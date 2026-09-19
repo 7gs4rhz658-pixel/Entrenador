@@ -19,6 +19,33 @@ export interface Cuestionario {
   preferencias: string;
 }
 
+// Cómo come el cliente: define los momentos del menú y las restricciones
+// duras (alergias) de la recomendación de comidas.
+export interface CuestionarioNutricion {
+  comidas: { momento: Momento; hora: string }[]; // 3 a 6, en orden del día
+  hora_entreno: string; // "18:30" o "" si varía
+  alergias: string; // restricción dura: nunca aparecen en el menú
+  no_come: string; // preferencias: se evitan
+  cocina: "cocino" | "mixto" | "como_fuera";
+  batch_cooking: boolean;
+  dia_batch: number | null; // 1 = lunes ... 7 = domingo
+  presupuesto: "bajo" | "medio" | "alto";
+  pais: string;
+}
+
+// Macros fijados a mano por el entrenador (pisan la fórmula)
+export interface MacrosManual {
+  entreno: MacrosBase;
+  descanso: MacrosBase;
+}
+
+export interface MacrosBase {
+  kcal: number;
+  prot_g: number;
+  carb_g: number;
+  grasa_g: number;
+}
+
 export interface Profile {
   id: string;
   email: string;
@@ -31,6 +58,9 @@ export interface Profile {
   nivel_actividad: NivelActividad;
   objetivo: Objetivo;
   cuestionario: Cuestionario | null;
+  cuestionario_nutricion: CuestionarioNutricion | null;
+  macros_manual: MacrosManual | null;
+  acepto_descargo_at: string | null;
   onboarding_completo: boolean;
   estado_pago: "pendiente" | "pagado";
   activo: boolean;
@@ -107,6 +137,7 @@ export interface LoggedSet {
 }
 
 export type Momento = "desayuno" | "almuerzo" | "merienda" | "cena" | "snack";
+export type TipoDia = "entreno" | "descanso";
 
 export interface Ingredient {
   id: string;
@@ -127,8 +158,85 @@ export interface MealLog {
   momento: Momento;
   ingredient_id: string;
   cantidad_g: number;
+  plan_item_id: string | null;
   created_at: string;
   ingredient: Ingredient;
+}
+
+// ── Recomendación de comidas ────────────────────────────────────
+
+export interface MealPlan {
+  id: string;
+  user_id: string;
+  nombre: string;
+  origen: "ia" | "txt";
+  activo: boolean;
+  notas: string | null;
+  batch_cooking: BatchCooking | null;
+  created_at: string;
+}
+
+export interface MealPlanItem {
+  id: string;
+  user_id: string;
+  meal_plan_id: string;
+  tipo_dia: TipoDia;
+  momento: Momento;
+  orden: number;
+  plato: string;
+  ingredient_id: string;
+  cantidad_g: number;
+  nota: string | null;
+  ingredient: Ingredient;
+}
+
+// Lo que devuelve la IA (o el intérprete del .txt) antes de resolver
+// cada ingrediente contra la tabla. Ver lib/meal-plan.ts.
+export interface IngredienteGenerado {
+  nombre: string;
+  gramos: number;
+  nota?: string;
+}
+
+export interface ComidaGenerada {
+  momento: Momento;
+  plato: string;
+  ingredientes: IngredienteGenerado[];
+}
+
+export interface PlanComidasGenerado {
+  nombre: string;
+  notas?: string;
+  entreno: ComidaGenerada[];
+  descanso: ComidaGenerada[];
+}
+
+// Ítem ya resuelto contra la base (ingredient null = no se encontró; el
+// entrenador lo corrige en la vista previa antes de aplicar).
+export interface ItemComidaResuelto {
+  tipo_dia: TipoDia;
+  momento: Momento;
+  orden: number;
+  plato: string;
+  nombre_pedido: string;
+  ingredient: Ingredient | null;
+  cantidad_g: number;
+  nota: string | null;
+}
+
+export interface PlanComidasResuelto {
+  nombre: string;
+  notas: string | null;
+  items: ItemComidaResuelto[];
+}
+
+// Guía de batch cooking guardada en meal_plans.batch_cooking
+export interface BatchCooking {
+  dia_semana: number;
+  tiempo_min: number;
+  tandas: { tecnica: string; items: { nombre: string; gramos_semana: number }[] }[];
+  pasos: string[];
+  conservacion: string[];
 }
 
 // Plan generado (por IA, por plantilla o interpretado de un .txt) antes

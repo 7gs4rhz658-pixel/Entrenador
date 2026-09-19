@@ -33,7 +33,10 @@ export default function ComidaItem({ comida }: { comida: MealLog }) {
     <li className="rounded-xl border border-line px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate font-semibold leading-snug">{comida.ingredient.nombre}</p>
+          <p className="truncate font-semibold leading-snug">
+            {comida.ingredient.nombre}
+            {comida.plan_item_id ? <span className="ml-1.5 text-xs font-medium text-accent">del menú</span> : null}
+          </p>
           <p className="text-xs text-muted" style={{ fontVariantNumeric: "tabular-nums" }}>
             {Math.round(comida.cantidad_g)} g · {m.kcal} kcal · P {m.prot_g} · C {m.carb_g} · G {m.grasa_g}
           </p>

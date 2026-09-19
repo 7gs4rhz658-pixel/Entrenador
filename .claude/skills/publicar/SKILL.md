@@ -104,6 +104,10 @@ desde el teléfono y que el link sea compartible.
    > nutrición. Los clientes NO se cargan por SQL: cada uno se registra desde
    > la app, completa el cuestionario y paga (checkout simulado).
 
+   Por último, borrá el editor otra vez, leé `supabase/migrations/0003_recomendacion_comidas.sql`
+   (tablas de la recomendación de comidas, cuestionario nutricional y descargo), pegalo
+   tal cual y que lo corra. Tiene que decir "Success".
+
 4. **Configurar el login por correo.** Guiá: menú izquierdo → **Authentication**
    → **Providers** → **Email**. Recomendá **desactivar "Confirm email"** (el
    correo gratuito de Supabase permite muy pocos envíos por hora y los clientes

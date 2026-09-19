@@ -1,6 +1,6 @@
 # Plan: Nutrición prescrita + asistente de situaciones + retención mensual
 
-Fecha: 2026-09-19 · Estado: **plan cerrado con las decisiones de EVER**, pendiente de autorización para ejecutar la fase 1.
+Fecha: 2026-09-19 · Estado: **fase 1 implementada y verificada end-to-end (2026-09-19)**; fases 2 a 6 autorizadas, en curso.
 
 ## Decisiones tomadas (2026-09-19)
 

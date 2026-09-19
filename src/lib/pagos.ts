@@ -11,7 +11,7 @@ export const PLAN = {
   incluye: [
     "Rutina personalizada de 8 semanas con progresión ondulada",
     "Ajustes de carga semana a semana",
-    "Plan de nutrición con macros y registro de comidas",
+    "Recomendación de comidas a tu medida, lista de compras y registro diario",
     "Seguimiento de tu entrenador desde su panel"
   ]
 };

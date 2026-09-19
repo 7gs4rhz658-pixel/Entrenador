@@ -1,4 +1,4 @@
-import type { Ingredient, Momento, NivelActividad, Objetivo, Sexo } from "./types";
+import type { Ingredient, Momento, NivelActividad, Objetivo, Profile, Sexo, TipoDia } from "./types";
 
 export interface PerfilNutricion {
   edad: number;
@@ -112,6 +112,34 @@ export function datosNutricion(p: {
     nivel_actividad: p.nivel_actividad,
     objetivo: p.objetivo
   };
+}
+
+// Referencia diaria del cliente: los macros fijados a mano por el
+// entrenador si existen, si no la fórmula. Null si el perfil está
+// incompleto y no hay macros manuales.
+export function objetivosCliente(perfil: Profile, esEntreno: boolean): ObjetivosDia | null {
+  const datos = datosNutricion(perfil);
+  const manual = perfil.macros_manual?.[esEntreno ? "entreno" : "descanso"];
+  if (manual && manual.kcal > 0) {
+    const agua_ml = datos ? objetivosDiarios(datos, esEntreno).agua_ml : 2500;
+    return {
+      kcal: Math.round(manual.kcal),
+      prot_g: Math.round(manual.prot_g),
+      carb_g: Math.round(manual.carb_g),
+      grasa_g: Math.round(manual.grasa_g),
+      agua_ml
+    };
+  }
+  return datos ? objetivosDiarios(datos, esEntreno) : null;
+}
+
+export const ETIQUETAS_TIPO_DIA: Record<TipoDia, string> = {
+  entreno: "Día de entreno",
+  descanso: "Día de descanso"
+};
+
+export function nombreMomento(m: Momento): string {
+  return MOMENTOS.find((x) => x.valor === m)?.texto ?? m;
 }
 
 // ── Cálculos sobre ingredientes ─────────────────────────────────

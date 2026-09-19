@@ -4,6 +4,8 @@ import type {
   Ingredient,
   LoggedSet,
   MealLog,
+  MealPlan,
+  MealPlanItem,
   Mesocycle,
   PlannedSet,
   Profile,
@@ -241,6 +243,47 @@ export async function getComidasRango(
       .order("fecha")
       .order("created_at")
   );
+}
+
+// Días de entreno configurados (para multiplicar el menú por semana)
+export async function contarDiasEntreno(userId: string): Promise<number> {
+  const { count, error } = await db()
+    .from("training_days")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("es_descanso", false);
+  if (error) throw new Error(`Base de datos: ${error.message}`);
+  return count ?? 0;
+}
+
+// ── Recomendación de comidas ────────────────────────────────────
+
+export interface PlanComidasActivo {
+  plan: MealPlan;
+  items: MealPlanItem[];
+}
+
+export async function getPlanComidas(userId: string): Promise<PlanComidasActivo | null> {
+  const plan = await q<MealPlan | null>(
+    db().from("meal_plans").select("*").eq("user_id", userId).eq("activo", true).maybeSingle()
+  );
+  if (!plan) return null;
+  const items = await q<MealPlanItem[]>(
+    db()
+      .from("meal_plan_items")
+      .select("*, ingredient:ingredients(*)")
+      .eq("meal_plan_id", plan.id)
+      .order("orden")
+  );
+  return { plan, items };
+}
+
+// Nombres de la base propia (USDA + manuales) para orientar a la IA
+export async function nombresBase(limite = 90): Promise<string[]> {
+  const filas = await q<{ nombre: string }[]>(
+    db().from("ingredients").select("nombre").neq("fuente", "off").order("nombre").limit(limite)
+  );
+  return filas.map((f) => f.nombre);
 }
 
 // ── Helpers de agrupado ─────────────────────────────────────────

@@ -4,7 +4,9 @@ import ClienteAcciones from "@/components/ClienteAcciones";
 import CloseWeekButton from "@/components/CloseWeekButton";
 import NewBlockButton from "@/components/NewBlockButton";
 import NutricionDia from "@/components/NutricionDia";
+import PlanComidasResumen from "@/components/PlanComidasResumen";
 import PlanTxt from "@/components/PlanTxt";
+import RecomendacionComidas from "@/components/RecomendacionComidas";
 import ProgresoCliente from "@/components/ProgresoCliente";
 import RutinaDia from "@/components/RutinaDia";
 import { iaDisponible } from "@/lib/ai";
@@ -15,12 +17,14 @@ import {
   getEjercicios,
   getLogs,
   getPerfil,
+  getPlanComidas,
   getPlanes,
   getUltimoRegistro,
   logsPorEjercicio,
   planesPorEjercicio,
   q
 } from "@/lib/data";
+import { objetivosDeReferencia } from "@/lib/comidas-service";
 import { fmtTiempoRelativo, hoyFecha, nombreDia } from "@/lib/format";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
 import { faseDe, nombreFase } from "@/lib/progression";
@@ -94,12 +98,7 @@ export default async function ClientePage({
         <ProgresoCliente userId={perfil.id} ejercicioSel={searchParams?.e} base={base} />
       ) : null}
       {tab === "nutricion" ? (
-        <NutricionDia
-          perfil={perfil}
-          fecha={fechaValida(searchParams?.fecha)}
-          base={base}
-          paraEntrenador
-        />
+        <Comida perfil={perfil} fecha={fechaValida(searchParams?.fecha)} base={base} />
       ) : null}
       {tab === "plan" ? (
         <PlanTxt userId={perfil.id} conIA={iaDisponible()} nombreBloque={meso?.nombre ?? null} />
@@ -201,6 +200,26 @@ async function Resumen({ perfil }: { perfil: Profile }) {
             <dd className="text-ink">{c.lesiones || "—"}</dd>
             <dt>Preferencias</dt>
             <dd className="text-ink">{c.preferencias || "—"}</dd>
+            {perfil.cuestionario_nutricion ? (
+              <>
+                <dt>Comidas</dt>
+                <dd className="text-ink">
+                  {perfil.cuestionario_nutricion.comidas.map((x) => `${x.momento} ${x.hora}`).join(", ")}
+                </dd>
+                <dt>Alergias</dt>
+                <dd className="text-ink">{perfil.cuestionario_nutricion.alergias || "—"}</dd>
+                <dt>Evita</dt>
+                <dd className="text-ink">{perfil.cuestionario_nutricion.no_come || "—"}</dd>
+                <dt>Cocina</dt>
+                <dd className="text-ink">
+                  {perfil.cuestionario_nutricion.cocina}
+                  {perfil.cuestionario_nutricion.batch_cooking
+                    ? ` · batch cooking los ${nombreDia(perfil.cuestionario_nutricion.dia_batch ?? 7).toLowerCase()}`
+                    : ""}{" "}
+                  · presupuesto {perfil.cuestionario_nutricion.presupuesto}
+                </dd>
+              </>
+            ) : null}
           </dl>
         </section>
       ) : null}
@@ -214,6 +233,33 @@ async function Resumen({ perfil }: { perfil: Profile }) {
       ) : (
         <NewBlockButton nombreAnterior={meso.nombre} userId={perfil.id} />
       )}
+    </div>
+  );
+}
+
+// Recomendación de comidas (referencia, generar/IA, .txt, menú activo) y
+// el registro del día del cliente.
+async function Comida({ perfil, fecha, base }: { perfil: Profile; fecha: string; base: string }) {
+  const plan = await getPlanComidas(perfil.id);
+  return (
+    <div className="flex flex-col gap-3">
+      {!perfil.cuestionario_nutricion ? (
+        <p className="card text-sm text-warn">
+          El cliente todavía no completó el cuestionario de comidas (momentos, horarios, alergias). La
+          recomendación se puede generar igual con desayuno, almuerzo, merienda y cena.
+        </p>
+      ) : null}
+      <RecomendacionComidas
+        userId={perfil.id}
+        conIA={iaDisponible()}
+        objetivos={objetivosDeReferencia(perfil)}
+        macrosManual={perfil.macros_manual}
+        tienePlan={!!plan}
+        nombrePlan={plan?.plan.nombre ?? null}
+      />
+      {plan ? <PlanComidasResumen plan={plan} cn={perfil.cuestionario_nutricion} /> : null}
+      <h2 className="mt-2 text-lg font-bold">Registro del día</h2>
+      <NutricionDia perfil={perfil} fecha={fecha} base={base} paraEntrenador />
     </div>
   );
 }

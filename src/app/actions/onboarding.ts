@@ -4,12 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSesion } from "@/lib/auth";
 import { generarPlanInicial, iaDisponible } from "@/lib/ai";
+import { aplicarRecomendacion, prepararRecomendacionIA } from "@/lib/comidas-service";
 import { exec, getPerfil } from "@/lib/data";
 import { procesarPago } from "@/lib/pagos";
 import { planPlantilla } from "@/lib/plan-generator";
 import { aplicarPlan } from "@/lib/plan-import";
 import { db } from "@/lib/supabase/server";
-import type { Cuestionario, NivelActividad, Objetivo, Sexo } from "@/lib/types";
+import type { Cuestionario, CuestionarioNutricion, Momento, NivelActividad, Objetivo, Sexo } from "@/lib/types";
 
 type Estado = { error?: string };
 
@@ -70,7 +71,62 @@ export async function guardarCuestionario(
           altura_cm: altura,
           nivel_actividad: actividad,
           objetivo,
-          cuestionario,
+          cuestionario
+        })
+        .eq("id", sesion.userId)
+    );
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+  revalidatePath("/", "layout");
+  redirect("/cuestionario/comida");
+}
+
+// Paso 2 del onboarding: cómo come el cliente + aceptación del descargo.
+// Recién acá se cierra el onboarding.
+const MOMENTOS: Momento[] = ["desayuno", "almuerzo", "merienda", "cena", "snack"];
+
+export async function guardarCuestionarioNutricion(
+  _prev: Estado,
+  formData: FormData
+): Promise<Estado> {
+  const sesion = await requireSesion();
+  if (!sesion.perfil.cuestionario) redirect("/cuestionario");
+
+  const comidas = MOMENTOS.filter((m) => formData.get(`comida_${m}`) === "on").map((m) => ({
+    momento: m,
+    hora: String(formData.get(`hora_${m}`) ?? "").trim().slice(0, 5)
+  }));
+  const cocina = String(formData.get("cocina") ?? "") as CuestionarioNutricion["cocina"];
+  const presupuesto = String(formData.get("presupuesto") ?? "") as CuestionarioNutricion["presupuesto"];
+  const diaBatchRaw = Number(formData.get("dia_batch"));
+  const batch = formData.get("batch_cooking") === "on";
+  const acepto = formData.get("acepto") === "on";
+
+  if (comidas.length < 3 || comidas.length > 6) return { error: "Elegí entre 3 y 6 comidas por día." };
+  if (!["cocino", "mixto", "como_fuera"].includes(cocina)) return { error: "Contanos si cocinás o comés fuera." };
+  if (!["bajo", "medio", "alto"].includes(presupuesto)) return { error: "Elegí tu presupuesto." };
+  if (!acepto) return { error: "Para ver las recomendaciones de comida tenés que aceptar el aviso." };
+
+  const cn: CuestionarioNutricion = {
+    comidas: comidas.sort((a, b) => (a.hora || "99").localeCompare(b.hora || "99")),
+    hora_entreno: String(formData.get("hora_entreno") ?? "").trim().slice(0, 5),
+    alergias: String(formData.get("alergias") ?? "").trim().slice(0, 300),
+    no_come: String(formData.get("no_come") ?? "").trim().slice(0, 300),
+    cocina,
+    batch_cooking: batch,
+    dia_batch: !batch ? null : Number.isInteger(diaBatchRaw) && diaBatchRaw >= 1 && diaBatchRaw <= 7 ? diaBatchRaw : 7,
+    presupuesto,
+    pais: String(formData.get("pais") ?? "").trim().slice(0, 40)
+  };
+
+  try {
+    await exec(
+      db()
+        .from("profiles")
+        .update({
+          cuestionario_nutricion: cn,
+          acepto_descargo_at: sesion.perfil.acepto_descargo_at ?? new Date().toISOString(),
           onboarding_completo: true
         })
         .eq("id", sesion.userId)

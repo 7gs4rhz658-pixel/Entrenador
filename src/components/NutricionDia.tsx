@@ -1,13 +1,16 @@
 import Link from "next/link";
 import AgregarComida from "@/components/AgregarComida";
 import ComidaItem from "@/components/ComidaItem";
+import ComidasDelDia from "@/components/ComidasDelDia";
 import MacroBars from "@/components/MacroBars";
 import Recetas from "@/components/Recetas";
 import Sustituir from "@/components/Sustituir";
 import { iaDisponible } from "@/lib/ai";
 import { getComidas, getDias } from "@/lib/data";
-import { fmtFechaCorta, fmtLitros, hoyFecha, sumarDias } from "@/lib/format";
-import { MOMENTOS, datosNutricion, macrosDe, objetivosDiarios, sumarMacros } from "@/lib/nutrition";
+import { DESCARGO_CORTO } from "@/lib/descargo";
+import { diaSemanaDe, fmtFechaCorta, fmtLitros, hoyFecha, sumarDias } from "@/lib/format";
+import { recomendacionPara } from "@/lib/meal-plan-db";
+import { MOMENTOS, macrosDe, objetivosCliente, sumarMacros } from "@/lib/nutrition";
 import type { Momento, Profile } from "@/lib/types";
 
 // Día de nutrición completo: objetivos vs consumido, comidas por momento,
@@ -24,10 +27,10 @@ export default async function NutricionDia({
   paraEntrenador?: boolean;
 }) {
   const [comidas, dias] = await Promise.all([getComidas(perfil.id, fecha), getDias(perfil.id)]);
-  const diaSemana = ((new Date(`${fecha}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
+  const diaSemana = diaSemanaDe(fecha);
   const esEntreno = dias.some((d) => d.dia_semana === diaSemana && !d.es_descanso);
-  const datos = datosNutricion(perfil);
-  const objetivo = datos ? objetivosDiarios(datos, esEntreno) : null;
+  const reco = await recomendacionPara(perfil.id, esEntreno ? "entreno" : "descanso", perfil.cuestionario_nutricion);
+  const objetivo = objetivosCliente(perfil, esEntreno);
   const consumido = sumarMacros(comidas.map((c) => macrosDe(c.ingredient, c.cantidad_g)));
   const hoy = hoyFecha();
   const sep = base.includes("?") ? "&" : "?";
@@ -87,6 +90,23 @@ export default async function NutricionDia({
         </Link>
       )}
 
+      {reco ? (
+        <ComidasDelDia
+          perfil={perfil}
+          fecha={fecha}
+          reco={reco}
+          comidasRegistradas={comidas}
+          titulo={fecha === hoy ? "Hoy te toca" : "Menú del día"}
+          userIdProp={userIdProp}
+          mostrarAvisos={false}
+        />
+      ) : paraEntrenador ? null : (
+        <p className="card text-sm text-muted">
+          Tu entrenador todavía no cargó tu recomendación de comidas. Mientras tanto podés registrar
+          lo que comés y ver cómo vas contra tu referencia diaria.
+        </p>
+      )}
+
       <AgregarComida userId={userIdProp} fecha={fecha} />
 
       {comidas.length === 0 ? (
@@ -120,10 +140,12 @@ export default async function NutricionDia({
       {restantes ? (
         <Recetas
           restantes={restantes}
-          preferencias={perfil.cuestionario?.preferencias ?? ""}
+          preferencias={[perfil.cuestionario?.preferencias, perfil.cuestionario_nutricion?.alergias ? `alergias: ${perfil.cuestionario_nutricion.alergias}` : "", perfil.cuestionario_nutricion?.no_come ? `evita: ${perfil.cuestionario_nutricion.no_come}` : ""].filter(Boolean).join(". ")}
           conIA={conIA}
         />
       ) : null}
+
+      {!reco ? <p className="px-1 text-center text-xs text-muted">{DESCARGO_CORTO}</p> : null}
     </div>
   );
 }

@@ -32,14 +32,14 @@ interface Opciones {
   maxTokens?: number;
 }
 
-async function generarJSON<T>(instrucciones: string, prompt: string, opciones: Opciones = {}): Promise<T> {
+export async function generarJSON<T>(instrucciones: string, prompt: string, opciones: Opciones = {}): Promise<T> {
   const p = proveedor();
   if (!p) throw new ErrorIA("La IA no está configurada (falta GROQ_API_KEY o GEMINI_API_KEY).");
   const texto =
     p === "groq"
       ? await llamarGroq(instrucciones, prompt, opciones)
       : await llamarGemini(instrucciones, prompt, opciones);
-  const limpio = texto.replace(/^```(?:json)?s*/i, "").replace(/s*```$/, "").trim();
+  const limpio = texto.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
   try {
     return JSON.parse(limpio) as T;
   } catch {
@@ -47,7 +47,10 @@ async function generarJSON<T>(instrucciones: string, prompt: string, opciones: O
   }
 }
 
-async function llamarGroq(instrucciones: string, prompt: string, opciones: Opciones): Promise<string> {
+// El plan gratuito de Groq limita tokens por minuto: si pide esperar
+// unos segundos (429), esperamos y reintentamos hasta dos veces.
+async function llamarGroq(instrucciones: string, prompt: string, opciones: Opciones, intento = 0): Promise<string> {
+  const modelo = process.env.GROQ_MODEL || MODELO_GROQ_DEFAULT;
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -55,19 +58,29 @@ async function llamarGroq(instrucciones: string, prompt: string, opciones: Opcio
       Authorization: `Bearer ${process.env.GROQ_API_KEY}`
     },
     body: JSON.stringify({
-      model: process.env.GROQ_MODEL || MODELO_GROQ_DEFAULT,
+      model: modelo,
       messages: [
         { role: "system", content: instrucciones },
         { role: "user", content: prompt }
       ],
       response_format: { type: "json_object" },
       temperature: opciones.temperatura ?? 0.3,
-      max_tokens: opciones.maxTokens ?? 8192
+      max_tokens: opciones.maxTokens ?? 8192,
+      // gpt-oss razona antes de responder; con esfuerzo alto gasta miles
+      // de tokens y puede truncar el JSON. Bajo alcanza para estas tareas.
+      ...(modelo.startsWith("openai/gpt-oss") ? { reasoning_effort: "low" } : {})
     }),
     cache: "no-store"
   });
   if (!res.ok) {
     const cuerpo = await res.text().catch(() => "");
+    if (res.status === 429 && intento < 2) {
+      const seg = Number(cuerpo.match(/try again in ([\d.]+)s/i)?.[1] ?? res.headers.get("retry-after") ?? 0);
+      if (seg > 0 && seg <= 25) {
+        await new Promise((r) => setTimeout(r, Math.ceil(seg * 1000) + 500));
+        return llamarGroq(instrucciones, prompt, opciones, intento + 1);
+      }
+    }
     throw new ErrorIA(`Groq respondió ${res.status}: ${cuerpo.slice(0, 300)}`);
   }
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
@@ -143,7 +156,7 @@ const ESQUEMA_PLAN = `Devolvé SOLO un JSON con esta forma exacta:
 }
 Reglas: compuestos (press, sentadilla, peso muerto, remo, jalón, dominadas) → progresion "compuesto", rango 8-12 o 6-10; aislamientos → "aislamiento", rango 10-15 o 12-20; ejercicios de peso corporal → "solo_reps"; abdominales/cuello al fallo → "al_fallo". Incluí solo los días que entrena; el resto no va en la lista.`;
 
-function describirPerfil(perfil: Profile): string {
+export function describirPerfil(perfil: Profile): string {
   return [
     `Nombre: ${perfil.nombre || "sin nombre"}`,
     `Edad: ${perfil.edad ?? "?"} · Sexo: ${perfil.sexo ?? "?"} · Peso: ${perfil.peso_kg ?? "?"} kg · Altura: ${perfil.altura_cm ?? "?"} cm`,

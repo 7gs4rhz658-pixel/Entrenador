@@ -300,7 +300,7 @@ export async function pedirRecetas(input: {
   preferencias: string;
 }): Promise<{ recetas?: Receta[]; error?: string }> {
   if (!iaDisponible()) {
-    return { error: "Las recetas necesitan la IA configurada (GEMINI_API_KEY)." };
+    return { error: "Las recetas necesitan la IA configurada (GROQ_API_KEY o GEMINI_API_KEY)." };
   }
   try {
     await resolverUsuario(null);

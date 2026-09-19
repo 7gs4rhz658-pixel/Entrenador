@@ -68,7 +68,7 @@ export default function PlanTxt({
         </p>
         {!conIA ? (
           <p className="mt-2 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">
-            Falta configurar GEMINI_API_KEY: sin IA no se puede interpretar el texto. Mientras
+            Falta configurar la IA (GROQ_API_KEY): sin ella no se puede interpretar el texto. Mientras
             tanto podés editar la rutina a mano en la pestaña Rutina.
           </p>
         ) : null}

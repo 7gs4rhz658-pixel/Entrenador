@@ -75,7 +75,9 @@ Facts · Vercel.
 3. Editá `supabase/migrations/0002_seed.sql`: reemplazá el correo de la tabla
    `entrenadores` por el tuyo (el correo con el que vas a registrarte como
    entrenador). Pegalo y corrélo.
-4. Authentication → Providers → Email: recomendado **desactivar "Confirm
+4. SQL Editor → pegá y corré `supabase/migrations/0003_recomendacion_comidas.sql`
+   (menú de comidas, cuestionario nutricional, descargo).
+5. Authentication → Providers → Email: recomendado **desactivar "Confirm
    email"** (el SMTP gratuito manda muy pocos correos por hora). Si lo dejás,
    la app muestra la pantalla "Confirmá tu correo".
 5. Project Settings → API: anotá **Project URL** y la clave **anon**
@@ -151,10 +153,15 @@ src/
     plan-generator.ts     normalizar plan de la IA · plantilla sin IA (puro)
     plan-import.ts        escribir un plan en la base
     ai.ts                 proxy IA Groq/Gemini (plan, .txt, ajustes, sustitución, recetas)
+    ai-comidas.ts         IA de la recomendación de comidas (menú, .txt, batch cooking)
+    meal-plan.ts          recomendación de comidas: sanear, cuadrar, compras, avisos, batch
+    meal-plan-db.ts       resolver ingredientes contra la base y escribir/leer el menú
+    comidas-service.ts    orquesta IA/.txt → resolver → cuadrar → aplicar
+    descargo.ts           aviso legal de las recomendaciones de comida
     nutrition.ts          TMB, macros por objetivo, regla de tres
     off.ts                Open Food Facts + caché en `ingredients`
     pagos.ts              checkout simulado (punto de cambio a pago real)
-supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes)
+supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes) · 0003 recomendación de comidas
 scripts/                  tests: progresión, planes/nutrición, RLS
 ```
 

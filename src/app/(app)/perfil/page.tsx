@@ -40,6 +40,17 @@ export default async function PerfilPage() {
         </p>
       </section>
 
+      <section className="card mt-4 text-sm">
+        <p className="font-semibold">Cómo comés</p>
+        <p className="mt-1 text-muted">
+          Comidas por día, horarios, alergias y si cocinás en tandas. Con esto se arma tu
+          recomendación de comidas.{" "}
+          <Link href="/cuestionario/comida" className="font-semibold text-accent">
+            Editar →
+          </Link>
+        </p>
+      </section>
+
       <p className="mt-4 text-center text-xs text-muted">{perfil.email}</p>
       <div className="mt-2">
         <LogoutButton />

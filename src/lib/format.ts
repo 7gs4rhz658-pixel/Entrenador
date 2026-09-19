@@ -108,3 +108,17 @@ export function fmtTiempoRelativo(iso: string | null): string {
   if (dias < 30) return `hace ${Math.floor(dias / 7)} sem.`;
   return `hace ${Math.floor(dias / 30)} meses`;
 }
+
+// Hora actual (0-23) en la zona horaria de la app, para decidir cuándo
+// mostrar "mañana te toca".
+export function horaLocal(): number {
+  const tz = process.env.TZ_APP || "America/Argentina/Buenos_Aires";
+  const h = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hour12: false }).format(new Date());
+  const n = parseInt(h, 10);
+  return Number.isFinite(n) ? n % 24 : 12;
+}
+
+// Día de la semana (1..7) de una fecha YYYY-MM-DD
+export function diaSemanaDe(fecha: string): number {
+  return ((new Date(`${fecha}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
+}

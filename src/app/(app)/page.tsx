@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AnticipoDia from "@/components/AnticipoDia";
 import CloseWeekButton from "@/components/CloseWeekButton";
 import NewBlockButton from "@/components/NewBlockButton";
 import { requireCliente } from "@/lib/auth";
@@ -11,8 +12,9 @@ import {
   getLogs,
   logsPorEjercicio
 } from "@/lib/data";
-import { fmtKcal, fmtLitros, hoyDiaSemana, hoyFecha, nombreDia } from "@/lib/format";
-import { datosNutricion, macrosDe, objetivosDiarios, sumarMacros } from "@/lib/nutrition";
+import { fmtKcal, fmtLitros, horaLocal, hoyDiaSemana, hoyFecha, nombreDia } from "@/lib/format";
+import { recomendacionPara } from "@/lib/meal-plan-db";
+import { macrosDe, objetivosCliente, sumarMacros } from "@/lib/nutrition";
 import { faseDe, nombreFase } from "@/lib/progression";
 
 // Cerrar semana consulta a la IA: margen para la server action.
@@ -52,10 +54,17 @@ export default async function Home({
   const diaHoy = dias.find((d) => d.dia_semana === hoy);
   const esEntrenoHoy = diaHoy ? !diaHoy.es_descanso : false;
 
-  const datos = datosNutricion(perfil);
-  const objetivos = datos ? objetivosDiarios(datos, esEntrenoHoy) : null;
+  const objetivos = objetivosCliente(perfil, esEntrenoHoy);
   const consumido = sumarMacros(comidas.map((c) => macrosDe(c.ingredient, c.cantidad_g)));
   const fase = faseDe(meso.semana_actual);
+
+  // Desde las 18 la app mira al día siguiente
+  const manana = horaLocal() >= 18;
+  const diaObjetivo = manana ? (hoy % 7) + 1 : hoy;
+  const diaAnticipo = dias.find((d) => d.dia_semana === diaObjetivo);
+  const entrenaAnticipo = diaAnticipo ? !diaAnticipo.es_descanso : false;
+  const reco = await recomendacionPara(userId, entrenaAnticipo ? "entreno" : "descanso", perfil.cuestionario_nutricion);
+  const diaBatch = perfil.cuestionario_nutricion?.batch_cooking ? perfil.cuestionario_nutricion.dia_batch ?? 7 : null;
 
   return (
     <main>
@@ -123,6 +132,16 @@ export default async function Home({
           </p>
         </Link>
       )}
+
+      <AnticipoDia
+        perfil={perfil}
+        manana={manana}
+        diaSemana={diaObjetivo}
+        dia={diaAnticipo}
+        cantidadEjercicios={diaAnticipo ? (porDia[diaAnticipo.id] ?? []).length : 0}
+        reco={reco}
+        esDiaBatch={diaBatch === diaObjetivo}
+      />
 
       {diaHoy && esEntrenoHoy ? (
         <Link href={`/dia/${diaHoy.id}/entrenar`} className="btn-primary mb-4 w-full">
