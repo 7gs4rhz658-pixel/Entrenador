@@ -28,7 +28,7 @@ export async function interpretarTxt(input: {
   const texto = input.texto.trim();
   if (texto.length < 20) return { error: "El texto es demasiado corto para ser un plan." };
   if (!iaDisponible()) {
-    return { error: "Interpretar un .txt necesita la IA configurada (GEMINI_API_KEY)." };
+    return { error: "Interpretar un .txt necesita la IA configurada (GROQ_API_KEY o GEMINI_API_KEY)." };
   }
   try {
     await requireEntrenador();

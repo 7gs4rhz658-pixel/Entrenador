@@ -1,4 +1,4 @@
-// Capa de IA: proxy en el servidor contra la API de Gemini. La clave vive
+// Capa de IA: proxy en el servidor contra Groq o Gemini. La clave vive
 // solo en el entorno del servidor (server actions / server components) y
 // nunca llega al navegador. Toda función devuelve JSON tipado y, si la IA
 // no está configurada o falla, quien la llama tiene un camino sin IA.
@@ -7,27 +7,81 @@ import type { Cuestionario, PlanGenerado, Profile } from "./types";
 import type { Macros } from "./nutrition";
 import { normalizarPlan } from "./plan-generator";
 
-const MODELO_DEFAULT = "gemini-2.5-flash";
+// Proveedores soportados (se elige el primero configurado):
+//   GROQ_API_KEY   → Groq, API compatible con OpenAI (plan gratuito, sin tarjeta)
+//   GEMINI_API_KEY → Google Gemini
+const MODELO_GROQ_DEFAULT = "openai/gpt-oss-120b";
+const MODELO_GEMINI_DEFAULT = "gemini-3.6-flash";
+
+type Proveedor = "groq" | "gemini";
+
+function proveedor(): Proveedor | null {
+  if (process.env.GROQ_API_KEY) return "groq";
+  if (process.env.GEMINI_API_KEY) return "gemini";
+  return null;
+}
 
 export function iaDisponible(): boolean {
-  return !!process.env.GEMINI_API_KEY;
+  return proveedor() !== null;
 }
 
 export class ErrorIA extends Error {}
 
-async function generarJSON<T>(
-  instrucciones: string,
-  prompt: string,
-  opciones: { temperatura?: number; maxTokens?: number } = {}
-): Promise<T> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new ErrorIA("La IA no está configurada (falta GEMINI_API_KEY).");
-  const modelo = process.env.GEMINI_MODEL || MODELO_DEFAULT;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`;
+interface Opciones {
+  temperatura?: number;
+  maxTokens?: number;
+}
 
+async function generarJSON<T>(instrucciones: string, prompt: string, opciones: Opciones = {}): Promise<T> {
+  const p = proveedor();
+  if (!p) throw new ErrorIA("La IA no está configurada (falta GROQ_API_KEY o GEMINI_API_KEY).");
+  const texto =
+    p === "groq"
+      ? await llamarGroq(instrucciones, prompt, opciones)
+      : await llamarGemini(instrucciones, prompt, opciones);
+  const limpio = texto.replace(/^```(?:json)?s*/i, "").replace(/s*```$/, "").trim();
+  try {
+    return JSON.parse(limpio) as T;
+  } catch {
+    throw new ErrorIA("La IA devolvió un JSON inválido.");
+  }
+}
+
+async function llamarGroq(instrucciones: string, prompt: string, opciones: Opciones): Promise<string> {
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: process.env.GROQ_MODEL || MODELO_GROQ_DEFAULT,
+      messages: [
+        { role: "system", content: instrucciones },
+        { role: "user", content: prompt }
+      ],
+      response_format: { type: "json_object" },
+      temperature: opciones.temperatura ?? 0.3,
+      max_tokens: opciones.maxTokens ?? 8192
+    }),
+    cache: "no-store"
+  });
+  if (!res.ok) {
+    const cuerpo = await res.text().catch(() => "");
+    throw new ErrorIA(`Groq respondió ${res.status}: ${cuerpo.slice(0, 300)}`);
+  }
+  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  const texto = data.choices?.[0]?.message?.content ?? "";
+  if (!texto) throw new ErrorIA("Groq devolvió una respuesta vacía.");
+  return texto;
+}
+
+async function llamarGemini(instrucciones: string, prompt: string, opciones: Opciones): Promise<string> {
+  const modelo = process.env.GEMINI_MODEL || MODELO_GEMINI_DEFAULT;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`;
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY! },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: instrucciones }] },
       contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -39,7 +93,6 @@ async function generarJSON<T>(
     }),
     cache: "no-store"
   });
-
   if (!res.ok) {
     const cuerpo = await res.text().catch(() => "");
     throw new ErrorIA(`Gemini respondió ${res.status}: ${cuerpo.slice(0, 300)}`);
@@ -56,12 +109,7 @@ async function generarJSON<T>(
         : "Gemini devolvió una respuesta vacía."
     );
   }
-  const limpio = texto.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-  try {
-    return JSON.parse(limpio) as T;
-  } catch {
-    throw new ErrorIA("Gemini devolvió un JSON inválido.");
-  }
+  return texto;
 }
 
 // ── Contexto compartido ─────────────────────────────────────────

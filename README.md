@@ -6,7 +6,7 @@ seguimiento; el entrenador ve y edita todo desde su panel. Mobile-first, en
 español (Argentina).
 
 **Stack:** Next.js 14 (App Router) + TypeScript + Tailwind · Supabase
-(Postgres + Auth + Row Level Security) · Gemini (IA, opcional) · Open Food
+(Postgres + Auth + Row Level Security) · Groq o Gemini (IA, opcional) · Open Food
 Facts · Vercel.
 
 ## Qué hace
@@ -63,7 +63,7 @@ Facts · Vercel.
 - El rol lo decide un trigger al registrarse: correos listados en la tabla
   `entrenadores` → entrenador; el resto → cliente. Un cliente no puede
   cambiarse el rol (trigger).
-- La clave de Gemini vive solo en el servidor (server actions).
+- La clave de la IA (Groq o Gemini) vive solo en el servidor (server actions).
 
 ---
 
@@ -81,8 +81,10 @@ Facts · Vercel.
 5. Project Settings → API: anotá **Project URL** y la clave **anon**
    (o **publishable**).
 
-### 2. Gemini (opcional pero recomendado)
-Clave gratis en [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+### 2. IA (opcional pero recomendado)
+Groq: clave gratis sin tarjeta en [console.groq.com/keys](https://console.groq.com/keys)
+→ `GROQ_API_KEY`. Alternativa: Gemini en [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+→ `GEMINI_API_KEY`. Se usa el primero que esté configurado.
 Sin ella: plan por plantilla, progresión por regla, sin recetas ni lectura de
 `.txt`.
 
@@ -105,7 +107,7 @@ git remote add origin https://github.com/TU_USUARIO/mi-entrenador.git
 git push -u origin main
 ```
 En Vercel: importar el repo, cargar `NEXT_PUBLIC_SUPABASE_URL`,
-`NEXT_PUBLIC_SUPABASE_ANON_KEY` y `GEMINI_API_KEY`, Deploy. Las páginas que
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` y `GROQ_API_KEY` (o `GEMINI_API_KEY`), Deploy. Las páginas que
 llaman a la IA declaran `maxDuration = 60`.
 
 > La skill `/publicar` (carpeta `.claude/skills/publicar/`) guía todo esto
@@ -148,7 +150,7 @@ src/
     plan-service.ts       cerrar semana, recalcular, nuevo bloque (+ IA)
     plan-generator.ts     normalizar plan de la IA · plantilla sin IA (puro)
     plan-import.ts        escribir un plan en la base
-    ai.ts                 proxy Gemini (plan, .txt, ajustes, sustitución, recetas)
+    ai.ts                 proxy IA Groq/Gemini (plan, .txt, ajustes, sustitución, recetas)
     nutrition.ts          TMB, macros por objetivo, regla de tres
     off.ts                Open Food Facts + caché en `ingredients`
     pagos.ts              checkout simulado (punto de cambio a pago real)

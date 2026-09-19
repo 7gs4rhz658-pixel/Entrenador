@@ -5,7 +5,7 @@ description: >-
   online su propia copia de la app "Mi Entrenador Personal" (multi-cliente:
   entrenador + clientes con cuenta propia). Crea las cuentas gratuitas
   (Supabase, GitHub, Vercel), carga la base de datos con el SQL del proyecto,
-  configura las variables (Supabase, Gemini) y deja un LINK funcionando 24/7. Úsala cuando el usuario quiera instalar, publicar,
+  configura las variables (Supabase, IA con Groq o Gemini) y deja un LINK funcionando 24/7. Úsala cuando el usuario quiera instalar, publicar,
   deployar, "poner online", "subir a internet" o "conseguir el link" de esta
   app, o cuando escriba /publicar.
 ---
@@ -175,12 +175,16 @@ datos** que va a pedir, así después es solo pegar:
   (o la **Publishable** en la UI nueva). Esta clave es pública: la seguridad la
   pone Row Level Security en la base, así que sí se puede pegar en el chat.
   **NO** usar la service_role/secret: la app no la necesita.
-- **`GEMINI_API_KEY`** — clave gratis de Google AI Studio
-  (`aistudio.google.com/apikey` → "Create API key"). Es secreta: que la pegue
-  directo en Vercel, no en el chat. Con ella la app genera el plan inicial con
-  IA, interpreta los `.txt` del entrenador, ajusta cargas y sugiere recetas.
-  Sin ella la app funciona igual con plantilla y reglas fijas.
-- Opcional: **`GEMINI_MODEL`** (por defecto `gemini-2.5-flash`) y **`TZ_APP`**
+- **`GROQ_API_KEY`** — clave gratis de Groq, sin tarjeta
+  (`console.groq.com/keys` → "Create API Key"; empieza por `gsk_`). Es
+  secreta: que la pegue directo en Vercel, no en el chat. Con ella la app
+  genera el plan inicial con IA, interpreta los `.txt` del entrenador, ajusta
+  cargas y sugiere recetas. Sin ella la app funciona igual con plantilla y
+  reglas fijas. Alternativa: **`GEMINI_API_KEY`** de Google AI Studio
+  (`aistudio.google.com/apikey`), solo si el proyecto figura como "Free Tier";
+  las cuentas nuevas suelen quedar en Prepago sin saldo y no responden.
+- Opcional: **`GROQ_MODEL`** (por defecto `openai/gpt-oss-120b`),
+  **`GEMINI_MODEL`** (por defecto `gemini-3.6-flash`) y **`TZ_APP`**
   (zona horaria, por defecto `America/Argentina/Buenos_Aires`).
 
 Después:
@@ -239,4 +243,4 @@ Una vez que entra y ve la rutina:
 Cuando el link ande y esté probado, felicitá y dejá anotado (si la persona
 quiere) un resumen de sus accesos: link, y que para cambios se toca Vercel
 (variables) o la pestaña Rutina de la app. Nunca guardes ni muestres la clave
-de Gemini ni contraseñas en texto plano en ningún lado.
+de la IA ni contraseñas en texto plano en ningún lado.
