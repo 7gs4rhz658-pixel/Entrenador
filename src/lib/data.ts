@@ -1,5 +1,6 @@
 import { db } from "./supabase/server";
 import type {
+  AsistenteLog,
   Exercise,
   Ingredient,
   LoggedSet,
@@ -310,4 +311,35 @@ export function ejerciciosPorDia(
   const mapa: Record<string, Exercise[]> = {};
   for (const e of ejercicios) (mapa[e.training_day_id] ??= []).push(e);
   return mapa;
+}
+
+// ── Asistente de situaciones ────────────────────────────────────
+
+export async function getConsultasAsistente(
+  userId: string,
+  opciones: { fecha?: string; limite?: number } = {}
+): Promise<AsistenteLog[]> {
+  let consulta = db()
+    .from("asistente_logs")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(opciones.limite ?? 10);
+  if (opciones.fecha) consulta = consulta.eq("fecha", opciones.fecha);
+  return q<AsistenteLog[]>(consulta);
+}
+
+// La respuesta que el cliente eligió como ajuste de ese día (la última)
+export async function getAjusteDelDia(userId: string, fecha: string): Promise<AsistenteLog | null> {
+  return q<AsistenteLog | null>(
+    db()
+      .from("asistente_logs")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("fecha", fecha)
+      .eq("aplicado", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+  );
 }

@@ -13,6 +13,7 @@ import { iaDisponible } from "@/lib/ai";
 import {
   ejerciciosPorDia,
   getBloque,
+  getConsultasAsistente,
   getDias,
   getEjercicios,
   getLogs,
@@ -258,9 +259,34 @@ async function Comida({ perfil, fecha, base }: { perfil: Profile; fecha: string;
         nombrePlan={plan?.plan.nombre ?? null}
       />
       {plan ? <PlanComidasResumen plan={plan} cn={perfil.cuestionario_nutricion} /> : null}
+      <ConsultasCliente userId={perfil.id} />
       <h2 className="mt-2 text-lg font-bold">Registro del día</h2>
       <NutricionDia perfil={perfil} fecha={fecha} base={base} paraEntrenador />
     </div>
+  );
+}
+
+// Qué le pregunta el cliente al asistente: pista de qué le cuesta y de
+// cuándo conviene escribirle en persona.
+async function ConsultasCliente({ userId }: { userId: string }) {
+  const consultas = await getConsultasAsistente(userId, { limite: 8 });
+  if (!consultas.length) return null;
+  return (
+    <section className="card">
+      <h2 className="font-bold">Consultas al asistente</h2>
+      <ul className="mt-2 flex flex-col gap-2 text-sm">
+        {consultas.map((c) => (
+          <li key={c.id} className="rounded-xl border border-line px-3 py-2">
+            <p className="text-xs text-muted">
+              {new Date(`${c.fecha}T12:00:00`).toLocaleDateString("es-AR")} · {c.tipo}
+              {c.aplicado ? " · usó la respuesta como ajuste del día" : ""}
+            </p>
+            <p className="mt-0.5">&ldquo;{c.pregunta}&rdquo;</p>
+            <p className="mt-0.5 text-muted">→ {c.respuesta.resumen}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

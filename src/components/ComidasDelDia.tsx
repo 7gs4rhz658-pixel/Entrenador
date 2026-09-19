@@ -3,7 +3,7 @@ import MarcarComida from "@/components/MarcarComida";
 import { DESCARGO_CORTO } from "@/lib/descargo";
 import { horaDe, notaUtil, type RecomendacionDia } from "@/lib/meal-plan";
 import { ETIQUETAS_TIPO_DIA, nombreMomento } from "@/lib/nutrition";
-import type { MealLog, Profile } from "@/lib/types";
+import type { AsistenteLog, MealLog, Profile } from "@/lib/types";
 
 // Menú recomendado para un día (entreno o descanso) con "La comí" por
 // comida. Lo usa el cliente en Comida y el entrenador en la ficha.
@@ -15,7 +15,8 @@ export default function ComidasDelDia({
   titulo,
   userIdProp,
   compacto = false,
-  mostrarAvisos = true
+  mostrarAvisos = true,
+  ajuste = null
 }: {
   perfil: Profile;
   fecha: string;
@@ -25,6 +26,7 @@ export default function ComidasDelDia({
   userIdProp?: string;
   compacto?: boolean;
   mostrarAvisos?: boolean;
+  ajuste?: AsistenteLog | null;
 }) {
   const hechos = new Set(comidasRegistradas.map((c) => c.plan_item_id).filter(Boolean));
   const cn = perfil.cuestionario_nutricion;
@@ -82,6 +84,21 @@ export default function ComidasDelDia({
           );
         })}
       </ul>
+
+      {ajuste ? (
+        <div className="mt-3 rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 text-sm">
+          <p className="font-semibold text-accent">Ajuste de hoy · {ajuste.respuesta.resumen}</p>
+          {ajuste.respuesta.reacomodo_dia.length ? (
+            <ul className="mt-1 flex flex-col gap-0.5">
+              {ajuste.respuesta.reacomodo_dia.map((r, i) => (
+                <li key={i}>
+                  <span className="text-muted">{r.momento === "general" ? "En general" : nombreMomento(r.momento)}:</span> {r.cambio}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
 
       {mostrarAvisos && reco.avisos.length ? (
         <div className="mt-3 rounded-xl border border-warn/30 bg-warn/10 px-3 py-2 text-sm">

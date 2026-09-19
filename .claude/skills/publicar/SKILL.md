@@ -106,7 +106,8 @@ desde el teléfono y que el link sea compartible.
 
    Por último, borrá el editor otra vez, leé `supabase/migrations/0003_recomendacion_comidas.sql`
    (tablas de la recomendación de comidas, cuestionario nutricional y descargo), pegalo
-   tal cual y que lo corra. Tiene que decir "Success".
+   tal cual y que lo corra. Tiene que decir "Success". Repetí lo mismo con
+   `supabase/migrations/0004_asistente.sql` (asistente de situaciones).
 
 4. **Configurar el login por correo.** Guiá: menú izquierdo → **Authentication**
    → **Providers** → **Email**. Recomendá **desactivar "Confirm email"** (el

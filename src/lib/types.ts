@@ -267,3 +267,33 @@ export interface PlanGenerado {
   notas?: string;
   dias: DiaGenerado[];
 }
+
+// ── Asistente de situaciones ────────────────────────────────────
+
+export type TipoSituacion =
+  | "evento"
+  | "restaurante"
+  | "falta_ingrediente"
+  | "antojo"
+  | "viaje"
+  | "me_pase"
+  | "otro";
+
+export interface RespuestaAsistente {
+  tipo: TipoSituacion;
+  resumen: string;
+  que_comer: { opcion: string; cantidad: string; por_que: string }[];
+  reacomodo_dia: { momento: Momento | "general"; cambio: string }[];
+  mensaje: string;
+}
+
+export interface AsistenteLog {
+  id: string;
+  user_id: string;
+  fecha: string;
+  pregunta: string;
+  tipo: TipoSituacion;
+  respuesta: RespuestaAsistente;
+  aplicado: boolean;
+  created_at: string;
+}

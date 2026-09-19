@@ -1,12 +1,13 @@
 import Link from "next/link";
 import AgregarComida from "@/components/AgregarComida";
+import Asistente from "@/components/Asistente";
 import ComidaItem from "@/components/ComidaItem";
 import ComidasDelDia from "@/components/ComidasDelDia";
 import MacroBars from "@/components/MacroBars";
 import Recetas from "@/components/Recetas";
 import Sustituir from "@/components/Sustituir";
 import { iaDisponible } from "@/lib/ai";
-import { getComidas, getDias } from "@/lib/data";
+import { getAjusteDelDia, getComidas, getConsultasAsistente, getDias } from "@/lib/data";
 import { DESCARGO_CORTO } from "@/lib/descargo";
 import { diaSemanaDe, fmtFechaCorta, fmtLitros, hoyFecha, sumarDias } from "@/lib/format";
 import { recomendacionPara } from "@/lib/meal-plan-db";
@@ -29,7 +30,11 @@ export default async function NutricionDia({
   const [comidas, dias] = await Promise.all([getComidas(perfil.id, fecha), getDias(perfil.id)]);
   const diaSemana = diaSemanaDe(fecha);
   const esEntreno = dias.some((d) => d.dia_semana === diaSemana && !d.es_descanso);
-  const reco = await recomendacionPara(perfil.id, esEntreno ? "entreno" : "descanso", perfil.cuestionario_nutricion);
+  const [reco, consultas, ajuste] = await Promise.all([
+    recomendacionPara(perfil.id, esEntreno ? "entreno" : "descanso", perfil.cuestionario_nutricion),
+    getConsultasAsistente(perfil.id, { fecha, limite: 3 }),
+    getAjusteDelDia(perfil.id, fecha)
+  ]);
   const objetivo = objetivosCliente(perfil, esEntreno);
   const consumido = sumarMacros(comidas.map((c) => macrosDe(c.ingredient, c.cantidad_g)));
   const hoy = hoyFecha();
@@ -99,6 +104,7 @@ export default async function NutricionDia({
           titulo={fecha === hoy ? "Hoy te toca" : "Menú del día"}
           userIdProp={userIdProp}
           mostrarAvisos={false}
+          ajuste={ajuste}
         />
       ) : paraEntrenador ? null : (
         <p className="card text-sm text-muted">
@@ -106,6 +112,10 @@ export default async function NutricionDia({
           lo que comés y ver cómo vas contra tu referencia diaria.
         </p>
       )}
+
+      {fecha === hoy && !paraEntrenador ? (
+        <Asistente userId={userIdProp} fecha={fecha} conIA={conIA} historial={consultas} />
+      ) : null}
 
       <AgregarComida userId={userIdProp} fecha={fecha} />
 
