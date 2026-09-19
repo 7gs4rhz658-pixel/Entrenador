@@ -1,6 +1,16 @@
 # Plan: Nutrición prescrita + asistente de situaciones + retención mensual
 
-Fecha: 2026-09-19 · Estado: propuesta, pendiente de aprobación de EVER.
+Fecha: 2026-09-19 · Estado: **plan cerrado con las decisiones de EVER**, pendiente de autorización para ejecutar la fase 1.
+
+## Decisiones tomadas (2026-09-19)
+
+1. Estructura: **menú de día de entreno + menú de día de descanso** (no 7 días distintos).
+2. Comidas por día: **las elige el cliente** en el cuestionario nutricional (3 a 6).
+3. Edición: **solo EVER** edita la dieta aplicada; el cliente sustituye ingredientes, no reescribe.
+4. No hay `.txt` de ejemplo: el intérprete se hace **tolerante a cualquier formato** (listas, tablas, "150g pollo + 80g arroz", con o sin días/momentos) y se prueba con varios estilos.
+5. **Enfoque en la experiencia del cliente**: el problema de los PDF es que hay que estar mirando qué toca mañana. La app debe **anticiparse** (sección 1.6): a la noche muestra qué toca mañana, sugiere batch cooking y arma la lista de compras.
+6. **Marco legal**: todo lo nutricional se presenta como **recomendaciones / orientación del entrenador**, nunca como "plan elaborado por nutricionista" (sección 7). Esto cambia textos, nombres de pantallas y agrega un descargo aceptado en el onboarding.
+7. Solo se agrega lo que **aporta valor real**: las ideas de retención quedan priorizadas (sección 4); nada se implementa "porque sí".
 
 ## 0. Punto de partida (lo que ya existe y se reutiliza)
 
@@ -68,7 +78,27 @@ Post-proceso determinista (sin IA): resolver ingredientes, recalcular macros rea
 
 ### 1.5 Cuestionario nutricional en el onboarding
 
-Añadir un paso al `CuestionarioForm` existente: comidas por día (3–6), horario de entreno, alergias/intolerancias, alimentos que no come, si cocina o come fuera, presupuesto (bajo/medio/alto), país (para nombres y disponibilidad). Sin esto la dieta por IA sale genérica; con esto sale "suya".
+Añadir un paso al `CuestionarioForm` existente: comidas por día (3–6) y a qué hora aproximada cada una, horario de entreno, alergias/intolerancias (restricción dura), alimentos que no come, si cocina o come fuera, si puede cocinar en tandas (batch cooking) y qué día, presupuesto (bajo/medio/alto), país (para nombres y disponibilidad). Sin esto la recomendación por IA sale genérica; con esto sale "suya". Al final del paso: aceptación del descargo (sección 7).
+
+### 1.6 La app se anticipa: "Mañana", batch cooking y lista de compras
+
+Es la diferencia con un PDF: el cliente no tiene que buscar qué toca. Todo esto es **determinista** (sale de las tablas, sin IA) salvo donde se indica.
+
+**a) "Mañana te toca"** — en la pantalla de inicio, a partir de las 18:00 (`TZ_APP`) aparece una tarjeta con el día siguiente:
+- Entreno o descanso, y si entrena: qué día de la rutina ("Pierna, 6 ejercicios, ~55 min").
+- Las comidas del menú que corresponde (entreno/descanso), en el orden y horarios del cliente.
+- **Preparación para mañana**: avisos derivados del menú, generados por reglas simples sobre los ingredientes: "sacá el pollo del freezer", "dejá la avena remojando", "llevá el tupper del almuerzo si comés fuera". Sin push en la fase 1: la tarjeta está ahí cuando abre la app; el push (fase 2) llevará este mismo contenido.
+- El mismo bloque sirve para "Hoy te toca" durante el día.
+
+**b) Batch cooking semanal** — el domingo (o el día que eligió en el cuestionario) la app muestra "Cociná una vez para la semana":
+- Cálculo determinista: suma los ingredientes de ambos menús × cantidad de días de entreno y descanso de esa semana (salen de `training_days`) → "Pollo 1,4 kg, arroz 560 g crudo (≈1,6 kg cocido), batata 1,2 kg…".
+- Agrupa por técnica (horno / hervido / plancha) y estima el tiempo total.
+- Con IA (una llamada corta, opcional): orden de cocción para que todo entre en ~1,5 h y cómo conservar (heladera 3–4 días, freezer el resto). Se guarda y se reutiliza mientras no cambie el plan.
+- Cada comida del plan referencia si viene "del batch" para que "Mañana te toca" diga "ya está cocinado, solo calentar".
+
+**c) Lista de compras** — derivada del mismo cálculo: ingredientes × 7 días, en gramos y en unidades prácticas ("huevos 14", "pollo 1,4 kg", "avena 1 paquete"). Se marca lo que ya tiene, se comparte por WhatsApp (texto) con un botón. Se regenera sola si EVER cambia el plan.
+
+Tablas: no hace falta ninguna nueva para a) y c); para b) se guarda el resultado en `meal_plans.batch_cooking jsonb`.
 
 ---
 
@@ -118,7 +148,7 @@ Principio: el cliente renueva cuando **ve progreso**, **siente que alguien lo mi
 - Semana actual: anillo "3/3 entrenos · 18/21 comidas". Racha de semanas cumplidas. Hitos de fuerza ("primera vez 100 kg en sentadilla") que se guardan y aparecen en el informe.
 - Nada de monedas ni confeti; adultos que pagan quieren ver números que suben.
 
-### 3.5 Lista de compras semanal
+### 3.5 Lista de compras semanal (movida a la fase 1, ver 1.6c)
 - Derivada del plan de comidas activo: agrupa ingredientes × 7 días, en gramos y en unidades prácticas ("pollo 1,1 kg", "huevos 14"). Un botón, se comparte por WhatsApp. Muy barato de hacer y se usa todas las semanas → hábito.
 
 ### 3.6 Recordatorios (PWA push)
@@ -138,19 +168,30 @@ Principio: el cliente renueva cuando **ve progreso**, **siente que alguien lo mi
 
 ---
 
-## 4. Orden de implementación propuesto
+## 4. Orden de implementación (cerrado)
 
-| Fase | Qué | Esfuerzo | Por qué en este orden |
+Criterio: entra en la fase 1 lo que el cliente usa **todos los días**; lo que se usa una vez por semana o por mes va después; lo que solo sirve con clientes reales, al final.
+
+| Fase | Qué | Esfuerzo | Valor para el cliente |
 |---|---|---|---|
-| **1** | Módulo A completo (tablas, IA + .txt, vista previa entrenador, "Hoy te toca" + "La comí" cliente, cuestionario nutricional) | grande | Es lo pedido y la base de todo lo demás |
-| **2** | Módulo B asistente de situaciones + `asistente_logs` | medio | Usa el contexto de la fase 1; es el diferencial que más se va a usar a diario |
-| **3** | Check-in semanal + informe IA aprobado por EVER + adherencia visible | medio | Primer gancho de retención; reutiliza `week_closures` |
-| **4** | Lista de compras + ajuste automático de macros quincenal | chico | Barato y de uso semanal |
-| **5** | Informe de fin de mes + `pago_vence_at` + bloqueo suave + recordatorios de renovación | medio | Cierra el ciclo mensual de cobro |
-| **6** | Push, mensajes con borradores IA, detección de abandono, referidos | medio | Cuando haya clientes reales que retener |
+| **1** | Módulo A: tablas, recomendación por IA + .txt, vista previa editable para EVER, cuestionario nutricional, **"Hoy / Mañana te toca"** con "✓ La comí" y avisos de preparación, **lista de compras**, **batch cooking**, textos y descargo legal (sección 7) | grande | Deja de mirar el PDF: la app le dice qué comer, qué preparar y qué comprar |
+| **2** | Módulo B: asistente de situaciones (fiesta, restaurante, no tengo X, antojo, viaje, me pasé) + `asistente_logs` | medio | Resuelve el día real, que nunca es el del plan |
+| **3** | Check-in semanal + informe IA aprobado por EVER + adherencia visible (anillos, racha, hitos) | medio | Siente que alguien lo mira; ve progreso |
+| **4** | Ajuste automático de macros quincenal (EVER confirma) | chico | Coaching real, no macros fijos |
+| **5** | Informe de fin de mes + `pago_vence_at` + bloqueo suave + recordatorio de renovación | medio | Cierra el ciclo mensual |
+| **6** | Push (PWA) con el contenido de "Mañana te toca", mensajes con borradores IA, detección de abandono, referidos | medio | Cuando haya clientes reales que retener |
 | — | Pago real (Mercado Pago) | medio | Cuando haya 3+ clientes pagando |
 
-Publicar en Vercel **después de la fase 1** (o antes, con lo que hay), no esperar a todo: cada fase se despliega sola con un `git push`.
+Publicar en Vercel **al terminar la fase 1**; cada fase siguiente se despliega sola con `git push`.
+
+### 4.1 Fase 1 en detalle (lo que se ejecuta con la autorización)
+
+1. Migración `0003_plan_comidas.sql`: `meal_plans`, `meal_plan_days`, `meal_plan_items`, campos nuevos en `profiles` (`macros_manual`, `cuestionario_nutricion`, `acepto_descargo_at`), RLS, aplicada en Supabase por MCP.
+2. `lib/ai.ts`: `generarRecomendacionComidas()` e `interpretarDietaTxt()`; `lib/meal-plan.ts`: resolver ingredientes, cuadrar macros, calcular compras y batch cooking.
+3. Onboarding: paso nutricional + descargo.
+4. Panel entrenador, pestaña "Comida": objetivos (fórmula / a mano), generar con IA, cargar .txt, vista previa editable, aplicar, ver adherencia.
+5. App cliente: "Hoy te toca" / "Mañana te toca" en inicio y nutrición, "✓ La comí", "Cambiar", lista de compras, batch cooking.
+6. Pruebas end-to-end con usuarios de prueba (se borran al final), `tsc` y `next build` limpios, commit y push.
 
 ## 5. Riesgos y cómo se cubren
 
@@ -159,9 +200,21 @@ Publicar en Vercel **después de la fase 1** (o antes, con lo que hay), no esper
 - **Datos de salud**: ya están bajo RLS; los logs del asistente también. No se mandan a la IA nombre ni email, solo datos del perfil físico.
 - **No es consejo médico**: aviso corto; alergias e intolerancias del cuestionario se pasan como restricciones duras al prompt.
 
-## 6. Decisiones que necesito de EVER antes de la fase 1
+## 6. Decisiones — resueltas (ver arriba, "Decisiones tomadas")
 
-1. **Estructura del plan de comidas**: ¿"día de entreno" + "día de descanso" (2 menús, más simple y realista) o 7 días distintos?
-2. **Comidas por día**: ¿fijas en 4 (desayuno, almuerzo, merienda, cena) + snack opcional, o lo elige el cliente en el cuestionario? (Propongo: lo elige el cliente, 3 a 6.)
-3. **¿Quién puede editar la dieta aplicada?** Propongo: solo EVER; el cliente sustituye ingredientes (ya existe) pero no reescribe el plan.
-4. **Formato del .txt de dieta**: ¿tenés un ejemplo real de cómo las escribís? Con uno o dos ejemplos tuyos ajusto el prompt a tu estilo.
+## 7. Marco legal: recomendaciones, no plan de nutricionista
+
+Todo lo nutricional se presenta como **orientación del entrenador basada en referencias generales**, no como prescripción dietética profesional. Se aplica en tres capas:
+
+**a) Lenguaje en toda la app** (cliente y entrenador):
+- "Recomendación de comidas" en vez de "Plan de dieta" / "Dieta". "Te recomendamos" en vez de "Tenés que". "Referencia diaria" en vez de "Objetivo prescrito".
+- La IA recibe la instrucción de redactar como entrenador ("sugerencia", "podés"), nunca como profesional de la salud, y de no dar indicaciones sobre enfermedades, medicación ni suplementos.
+
+**b) Descargo aceptado una vez** (en el paso nutricional del onboarding, con `acepto_descargo_at` guardado con fecha):
+> Las recomendaciones de alimentación de esta app son orientación general de tu entrenador basada en referencias nutricionales públicas (USDA, Open Food Facts) y en los datos que cargaste. No son un plan elaborado por un nutricionista ni reemplazan una consulta médica. Si tenés una condición de salud, embarazo, trastorno alimentario o tomás medicación, consultá con un profesional antes de seguirlas.
+
+- Se muestra también en el pie de la pantalla de nutrición y en la primera respuesta del asistente de situaciones (fase 2), en versión corta con enlace al texto completo.
+
+**c) Restricciones duras**: alergias e intolerancias del cuestionario se pasan a la IA como prohibiciones y, además, el post-proceso determinista rechaza cualquier ingrediente que coincida con ellas (no depende del modelo).
+
+Nota: esto es una medida de prudencia razonable, no asesoría legal. Si EVER va a cobrar a escala, conviene que un abogado revise el texto del descargo y los términos del servicio.
