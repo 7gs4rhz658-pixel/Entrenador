@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ClienteAcciones from "@/components/ClienteAcciones";
+import InformesEntrenador from "@/components/InformesEntrenador";
 import CloseWeekButton from "@/components/CloseWeekButton";
 import NewBlockButton from "@/components/NewBlockButton";
 import NutricionDia from "@/components/NutricionDia";
@@ -13,6 +14,7 @@ import { iaDisponible } from "@/lib/ai";
 import {
   ejerciciosPorDia,
   getBloque,
+  getCheckins,
   getConsultasAsistente,
   getDias,
   getEjercicios,
@@ -25,6 +27,7 @@ import {
   planesPorEjercicio,
   q
 } from "@/lib/data";
+import { informeATexto } from "@/lib/ai-informe";
 import { objetivosDeReferencia } from "@/lib/comidas-service";
 import { fmtTiempoRelativo, hoyFecha, nombreDia } from "@/lib/format";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
@@ -187,6 +190,8 @@ async function Resumen({ perfil }: { perfil: Profile }) {
         </ul>
       </section>
 
+      <Informes userId={perfil.id} />
+
       {c ? (
         <section className="card text-sm">
           <h2 className="mb-2 font-bold">Cuestionario</h2>
@@ -264,6 +269,13 @@ async function Comida({ perfil, fecha, base }: { perfil: Profile; fecha: string;
       <NutricionDia perfil={perfil} fecha={fecha} base={base} paraEntrenador />
     </div>
   );
+}
+
+async function Informes({ userId }: { userId: string }) {
+  const checkins = await getCheckins(userId, 12);
+  const textos: Record<string, string> = {};
+  for (const c of checkins) textos[c.id] = c.informe_final ?? (c.informe ? informeATexto(c.informe) : "");
+  return <InformesEntrenador checkins={checkins} textoInicial={textos} />;
 }
 
 // Qué le pregunta el cliente al asistente: pista de qué le cuesta y de

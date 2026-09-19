@@ -297,3 +297,54 @@ export interface AsistenteLog {
   aplicado: boolean;
   created_at: string;
 }
+
+// ── Check-in semanal e informe ──────────────────────────────────
+
+// Números de la semana calculados desde los registros (sin IA)
+export interface ResumenSemana {
+  semana: number;
+  entrenos_hechos: number;
+  entrenos_planificados: number;
+  series_registradas: number;
+  comidas_menu_hechas: number;
+  comidas_menu_esperadas: number;
+  dias_con_registro_comida: number;
+  kcal_promedio: number | null;
+  prot_promedio: number | null;
+  kcal_referencia: number | null;
+  prot_referencia: number | null;
+  peso_anterior_kg: number | null;
+  peso_actual_kg: number | null;
+  mejoras_carga: { ejercicio: string; antes_kg: number; ahora_kg: number }[];
+  consultas_asistente: number;
+}
+
+export interface Informe {
+  titulo: string;
+  resumen: string;
+  logros: string[];
+  a_mejorar: string[];
+  foco: string[];
+  mensaje: string;
+}
+
+export interface Checkin {
+  id: string;
+  user_id: string;
+  mesocycle_id: string;
+  semana: number;
+  fecha: string;
+  peso_kg: number | null;
+  cintura_cm: number | null;
+  energia: number | null;
+  sueno: number | null;
+  adherencia: number | null;
+  comentario: string;
+  resumen: ResumenSemana | null;
+  informe: Informe | null;
+  informe_estado: "pendiente" | "borrador" | "aprobado";
+  informe_final: string | null;
+  aprobado_at: string | null;
+  visto_at: string | null;
+  created_at: string;
+}

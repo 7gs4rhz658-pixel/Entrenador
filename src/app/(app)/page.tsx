@@ -1,11 +1,14 @@
 import Link from "next/link";
+import AdherenciaSemana from "@/components/AdherenciaSemana";
 import AnticipoDia from "@/components/AnticipoDia";
+import InformeCard from "@/components/InformeCard";
 import CloseWeekButton from "@/components/CloseWeekButton";
 import NewBlockButton from "@/components/NewBlockButton";
 import { requireCliente } from "@/lib/auth";
 import {
   ejerciciosPorDia,
   getBloque,
+  getCheckins,
   getComidas,
   getDias,
   getEjercicios,
@@ -14,6 +17,7 @@ import {
 } from "@/lib/data";
 import { fmtKcal, fmtLitros, horaLocal, hoyDiaSemana, hoyFecha, nombreDia } from "@/lib/format";
 import { recomendacionPara } from "@/lib/meal-plan-db";
+import { adherenciaSemanaActual, checkinPendiente } from "@/lib/stats";
 import { macrosDe, objetivosCliente, sumarMacros } from "@/lib/nutrition";
 import { faseDe, nombreFase } from "@/lib/progression";
 
@@ -23,7 +27,7 @@ export const maxDuration = 60;
 export default async function Home({
   searchParams
 }: {
-  searchParams?: { bienvenida?: string };
+  searchParams?: { bienvenida?: string; checkin?: string };
 }) {
   const { userId, perfil } = await requireCliente();
 
@@ -66,6 +70,13 @@ export default async function Home({
   const reco = await recomendacionPara(userId, entrenaAnticipo ? "entreno" : "descanso", perfil.cuestionario_nutricion);
   const diaBatch = perfil.cuestionario_nutricion?.batch_cooking ? perfil.cuestionario_nutricion.dia_batch ?? 7 : null;
 
+  const [adherencia, pendiente, checkins] = await Promise.all([
+    adherenciaSemanaActual(perfil),
+    checkinPendiente(userId),
+    getCheckins(userId, 3)
+  ]);
+  const informe = checkins.find((c) => c.informe_estado === "aprobado" && c.informe_final);
+
   return (
     <main>
       {searchParams?.bienvenida ? (
@@ -77,6 +88,26 @@ export default async function Home({
           </p>
         </section>
       ) : null}
+
+      {searchParams?.checkin ? (
+        <section className="card mb-4 border-ok/40">
+          <p className="font-semibold">✓ Check-in enviado</p>
+          <p className="mt-1 text-sm text-muted">
+            Tu entrenador revisa el informe de la semana y te lo manda acá mismo.
+          </p>
+        </section>
+      ) : null}
+
+      {pendiente ? (
+        <Link href="/checkin" className="card mb-4 block border-warn/50">
+          <p className="font-semibold">📝 Check-in de la semana {pendiente.semana}</p>
+          <p className="mt-1 text-sm text-muted">
+            Un minuto: peso, energía y cómo te fue. Con eso sale tu informe semanal →
+          </p>
+        </Link>
+      ) : null}
+
+      {informe ? <InformeCard checkin={informe} /> : null}
 
       <header className="mb-4">
         <p className="text-sm font-medium text-muted">{meso.nombre}</p>
@@ -132,6 +163,8 @@ export default async function Home({
           </p>
         </Link>
       )}
+
+      <AdherenciaSemana datos={adherencia} />
 
       <AnticipoDia
         perfil={perfil}
@@ -207,6 +240,7 @@ export default async function Home({
             mesoId={meso.id}
             semana={meso.semana_actual}
             esUltima={meso.semana_actual >= meso.total_semanas}
+            conCheckin
           />
         ) : (
           <NewBlockButton nombreAnterior={meso.nombre} />

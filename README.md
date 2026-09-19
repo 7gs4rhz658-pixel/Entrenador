@@ -77,7 +77,8 @@ Facts · Vercel.
    entrenador). Pegalo y corrélo.
 4. SQL Editor → pegá y corré `supabase/migrations/0003_recomendacion_comidas.sql`
    (menú de comidas, cuestionario nutricional, descargo) y después
-   `supabase/migrations/0004_asistente.sql` (asistente de situaciones).
+   `supabase/migrations/0004_asistente.sql` (asistente de situaciones) y
+   `supabase/migrations/0005_checkins.sql` (check-in semanal e informe).
 5. Authentication → Providers → Email: recomendado **desactivar "Confirm
    email"** (el SMTP gratuito manda muy pocos correos por hora). Si lo dejás,
    la app muestra la pantalla "Confirmá tu correo".
@@ -156,6 +157,8 @@ src/
     ai.ts                 proxy IA Groq/Gemini (plan, .txt, ajustes, sustitución, recetas)
     ai-comidas.ts         IA de la recomendación de comidas (menú, .txt, batch cooking)
     ai-asistente.ts       asistente de situaciones (fiesta, restaurante, falta X, viaje…)
+    ai-informe.ts         borrador del informe semanal (el entrenador lo aprueba)
+    stats.ts              adherencia de la semana y resumen numérico para el informe
     meal-plan.ts          recomendación de comidas: sanear, cuadrar, compras, avisos, batch
     meal-plan-db.ts       resolver ingredientes contra la base y escribir/leer el menú
     comidas-service.ts    orquesta IA/.txt → resolver → cuadrar → aplicar
@@ -163,7 +166,7 @@ src/
     nutrition.ts          TMB, macros por objetivo, regla de tres
     off.ts                Open Food Facts + caché en `ingredients`
     pagos.ts              checkout simulado (punto de cambio a pago real)
-supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes) · 0003 recomendación de comidas · 0004 asistente
+supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes) · 0003 recomendación de comidas · 0004 asistente · 0005 check-ins
 scripts/                  tests: progresión, planes/nutrición, RLS
 ```
 

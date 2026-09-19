@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { getBloque, getClientes, getUltimoRegistro } from "@/lib/data";
+import { getBloque, getClientes, getInformesPendientes, getUltimoRegistro } from "@/lib/data";
 import { fmtTiempoRelativo } from "@/lib/format";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
 
 export default async function ClientesPage() {
-  const clientes = await getClientes();
+  const [clientes, pendientesInforme] = await Promise.all([getClientes(), getInformesPendientes()]);
+  const conInforme = new Set(pendientesInforme.map((p) => p.user_id));
   const filas = await Promise.all(
     clientes.map(async (c) => {
       const [meso, ultimo] = await Promise.all([getBloque(c.id), getUltimoRegistro(c.id)]);
@@ -35,6 +36,7 @@ export default async function ClientesPage() {
           if (!c.onboarding_completo) pendientes.push("cuestionario");
           if (c.estado_pago !== "pagado") pendientes.push("pago");
           if (c.onboarding_completo && c.estado_pago === "pagado" && !meso) pendientes.push("sin plan");
+          if (conInforme.has(c.id)) pendientes.push("informe por aprobar");
           return (
             <li key={c.id}>
               <Link

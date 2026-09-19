@@ -1,19 +1,23 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { finalizarSemana } from "@/app/actions/entreno";
 
 export default function CloseWeekButton({
   mesoId,
   semana,
-  esUltima
+  esUltima,
+  conCheckin = false
 }: {
   mesoId: string;
   semana: number;
   esUltima: boolean;
+  conCheckin?: boolean; // el cliente sigue al check-in de la semana
 }) {
   const [pendiente, iniciar] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   function onClick() {
     const aviso = esUltima
@@ -24,6 +28,7 @@ export default function CloseWeekButton({
     iniciar(async () => {
       const r = await finalizarSemana(mesoId);
       if (r.error) setError(r.error);
+      else if (conCheckin) router.push("/checkin");
     });
   }
 

@@ -1,6 +1,7 @@
 import { db } from "./supabase/server";
 import type {
   AsistenteLog,
+  Checkin,
   Exercise,
   Ingredient,
   LoggedSet,
@@ -341,5 +342,45 @@ export async function getAjusteDelDia(userId: string, fecha: string): Promise<As
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
+  );
+}
+
+// ── Check-ins ───────────────────────────────────────────────────
+
+export async function getCheckins(userId: string, limite = 12): Promise<Checkin[]> {
+  return q<Checkin[]>(
+    db().from("checkins").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(limite)
+  );
+}
+
+export async function getCheckin(mesoId: string, semana: number): Promise<Checkin | null> {
+  return q<Checkin | null>(
+    db().from("checkins").select("*").eq("mesocycle_id", mesoId).eq("semana", semana).maybeSingle()
+  );
+}
+
+export async function getSemanasCerradas(mesoId: string): Promise<{ semana: number; cerrada_at: string }[]> {
+  return q<{ semana: number; cerrada_at: string }[]>(
+    db().from("week_closures").select("semana, cerrada_at").eq("mesocycle_id", mesoId).order("semana")
+  );
+}
+
+// Registros de series de un rango de fechas (adherencia de la semana)
+export async function getLogsRango(userId: string, desdeIso: string, hastaIso: string): Promise<LoggedSet[]> {
+  return q<LoggedSet[]>(
+    db()
+      .from("logged_sets")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("logged_at", desdeIso)
+      .lte("logged_at", hastaIso)
+      .order("logged_at")
+  );
+}
+
+// Clientes con informe pendiente de aprobar (para el panel)
+export async function getInformesPendientes(): Promise<{ user_id: string; semana: number }[]> {
+  return q<{ user_id: string; semana: number }[]>(
+    db().from("checkins").select("user_id, semana").eq("informe_estado", "borrador")
   );
 }
