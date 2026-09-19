@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* App oscura por defecto (se usa en el gym). Paleta validada contra la
+   superficie #141A21 con el validador de dataviz. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0f14;
+  --surface: #141a21;
+  --surface-2: #1c242e;
+  --line: #27313d;
+  --ink: #e6edf3;
+  --muted: #8b98a8;
+  --accent: #4d95ec;
+  --accent-ink: #071a2f;
+  --ok: #0ca30c;
+  --warn: #fab219;
+  --danger: #e66767;
+  --serie: #3987e5; /* serie única del gráfico de progreso */
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px; /* evita el zoom automático de iOS en inputs */
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-line bg-surface p-4;
+  }
+  .btn {
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-base font-semibold transition active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-accent-ink;
+  }
+  .btn-ghost {
+    @apply btn border border-line bg-transparent text-ink;
+  }
+  .btn-danger {
+    @apply btn border border-danger/40 bg-transparent text-danger;
+  }
+  .input {
+    @apply w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-accent;
+  }
+  .label {
+    @apply mb-1 block text-sm font-medium text-muted;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold;
+  }
+}

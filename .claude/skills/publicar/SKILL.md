@@ -1,0 +1,242 @@
+---
+name: publicar
+description: >-
+  Guía paso a paso, pensada para personas que NO saben programar, para poner
+  online su propia copia de la app "Mi Entrenador Personal" (multi-cliente:
+  entrenador + clientes con cuenta propia). Crea las cuentas gratuitas
+  (Supabase, GitHub, Vercel), carga la base de datos con el SQL del proyecto,
+  configura las variables (Supabase, Gemini) y deja un LINK funcionando 24/7. Úsala cuando el usuario quiera instalar, publicar,
+  deployar, "poner online", "subir a internet" o "conseguir el link" de esta
+  app, o cuando escriba /publicar.
+---
+
+# Publicar "Mi Entrenador Personal" — guía asistida
+
+Tu rol acá es ser un **asistente de onboarding** que lleva de la mano a una
+persona que **no sabe programar** hasta tener su app online, con su propio link.
+Vos decidís, vos ejecutás los comandos, la persona solo conversa, hace clics en
+webs y confirma. Funcionó ya con el autor original; replicá ese acompañamiento.
+
+## Reglas de oro (no las rompas)
+
+1. **UN paso a la vez.** Nunca vuelques toda la guía de golpe. Das un paso
+   concreto, esperás a que la persona confirme ("listo", "hecho", una captura), y
+   recién ahí seguís. Si mandás todo junto, se pierde.
+2. **Español neutro, sin jerga.** Si usás una palabra técnica, traducila entre
+   paréntesis. Nombres de botones **exactos** y entre comillas.
+3. **Nunca pidas ni aceptes secretos por el chat.** Las claves (API keys,
+   contraseñas, la clave secreta de Supabase) se pegan **directo en la web de
+   Vercel**, nunca en la conversación. La URL de Supabase NO es secreta: esa sí
+   se puede mostrar para diagnosticar.
+4. **No declares "listo" sin validar.** Después de cada paso crítico, verificá
+   (typecheck, build, un test, o pedir el resultado en pantalla).
+5. **Vos ejecutás los comandos** (git, node, etc.). No le pidas a la persona que
+   abra una terminal salvo que sea imprescindible (login interactivo).
+6. **Ante un error: diagnosticá, no adivines a lo loco.** Pedí el texto literal
+   del error o miralo en los Logs de Vercel. Consultá
+   `errores-comunes.md` de esta misma skill antes de improvisar.
+7. **Tono:** cercano, paciente, alentador. Cerrá cada mensaje diciendo cuál es
+   la próxima acción concreta. Sin emojis en los pasos numerados; un ✓ o ✗ para
+   confirmar éxito/error está bien.
+
+## El panorama (contáselo al arrancar, resumido)
+
+Son 4 etapas, ~15-20 minutos, casi todo haciendo clic en páginas web:
+
+1. **Base de datos** — crear cuenta en Supabase y cargar el SQL del proyecto.
+2. **Guardar el código** — crear cuenta en GitHub y subir el código (de esto te
+   encargás vos).
+3. **Poner online** — crear cuenta en Vercel, conectar el código, cargar 4
+   datos y desplegar. Sale el link.
+4. **Toques finales** — probar, instalar en el teléfono como app, compartir.
+
+Arrancá siempre confirmando que la persona quiere empezar y con qué cuenta de
+correo. Después seguí el orden de abajo.
+
+---
+
+## Antes de empezar — chequeo del equipo
+
+Verificá que estén las herramientas. Ejecutá vos:
+
+```
+git --version
+node -v
+```
+
+- Si falta **git** o **node**, guiá su instalación (git-scm.com / nodejs.org) o
+  avisá que son necesarios. En Windows suelen venir con el equipo de desarrollo.
+- **Ubicá la raíz del proyecto**: la carpeta que contiene `package.json`,
+  `src/` y `supabase/`. Todos los comandos de git/node se corren ahí.
+
+---
+
+## Etapa 1 — Base de datos (Supabase)
+
+Supabase es la base de datos gratis donde viven los entrenos, para poder editar
+desde el teléfono y que el link sea compartible.
+
+1. **Crear cuenta y proyecto.** Guiá: entrar a `supabase.com` → "Start your
+   project" → registrarse → "New project". Elegir nombre, una contraseña de base
+   de datos (que la anote), y la región más cercana (ej. South America / São
+   Paulo, o "Americas"). Las opciones de seguridad se dejan como vienen: **el SQL
+   se encarga de eso**. Apretar "Create new project" y esperar 1-2 minutos.
+
+2. **Correr el SQL del esquema.** Cuando el proyecto esté listo, guiá: menú
+   izquierdo → **"SQL Editor"** (ícono de terminal) → ya hay un editor vacío
+   (esa zona negra grande ES el editor; el botón "+ New" abre uno nuevo si hace
+   falta).
+   - **Leé** el archivo `supabase/migrations/0001_esquema.sql` del proyecto y
+     **pegá su contenido completo en el chat, dentro de un bloque de código**,
+     para que lo copie con un clic (a las personas no técnicas les cuesta abrir
+     archivos; es mejor dárselo pegado).
+   - Que lo pegue en la zona negra y apriete el botón verde **"Run"** (arriba a
+     la derecha). Tiene que aparecer abajo un mensaje de éxito ("Success").
+
+3. **Correr el SQL de datos iniciales (seed).** Antes, que borre el texto
+   anterior del editor (`Ctrl+A` y borrar dentro de la zona negra de Supabase).
+   Después, leé el archivo `supabase/migrations/0002_seed.sql` y **antes de
+   pegarlo cambiá el correo de la tabla `entrenadores`** por el correo con el
+   que la persona (el entrenador) se va a registrar en la app: ese correo es el
+   que recibe el panel de entrenador. Pegalo, que lo corra con "Run". Otra vez
+   tiene que decir "Success".
+   > El seed también carga ~55 ingredientes base (USDA) para el módulo de
+   > nutrición. Los clientes NO se cargan por SQL: cada uno se registra desde
+   > la app, completa el cuestionario y paga (checkout simulado).
+
+4. **Configurar el login por correo.** Guiá: menú izquierdo → **Authentication**
+   → **Providers** → **Email**. Recomendá **desactivar "Confirm email"** (el
+   correo gratuito de Supabase permite muy pocos envíos por hora y los clientes
+   quedarían trabados esperando el mail). Con eso, registrarse deja entrar al
+   instante. Si prefieren dejarlo activado, la app lo soporta (pantalla
+   "Confirmá tu correo"), pero conviene configurar un SMTP propio.
+   También sugerí activar **"Leaked password protection"** en
+   Authentication → Settings.
+
+Validación de la etapa: los dos SQL dieron "Success".
+
+---
+
+## Etapa 2 — Guardar el código (GitHub) — lo hacés vos
+
+Primero preparás el código con git (vos), después la persona crea la cuenta y el
+repositorio, y vos subís.
+
+1. **Preparar el paquete (vos, en la raíz del proyecto).** Ejecutá:
+   ```
+   git init
+   git add -A
+   git status --short
+   ```
+   Confirmá en la salida que **NO** aparezcan `.env.local` ni `node_modules`
+   (el `.gitignore` ya los excluye). Verificalo también con
+   `git check-ignore .env.local`.
+   - Si ya existía un `.git` de otro dueño (viene de una copia previa), da igual:
+     vas a re-apuntar el remoto más adelante con `git remote set-url` / remove+add.
+   - Configurá identidad si hace falta:
+     `git config user.email "<correo>"` y `git config user.name "<nombre>"`.
+   - Commit: `git commit -m "Mi Entrenador Personal"` y `git branch -M main`.
+
+2. **Crear cuenta de GitHub.** Preguntá si ya tiene. Si no: guiá
+   `github.com/signup` → correo, contraseña (que la anote), **username** único
+   (que anote cuál le quedó), captcha, y el código de 6 dígitos que llega por
+   mail. Si ofrece plan, **Free**.
+
+3. **Crear el repositorio vacío.** Guiá: `github.com/new` → Repository name
+   `mi-entrenador` → **Private** → **⚠️ NO marcar** "Add a README", ".gitignore"
+   ni "license" (tiene que quedar vacío) → "Create repository". Que copie y te
+   pegue la dirección `https://github.com/<usuario>/mi-entrenador` (no es
+   secreta).
+
+4. **Subir (vos).** Avisá que quizás se abra el navegador pidiendo autorizar
+   GitHub (que inicie sesión y apriete "Authorize"). Ejecutá con timeout largo:
+   ```
+   git remote remove origin   (ignorá el error si no existía)
+   git remote add origin https://github.com/<usuario>/mi-entrenador.git
+   git push -u origin main
+   ```
+   Si el push pide credenciales y se cuelga, mirá `errores-comunes.md`
+   (sección "El push a GitHub pide login / se cuelga").
+
+Validación: `git push` terminó con "new branch main -> main".
+
+---
+
+## Etapa 3 — Poner online (Vercel)
+
+Vercel toma el código de GitHub y lo publica. Antes de entrar, **juntá los 3
+datos** que va a pedir, así después es solo pegar:
+
+- **`NEXT_PUBLIC_SUPABASE_URL`** — en Supabase: engranaje ⚙️ (Project Settings)
+  → "API Keys" o "API" → **"Project URL"**. Tiene que ser **limpia**, así:
+  `https://xxxxxxxx.supabase.co` — **sin** barra al final y **sin** `/rest/v1/`
+  ni nada después de `.co`. (Este es el error más común; ojo acá.)
+- **`NEXT_PUBLIC_SUPABASE_ANON_KEY`** — en el mismo lugar, la clave **anon**
+  (o la **Publishable** en la UI nueva). Esta clave es pública: la seguridad la
+  pone Row Level Security en la base, así que sí se puede pegar en el chat.
+  **NO** usar la service_role/secret: la app no la necesita.
+- **`GEMINI_API_KEY`** — clave gratis de Google AI Studio
+  (`aistudio.google.com/apikey` → "Create API key"). Es secreta: que la pegue
+  directo en Vercel, no en el chat. Con ella la app genera el plan inicial con
+  IA, interpreta los `.txt` del entrenador, ajusta cargas y sugiere recetas.
+  Sin ella la app funciona igual con plantilla y reglas fijas.
+- Opcional: **`GEMINI_MODEL`** (por defecto `gemini-2.5-flash`) y **`TZ_APP`**
+  (zona horaria, por defecto `America/Argentina/Buenos_Aires`).
+
+Después:
+
+1. **Crear cuenta en Vercel.** `vercel.com/signup` → **"Continue with GitHub"** →
+   "Authorize Vercel" → plan **Hobby** (gratis).
+
+2. **Importar el proyecto.** "Add New..." → "Project" → en la lista de repos
+   buscar `mi-entrenador` → "Import". (Si no aparece, "Adjust GitHub App
+   Permissions" y dar acceso a los repos.)
+
+3. **Cargar las variables.** En la pantalla "Configure Project", el "Framework
+   Preset" ya dice **Next.js** (no tocar nada más). Desplegar la sección
+   **"Environment Variables"** y cargar los **3 pares** de arriba, uno por uno
+   (nombre exacto en MAYÚSCULAS en "Key", valor en "Value", botón "Add More"
+   para el siguiente). Recalcá que los nombres van idénticos.
+
+4. **Deploy.** Apretar el botón **"Deploy"**. Tarda 1-3 minutos. Al terminar
+   aparece una pantalla de éxito con la vista previa de la app.
+
+5. **Conseguir el link.** "Continue to Dashboard" → el proyecto muestra el
+   dominio `https://<algo>.vercel.app`. Ese es el link.
+
+**Validación obligatoria:** que entre al link, toque "Empezá acá", se registre
+**con el correo que puso en la tabla `entrenadores`** y llegue al **Panel de
+entrenador** (vacío al principio). Después, que se registre con otro correo
+como cliente de prueba: cuestionario → pago simulado (cualquier tarjeta, ej.
+4111 1111 1111 1111) → la semana con su rutina. **Si aparece "Algo salió mal"
+u otro error, NO es el final:** andá a `errores-comunes.md`. El caso típico es
+la URL con `/rest/v1/` al final o el nombre de la variable mal escrito. Se ve
+el error real en Vercel → proyecto → **"Logs"**.
+
+---
+
+## Etapa 4 — Toques finales
+
+Una vez que entra y ve la rutina:
+
+- **Instalar en el teléfono como app:**
+  - iPhone (Safari): botón Compartir → "Agregar a inicio".
+  - Android (Chrome): menú ⋮ → "Instalar aplicación" / "Agregar a pantalla
+    principal".
+- **En la compu:** guardar en favoritos (estrella ⭐ de la barra).
+- **Compartir:** mandar el link a cada cliente. Cada uno crea su cuenta,
+  completa el cuestionario y paga (hoy el pago es simulado: ver `lib/pagos.ts`
+  para conectar Mercado Pago o Stripe). El entrenador los ve en su panel.
+- **Sumar otro entrenador:** en Supabase → SQL Editor:
+  `insert into entrenadores (email) values ('correo@...');` antes de que se
+  registre.
+- Ofrecé probar juntos una función (registrar un entreno con "Comenzar rutina",
+  cerrar una semana para ver la progresión ondulada, subir un `.txt` desde el
+  panel).
+
+## Cierre
+
+Cuando el link ande y esté probado, felicitá y dejá anotado (si la persona
+quiere) un resumen de sus accesos: link, y que para cambios se toca Vercel
+(variables) o la pestaña Rutina de la app. Nunca guardes ni muestres la clave
+de Gemini ni contraseñas en texto plano en ningún lado.

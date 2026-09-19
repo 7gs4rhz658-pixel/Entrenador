@@ -1,0 +1,122 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { requireSesion } from "@/lib/auth";
+import { generarPlanInicial, iaDisponible } from "@/lib/ai";
+import { exec, getPerfil } from "@/lib/data";
+import { procesarPago } from "@/lib/pagos";
+import { planPlantilla } from "@/lib/plan-generator";
+import { aplicarPlan } from "@/lib/plan-import";
+import { db } from "@/lib/supabase/server";
+import type { Cuestionario, NivelActividad, Objetivo, Sexo } from "@/lib/types";
+
+type Estado = { error?: string };
+
+function mensaje(e: unknown): string {
+  return e instanceof Error ? e.message : "Ocurrió un error inesperado.";
+}
+
+export async function guardarCuestionario(
+  _prev: Estado,
+  formData: FormData
+): Promise<Estado> {
+  const sesion = await requireSesion();
+
+  const edad = Number(formData.get("edad"));
+  const sexo = String(formData.get("sexo") ?? "") as Sexo;
+  const peso = Number(String(formData.get("peso_kg") ?? "").replace(",", "."));
+  const altura = Number(String(formData.get("altura_cm") ?? "").replace(",", "."));
+  const actividad = String(formData.get("nivel_actividad") ?? "") as NivelActividad;
+  const objetivo = String(formData.get("objetivo") ?? "") as Objetivo;
+  const experiencia = String(formData.get("experiencia") ?? "") as Cuestionario["experiencia"];
+  const dias = formData
+    .getAll("dias")
+    .map(Number)
+    .filter((d) => Number.isInteger(d) && d >= 1 && d <= 7);
+  const minutos = Number(formData.get("minutos_sesion"));
+  const equipamiento = String(formData.get("equipamiento") ?? "") as Cuestionario["equipamiento"];
+  const lesiones = String(formData.get("lesiones") ?? "").trim().slice(0, 500);
+  const preferencias = String(formData.get("preferencias") ?? "").trim().slice(0, 500);
+
+  if (!Number.isFinite(edad) || edad < 14 || edad > 90) return { error: "Revisá la edad (entre 14 y 90)." };
+  if (sexo !== "masculino" && sexo !== "femenino") return { error: "Elegí el sexo." };
+  if (!Number.isFinite(peso) || peso < 30 || peso > 300) return { error: "Revisá el peso corporal (en kg)." };
+  if (!Number.isFinite(altura) || altura < 120 || altura > 230) return { error: "Revisá la altura (en cm)." };
+  if (!["sedentario", "ligero", "moderado", "alto"].includes(actividad)) return { error: "Elegí el nivel de actividad." };
+  if (!["deficit", "mantenimiento", "superavit"].includes(objetivo)) return { error: "Elegí tu objetivo." };
+  if (!["principiante", "intermedio", "avanzado"].includes(experiencia)) return { error: "Elegí tu experiencia." };
+  if (dias.length < 1) return { error: "Marcá al menos un día para entrenar." };
+  if (![30, 45, 60, 90].includes(minutos)) return { error: "Elegí cuánto tiempo tenés por sesión." };
+  if (!["gimnasio", "casa_basico", "sin_equipo"].includes(equipamiento)) return { error: "Elegí con qué equipamiento contás." };
+
+  const cuestionario: Cuestionario = {
+    experiencia,
+    dias_disponibles: dias.sort((a, b) => a - b),
+    minutos_sesion: minutos,
+    equipamiento,
+    lesiones,
+    preferencias
+  };
+
+  try {
+    await exec(
+      db()
+        .from("profiles")
+        .update({
+          edad,
+          sexo,
+          peso_kg: peso,
+          altura_cm: altura,
+          nivel_actividad: actividad,
+          objetivo,
+          cuestionario,
+          onboarding_completo: true
+        })
+        .eq("id", sesion.userId)
+    );
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+  revalidatePath("/", "layout");
+  redirect(sesion.perfil.estado_pago === "pagado" ? "/" : "/pago");
+}
+
+// Checkout (simulado) + generación del plan inicial. Si la IA no está
+// configurada o falla, se usa la plantilla para que el cliente nunca
+// quede sin rutina; el entrenador puede regenerarla desde su panel.
+export async function pagar(_prev: Estado, formData: FormData): Promise<Estado> {
+  const sesion = await requireSesion();
+  if (!sesion.perfil.onboarding_completo) redirect("/cuestionario");
+
+  const r = await procesarPago({
+    titular: String(formData.get("titular") ?? ""),
+    numero: String(formData.get("numero") ?? ""),
+    vencimiento: String(formData.get("vencimiento") ?? ""),
+    cvv: String(formData.get("cvv") ?? "")
+  });
+  if (!r.ok) return { error: r.error };
+
+  try {
+    await exec(
+      db().from("profiles").update({ estado_pago: "pagado" }).eq("id", sesion.userId)
+    );
+    const perfil = await getPerfil(sesion.userId);
+    let plan;
+    let origen: "ia" | "plantilla" = "plantilla";
+    if (iaDisponible()) {
+      try {
+        plan = await generarPlanInicial(perfil);
+        origen = "ia";
+      } catch (e) {
+        console.error("Plan IA falló, uso plantilla:", mensaje(e));
+      }
+    }
+    if (!plan) plan = planPlantilla(perfil.cuestionario);
+    await aplicarPlan(sesion.userId, plan, origen);
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+  revalidatePath("/", "layout");
+  redirect("/?bienvenida=1");
+}
