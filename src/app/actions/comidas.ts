@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { ErrorIA, iaDisponible } from "@/lib/ai";
+import { aplicarAjuste, descartarAjuste } from "@/lib/ajuste-macros";
 import { requireEntrenador, resolverUsuario } from "@/lib/auth";
 import {
   aplicarRecomendacion,
@@ -164,6 +165,32 @@ export async function marcarComida(input: {
         db().from("meal_logs").delete().eq("user_id", userId).eq("fecha", input.fecha).in("plan_item_id", ids)
       );
     }
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+// ── Ajuste quincenal de la referencia ───────────────────────────
+
+export async function aplicarAjusteMacros(input: { userId: string; deltaKcal: number }): Promise<Resultado> {
+  if (![150, -150].includes(input.deltaKcal)) return { error: "Ajuste inválido." };
+  try {
+    await requireEntrenador();
+    const perfil = await getPerfil(input.userId);
+    await aplicarAjuste(perfil, input.deltaKcal);
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function descartarAjusteMacros(input: { userId: string }): Promise<Resultado> {
+  try {
+    await requireEntrenador();
+    await descartarAjuste(input.userId);
   } catch (e) {
     return { error: mensaje(e) };
   }

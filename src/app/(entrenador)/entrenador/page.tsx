@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { propuestaAjuste } from "@/lib/ajuste-macros";
 import { getBloque, getClientes, getInformesPendientes, getUltimoRegistro } from "@/lib/data";
 import { fmtTiempoRelativo } from "@/lib/format";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
@@ -8,8 +9,8 @@ export default async function ClientesPage() {
   const conInforme = new Set(pendientesInforme.map((p) => p.user_id));
   const filas = await Promise.all(
     clientes.map(async (c) => {
-      const [meso, ultimo] = await Promise.all([getBloque(c.id), getUltimoRegistro(c.id)]);
-      return { c, meso, ultimo };
+      const [meso, ultimo, ajuste] = await Promise.all([getBloque(c.id), getUltimoRegistro(c.id), propuestaAjuste(c)]);
+      return { c, meso, ultimo, ajuste };
     })
   );
   const activos = filas.filter((f) => f.c.activo);
@@ -31,12 +32,13 @@ export default async function ClientesPage() {
       ) : null}
 
       <ul className="flex flex-col gap-3">
-        {[...activos, ...inactivos].map(({ c, meso, ultimo }) => {
+        {[...activos, ...inactivos].map(({ c, meso, ultimo, ajuste }) => {
           const pendientes: string[] = [];
           if (!c.onboarding_completo) pendientes.push("cuestionario");
           if (c.estado_pago !== "pagado") pendientes.push("pago");
           if (c.onboarding_completo && c.estado_pago === "pagado" && !meso) pendientes.push("sin plan");
           if (conInforme.has(c.id)) pendientes.push("informe por aprobar");
+          if (ajuste) pendientes.push("ajuste de kcal sugerido");
           return (
             <li key={c.id}>
               <Link

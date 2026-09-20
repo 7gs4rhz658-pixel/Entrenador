@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import AjusteMacros from "@/components/AjusteMacros";
 import ClienteAcciones from "@/components/ClienteAcciones";
 import InformesEntrenador from "@/components/InformesEntrenador";
 import CloseWeekButton from "@/components/CloseWeekButton";
@@ -28,6 +29,7 @@ import {
   q
 } from "@/lib/data";
 import { informeATexto } from "@/lib/ai-informe";
+import { propuestaAjuste } from "@/lib/ajuste-macros";
 import { objetivosDeReferencia } from "@/lib/comidas-service";
 import { fmtTiempoRelativo, hoyFecha, nombreDia } from "@/lib/format";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
@@ -246,9 +248,10 @@ async function Resumen({ perfil }: { perfil: Profile }) {
 // Recomendación de comidas (referencia, generar/IA, .txt, menú activo) y
 // el registro del día del cliente.
 async function Comida({ perfil, fecha, base }: { perfil: Profile; fecha: string; base: string }) {
-  const plan = await getPlanComidas(perfil.id);
+  const [plan, ajuste] = await Promise.all([getPlanComidas(perfil.id), propuestaAjuste(perfil)]);
   return (
     <div className="flex flex-col gap-3">
+      {ajuste ? <AjusteMacros userId={perfil.id} propuesta={ajuste} /> : null}
       {!perfil.cuestionario_nutricion ? (
         <p className="card text-sm text-warn">
           El cliente todavía no completó el cuestionario de comidas (momentos, horarios, alergias). La

@@ -61,6 +61,7 @@ export interface Profile {
   cuestionario_nutricion: CuestionarioNutricion | null;
   macros_manual: MacrosManual | null;
   acepto_descargo_at: string | null;
+  ajuste_macros_at: string | null;
   onboarding_completo: boolean;
   estado_pago: "pendiente" | "pagado";
   activo: boolean;
