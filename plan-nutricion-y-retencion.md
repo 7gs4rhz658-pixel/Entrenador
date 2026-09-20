@@ -1,6 +1,20 @@
 # Plan: Nutrición prescrita + asistente de situaciones + retención mensual
 
-Fecha: 2026-09-19 · Estado: **fase 1 implementada y verificada end-to-end (2026-09-19)**; fases 2 a 6 autorizadas, en curso.
+Fecha: 2026-09-19 · Estado: **fases 1 a 6 implementadas y verificadas end-to-end (2026-09-19/20)**. Pendiente: conectar Vercel (guía `/publicar`) y, más adelante, el pago real (Mercado Pago).
+
+## Qué quedó hecho (resumen)
+
+| Fase | Estado | Dónde |
+|---|---|---|
+| 1 Recomendación de comidas (IA + .txt), Hoy/Mañana te toca, compras, batch cooking, descargo | ✓ | migración 0003, `lib/meal-plan*.ts`, `ai-comidas.ts` |
+| 2 Asistente de situaciones | ✓ | migración 0004, `ai-asistente.ts`, `Asistente.tsx` |
+| 3 Check-in semanal + informe aprobado por el entrenador + adherencia | ✓ | migración 0005, `stats.ts`, `ai-informe.ts` |
+| 4 Ajuste quincenal de kcal | ✓ | migración 0006, `ajuste-macros.ts` |
+| 5 Tu mes + vencimiento del pago + bloqueo suave | ✓ | migración 0007, `/mes`, `pagos.ts` |
+| 6 Mensajes con borradores IA, abandono, push (PWA + cron), referidos | ✓ | migración 0008, `push.ts`, `avisos.ts`, `ai-mensajes.ts` |
+| — Pago real (Mercado Pago) | pendiente | `pagos.ts` (mock) |
+
+No verificado en local: la entrega real de notificaciones push (requiere teléfono + claves en Vercel + `SUPABASE_SERVICE_ROLE_KEY`); sí se verificó el service worker, la suscripción, la ruta del cron con su protección y el contenido del aviso (`/api/avisos/preview`).
 
 ## Decisiones tomadas (2026-09-19)
 
