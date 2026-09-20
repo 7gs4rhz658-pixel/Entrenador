@@ -1,7 +1,9 @@
 import Link from "next/link";
+import ActivarAvisos from "@/components/ActivarAvisos";
 import LogoutButton from "@/components/LogoutButton";
 import ProfileForm from "@/components/ProfileForm";
 import { requireCliente } from "@/lib/auth";
+import CodigoReferido from "@/components/CodigoReferido";
 import { getBloque } from "@/lib/data";
 
 export default async function PerfilPage() {
@@ -50,6 +52,20 @@ export default async function PerfilPage() {
           </Link>
         </p>
       </section>
+
+      <ActivarAvisos vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null} />
+
+      <section className="card mt-4 text-sm">
+        <p className="font-semibold">Mensajes</p>
+        <p className="mt-1 text-muted">
+          Hablá con tu entrenador dentro de la app.{" "}
+          <Link href="/mensajes" className="font-semibold text-accent">
+            Abrir →
+          </Link>
+        </p>
+      </section>
+
+      {perfil.codigo_referido ? <CodigoReferido codigo={perfil.codigo_referido} /> : null}
 
       <p className="mt-4 text-center text-xs text-muted">{perfil.email}</p>
       <div className="mt-2">

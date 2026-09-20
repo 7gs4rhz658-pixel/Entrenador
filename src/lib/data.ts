@@ -2,6 +2,8 @@ import { db } from "./supabase/server";
 import type {
   AsistenteLog,
   Checkin,
+  Mensaje,
+  PushSubscriptionRow,
   Exercise,
   Ingredient,
   LoggedSet,
@@ -383,4 +385,46 @@ export async function getInformesPendientes(): Promise<{ user_id: string; semana
   return q<{ user_id: string; semana: number }[]>(
     db().from("checkins").select("user_id, semana").eq("informe_estado", "borrador")
   );
+}
+
+// ── Mensajes ────────────────────────────────────────────────────
+
+export async function getMensajes(userId: string, limite = 50): Promise<Mensaje[]> {
+  return q<Mensaje[]>(
+    db().from("mensajes").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(limite)
+  );
+}
+
+// Mensajes del entrenador que el cliente todavía no leyó
+export async function contarNoLeidos(userId: string, de: "entrenador" | "cliente"): Promise<number> {
+  const { count, error } = await db()
+    .from("mensajes")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("de", de)
+    .is("leido_at", null);
+  if (error) throw new Error(`Base de datos: ${error.message}`);
+  return count ?? 0;
+}
+
+// Último registro de cualquier tipo (series o comidas): para detectar abandono
+export async function getUltimaActividad(userId: string): Promise<string | null> {
+  const [serie, comida] = await Promise.all([
+    getUltimoRegistro(userId),
+    q<{ created_at: string } | null>(
+      db().from("meal_logs").select("created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle()
+    )
+  ]);
+  const fechas = [serie, comida?.created_at ?? null].filter((f): f is string => !!f).sort();
+  return fechas.length ? fechas[fechas.length - 1] : null;
+}
+
+// ── Push ────────────────────────────────────────────────────────
+
+export async function getSuscripcionesPush(userId: string): Promise<PushSubscriptionRow[]> {
+  return q<PushSubscriptionRow[]>(db().from("push_subscriptions").select("*").eq("user_id", userId));
+}
+
+export async function getReferidos(userId: string): Promise<Profile[]> {
+  return q<Profile[]>(db().from("profiles").select("*").eq("referido_por", userId).order("created_at"));
 }

@@ -7,6 +7,7 @@ import NewBlockButton from "@/components/NewBlockButton";
 import { requireCliente } from "@/lib/auth";
 import {
   ejerciciosPorDia,
+  contarNoLeidos,
   getBloque,
   getCheckins,
   getComidas,
@@ -71,10 +72,11 @@ export default async function Home({
   const reco = await recomendacionPara(userId, entrenaAnticipo ? "entreno" : "descanso", perfil.cuestionario_nutricion);
   const diaBatch = perfil.cuestionario_nutricion?.batch_cooking ? perfil.cuestionario_nutricion.dia_batch ?? 7 : null;
 
-  const [adherencia, pendiente, checkins] = await Promise.all([
+  const [adherencia, pendiente, checkins, noLeidos] = await Promise.all([
     adherenciaSemanaActual(perfil),
     checkinPendiente(userId),
-    getCheckins(userId, 3)
+    getCheckins(userId, 3),
+    contarNoLeidos(userId, "entrenador")
   ]);
   const pago = estadoPago(perfil, fecha);
   // Con el mes vencido no llegan informes nuevos hasta renovar
@@ -130,6 +132,13 @@ export default async function Home({
           <p className="mt-1 text-sm text-muted">
             Un minuto: peso, energía y cómo te fue. Con eso sale tu informe semanal →
           </p>
+        </Link>
+      ) : null}
+
+      {noLeidos ? (
+        <Link href="/mensajes" className="card mb-4 block border-accent/60">
+          <p className="font-semibold">💬 {noLeidos === 1 ? "Tenés un mensaje nuevo" : `Tenés ${noLeidos} mensajes nuevos`} de tu entrenador</p>
+          <p className="mt-1 text-sm text-muted">Leer y responder →</p>
         </Link>
       ) : null}
 

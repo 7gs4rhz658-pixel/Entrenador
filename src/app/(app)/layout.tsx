@@ -1,4 +1,5 @@
 import BottomNav from "@/components/BottomNav";
+import RegistrarSW from "@/components/RegistrarSW";
 import { requireCliente } from "@/lib/auth";
 
 // Todo el árbol autenticado se renderiza en cada request (los datos
@@ -14,6 +15,7 @@ export default async function AppLayout({
   await requireCliente();
   return (
     <div className="mx-auto w-full max-w-lg px-4 pb-28 pt-5">
+      <RegistrarSW />
       {children}
       <BottomNav />
     </div>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { propuestaAjuste } from "@/lib/ajuste-macros";
-import { getBloque, getClientes, getInformesPendientes, getUltimoRegistro } from "@/lib/data";
+import { contarNoLeidos, getBloque, getClientes, getInformesPendientes, getUltimaActividad, getUltimoRegistro } from "@/lib/data";
 import { fmtTiempoRelativo, hoyFecha } from "@/lib/format";
 import { estadoPago } from "@/lib/pagos";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
@@ -10,12 +10,21 @@ export default async function ClientesPage() {
   const conInforme = new Set(pendientesInforme.map((p) => p.user_id));
   const filas = await Promise.all(
     clientes.map(async (c) => {
-      const [meso, ultimo, ajuste] = await Promise.all([getBloque(c.id), getUltimoRegistro(c.id), propuestaAjuste(c)]);
-      return { c, meso, ultimo, ajuste };
+      const [meso, ultimo, ajuste, ultimaActividad, noLeidos] = await Promise.all([
+        getBloque(c.id),
+        getUltimoRegistro(c.id),
+        propuestaAjuste(c),
+        getUltimaActividad(c.id),
+        contarNoLeidos(c.id, "cliente")
+      ]);
+      const diasSin = ultimaActividad ? Math.floor((Date.now() - new Date(ultimaActividad).getTime()) / 86_400_000) : null;
+      // Sin registros hace 4+ días: candidato a abandono, va arriba
+      const abandono = c.activo && c.estado_pago === "pagado" && meso != null && (diasSin == null || diasSin >= 4);
+      return { c, meso, ultimo, ajuste, diasSin, noLeidos, abandono };
     })
   );
   const hoy = hoyFecha();
-  const activos = filas.filter((f) => f.c.activo);
+  const activos = filas.filter((f) => f.c.activo).sort((a, b) => Number(b.abandono) - Number(a.abandono));
   const inactivos = filas.filter((f) => !f.c.activo);
 
   return (
@@ -34,7 +43,7 @@ export default async function ClientesPage() {
       ) : null}
 
       <ul className="flex flex-col gap-3">
-        {[...activos, ...inactivos].map(({ c, meso, ultimo, ajuste }) => {
+        {[...activos, ...inactivos].map(({ c, meso, ultimo, ajuste, diasSin, noLeidos, abandono }) => {
           const pendientes: string[] = [];
           if (!c.onboarding_completo) pendientes.push("cuestionario");
           if (c.estado_pago !== "pagado") pendientes.push("pago");
@@ -44,6 +53,8 @@ export default async function ClientesPage() {
           if (c.onboarding_completo && c.estado_pago === "pagado" && !meso) pendientes.push("sin plan");
           if (conInforme.has(c.id)) pendientes.push("informe por aprobar");
           if (ajuste) pendientes.push("ajuste de kcal sugerido");
+          if (abandono) pendientes.push(diasSin == null ? "nunca registró" : `sin registros hace ${diasSin} d`);
+          if (noLeidos) pendientes.push(`${noLeidos} msj`);
           return (
             <li key={c.id}>
               <Link

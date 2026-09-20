@@ -12,7 +12,7 @@ function BotonCrear() {
   );
 }
 
-export default function RegistroForm() {
+export default function RegistroForm({ referido = "" }: { referido?: string }) {
   const [estado, accion] = useFormState(registro, {});
   return (
     <form action={accion} className="card flex flex-col gap-4">
@@ -57,6 +57,20 @@ export default function RegistroForm() {
           required
           className="input"
           placeholder="••••••••"
+        />
+      </div>
+      <div>
+        <label htmlFor="referido" className="label">
+          Código de un amigo (opcional)
+        </label>
+        <input
+          id="referido"
+          name="referido"
+          autoComplete="off"
+          defaultValue={referido}
+          maxLength={12}
+          className="input uppercase"
+          placeholder="Ej: JUANA1B2"
         />
       </div>
       {estado.error ? (

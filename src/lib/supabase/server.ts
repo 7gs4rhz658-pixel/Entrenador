@@ -1,4 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { cookies } from "next/headers";
 import { cache } from "react";
 
@@ -17,7 +19,7 @@ function config() {
   return { url, key };
 }
 
-export const db = cache(() => {
+const dbSesion = cache(() => {
   const { url, key } = config();
   const store = cookies();
   return createServerClient(url, key, {
@@ -40,3 +42,27 @@ export const db = cache(() => {
     }
   });
 });
+
+// El cron de avisos corre sin usuario: dentro de `conAdmin` todo el
+// código de datos usa la clave service_role (salta RLS). Solo el
+// servidor la conoce y solo la ruta del cron la usa.
+const alsAdmin = new AsyncLocalStorage<SupabaseClient>();
+
+export function adminDisponible(): boolean {
+  return !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+}
+
+export function conAdmin<T>(fn: () => Promise<T>): Promise<T> {
+  const { url } = config();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) throw new Error("Falta SUPABASE_SERVICE_ROLE_KEY para las tareas programadas.");
+  const cliente = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }) }
+  });
+  return alsAdmin.run(cliente, fn);
+}
+
+export function db() {
+  return (alsAdmin.getStore() ?? dbSesion()) as ReturnType<typeof dbSesion>;
+}

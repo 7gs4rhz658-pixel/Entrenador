@@ -64,6 +64,8 @@ export interface Profile {
   ajuste_macros_at: string | null;
   pago_vence_at: string | null;
   pagado_at: string | null;
+  codigo_referido: string | null;
+  referido_por: string | null;
   onboarding_completo: boolean;
   estado_pago: "pendiente" | "pagado";
   activo: boolean;
@@ -350,4 +352,24 @@ export interface Checkin {
   aprobado_at: string | null;
   visto_at: string | null;
   created_at: string;
+}
+
+// ── Mensajes y push ─────────────────────────────────────────────
+
+export interface Mensaje {
+  id: string;
+  user_id: string;
+  de: "entrenador" | "cliente";
+  texto: string;
+  leido_at: string | null;
+  created_at: string;
+}
+
+export interface PushSubscriptionRow {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  created_at: string;
+  ultimo_envio_at: string | null;
 }

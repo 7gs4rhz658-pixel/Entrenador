@@ -110,7 +110,8 @@ desde el teléfono y que el link sea compartible.
    `supabase/migrations/0004_asistente.sql` (asistente de situaciones) y con
    `supabase/migrations/0005_checkins.sql` (check-in semanal e informe) y con
    `supabase/migrations/0006_ajuste_macros.sql` (ajuste quincenal de calorías) y con
-   `supabase/migrations/0007_pago_vence.sql` (vencimiento del mes).
+   `supabase/migrations/0007_pago_vence.sql` (vencimiento del mes) y con
+   `supabase/migrations/0008_mensajes_push_referidos.sql` (mensajes, avisos y referidos).
 
 4. **Configurar el login por correo.** Guiá: menú izquierdo → **Authentication**
    → **Providers** → **Email**. Recomendá **desactivar "Confirm email"** (el
@@ -194,6 +195,22 @@ datos** que va a pedir, así después es solo pegar:
 - Opcional: **`GROQ_MODEL`** (por defecto `openai/gpt-oss-120b`),
   **`GEMINI_MODEL`** (por defecto `gemini-3.6-flash`) y **`TZ_APP`**
   (zona horaria, por defecto `America/Argentina/Buenos_Aires`).
+- **Avisos al teléfono (opcional, recomendado).** Cinco variables más; sin
+  ellas la app funciona igual, solo no manda notificaciones:
+  - **`NEXT_PUBLIC_VAPID_PUBLIC_KEY`** y **`VAPID_PRIVATE_KEY`**: generalas
+    vos una sola vez con `npx web-push generate-vapid-keys` en la raíz del
+    proyecto y pegá cada una en Vercel (la privada es secreta; nunca por el chat).
+  - **`VAPID_SUBJECT`**: `mailto:` + el correo del entrenador.
+  - **`CRON_SECRET`**: un texto largo al azar (ej. 40 letras y números). Protege
+    la ruta que dispara el aviso diario. Vercel lo manda solo al cron.
+  - **`SUPABASE_SERVICE_ROLE_KEY`**: en Supabase, engranaje ⚙️ → "API Keys" →
+    la clave **service_role** (o "Secret"). **Es secreta**: solo la usa el
+    aviso diario, que corre sin usuario. Que la pegue directo en Vercel.
+  - El aviso diario ya está programado en `vercel.json` (todos los días a las
+    22:00 UTC = 19:00 Argentina). En el plan Hobby de Vercel un cron diario
+    está permitido. El cliente activa los avisos desde **Perfil → "Avisos en el
+    teléfono"**; en iPhone primero tiene que agregar la app a la pantalla de
+    inicio.
 
 Después:
 

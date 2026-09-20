@@ -30,6 +30,7 @@ export async function registro(_prev: Estado, formData: FormData): Promise<Estad
   const nombre = String(formData.get("nombre") ?? "").trim();
   const email = limpiarEmail(formData.get("email"));
   const password = String(formData.get("password") ?? "");
+  const referido = String(formData.get("referido") ?? "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 12);
   if (nombre.length < 2) return { error: "Poné tu nombre." };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "Revisá el correo." };
   if (password.length < 8) return { error: "La contraseña necesita al menos 8 caracteres." };
@@ -37,7 +38,8 @@ export async function registro(_prev: Estado, formData: FormData): Promise<Estad
   const { data, error } = await db().auth.signUp({
     email,
     password,
-    options: { data: { nombre } }
+    // El trigger de alta enlaza al referente si el código existe
+    options: { data: { nombre, referido: referido || null } }
   });
   if (error) {
     if (error.message.toLowerCase().includes("already registered")) {

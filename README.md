@@ -80,7 +80,8 @@ Facts · Vercel.
    `supabase/migrations/0004_asistente.sql` (asistente de situaciones) y
    `supabase/migrations/0005_checkins.sql` (check-in semanal e informe) y
    `supabase/migrations/0006_ajuste_macros.sql` (ajuste quincenal) y
-   `supabase/migrations/0007_pago_vence.sql` (vencimiento del mes).
+   `supabase/migrations/0007_pago_vence.sql` (vencimiento del mes) y
+   `supabase/migrations/0008_mensajes_push_referidos.sql` (mensajes, push, referidos).
 5. Authentication → Providers → Email: recomendado **desactivar "Confirm
    email"** (el SMTP gratuito manda muy pocos correos por hora). Si lo dejás,
    la app muestra la pantalla "Confirmá tu correo".
@@ -115,6 +116,11 @@ git push -u origin main
 En Vercel: importar el repo, cargar `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `GROQ_API_KEY` (o `GEMINI_API_KEY`), Deploy. Las páginas que
 llaman a la IA declaran `maxDuration = 60`.
+
+Avisos al teléfono (opcional): `NEXT_PUBLIC_VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY`
+(`npx web-push generate-vapid-keys`), `VAPID_SUBJECT`, `CRON_SECRET` y
+`SUPABASE_SERVICE_ROLE_KEY` (solo la usa el cron diario de `vercel.json`, que corre
+sin usuario). El cliente los activa en Perfil.
 
 > La skill `/publicar` (carpeta `.claude/skills/publicar/`) guía todo esto
 > paso a paso desde Claude Code, pensada para quien no programa.
@@ -162,6 +168,9 @@ src/
     ai-informe.ts         borrador del informe semanal (el entrenador lo aprueba)
     stats.ts              adherencia de la semana y resumen numérico para el informe
     ajuste-macros.ts      ajuste quincenal de kcal por tendencia de peso (el entrenador confirma)
+    ai-mensajes.ts        borrador de mensaje del entrenador al cliente
+    avisos.ts             aviso diario ("mañana te toca" + pendientes) para push
+    push.ts               envío Web Push (VAPID); cron en app/api/cron/avisos
     meal-plan.ts          recomendación de comidas: sanear, cuadrar, compras, avisos, batch
     meal-plan-db.ts       resolver ingredientes contra la base y escribir/leer el menú
     comidas-service.ts    orquesta IA/.txt → resolver → cuadrar → aplicar
@@ -169,7 +178,7 @@ src/
     nutrition.ts          TMB, macros por objetivo, regla de tres
     off.ts                Open Food Facts + caché en `ingredients`
     pagos.ts              checkout simulado (punto de cambio a pago real)
-supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes) · 0003 recomendación de comidas · 0004 asistente · 0005 check-ins · 0006 ajuste de macros · 0007 vencimiento del pago
+supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes) · 0003 recomendación de comidas · 0004 asistente · 0005 check-ins · 0006 ajuste de macros · 0007 vencimiento del pago · 0008 mensajes, push y referidos
 scripts/                  tests: progresión, planes/nutrición, RLS
 ```
 

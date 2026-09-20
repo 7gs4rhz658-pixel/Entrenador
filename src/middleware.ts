@@ -24,8 +24,9 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Protege todo salvo estáticos de Next e íconos
+  // Protege todo salvo estáticos de Next, íconos, el service worker y el
+  // cron de avisos (que se autentica con CRON_SECRET, sin usuario)
   matcher: [
-    "/((?!_next/static|_next/image|favicon\.ico|icon\.svg|manifest\.webmanifest).*)"
+    "/((?!_next/static|_next/image|favicon\.ico|icon\.svg|manifest\.webmanifest|sw\.js|api/cron).*)"
   ]
 };

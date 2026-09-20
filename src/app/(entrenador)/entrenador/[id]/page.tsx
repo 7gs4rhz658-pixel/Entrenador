@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import AjusteMacros from "@/components/AjusteMacros";
 import ClienteAcciones from "@/components/ClienteAcciones";
+import HiloMensajes from "@/components/HiloMensajes";
 import InformesEntrenador from "@/components/InformesEntrenador";
 import CloseWeekButton from "@/components/CloseWeekButton";
 import NewBlockButton from "@/components/NewBlockButton";
@@ -15,8 +16,12 @@ import { iaDisponible } from "@/lib/ai";
 import {
   ejerciciosPorDia,
   getBloque,
+  contarNoLeidos,
   getCheckins,
   getConsultasAsistente,
+  getMensajes,
+  getReferidos,
+  getUltimaActividad,
   getDias,
   getEjercicios,
   getLogs,
@@ -46,6 +51,7 @@ const TABS = [
   { id: "rutina", texto: "Rutina" },
   { id: "progreso", texto: "Progreso" },
   { id: "nutricion", texto: "Comida" },
+  { id: "mensajes", texto: "Mensajes" },
   { id: "plan", texto: "Plan .txt" }
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
@@ -67,7 +73,15 @@ export default async function ClientePage({
 
   const tab: Tab = (TABS.find((t) => t.id === searchParams?.tab)?.id ?? "resumen") as Tab;
   const base = `/entrenador/${perfil.id}?tab=${tab}`;
-  const [meso, ultimo] = await Promise.all([getBloque(perfil.id), getUltimoRegistro(perfil.id)]);
+  const [meso, ultimo, ultimaActividad, noLeidos, referidos, referente] = await Promise.all([
+    getBloque(perfil.id),
+    getUltimoRegistro(perfil.id),
+    getUltimaActividad(perfil.id),
+    contarNoLeidos(perfil.id, "cliente"),
+    getReferidos(perfil.id),
+    perfil.referido_por ? getPerfil(perfil.referido_por).catch(() => null) : Promise.resolve(null)
+  ]);
+  const diasSinActividad = ultimaActividad ? Math.floor((Date.now() - new Date(ultimaActividad).getTime()) / 86_400_000) : null;
 
   return (
     <main>
@@ -86,6 +100,25 @@ export default async function ClientePage({
               return ` · ${p.vencido ? "mes vencido el" : "mes vence el"} ${new Date(`${p.vence}T12:00:00`).toLocaleDateString("es-AR")}`;
             })()}
           </p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {diasSinActividad != null && diasSinActividad >= 4 ? (
+              <Link href={`/entrenador/${perfil.id}?tab=mensajes`} className="chip border-danger/40 text-danger">
+                sin registros hace {diasSinActividad} días · escribirle
+              </Link>
+            ) : null}
+            {noLeidos ? (
+              <Link href={`/entrenador/${perfil.id}?tab=mensajes`} className="chip border-accent/60 text-accent">
+                {noLeidos} mensaje{noLeidos === 1 ? "" : "s"} sin leer
+              </Link>
+            ) : null}
+            {perfil.codigo_referido ? <span className="chip border-line text-muted">código {perfil.codigo_referido}</span> : null}
+            {referente ? <span className="chip border-line text-muted">referido por {referente.nombre || referente.email}</span> : null}
+            {referidos.length ? (
+              <span className="chip border-ok/40 text-ok">
+                trajo a {referidos.map((r) => r.nombre || r.email).join(", ")} · aplicar descuento
+              </span>
+            ) : null}
+          </div>
         </div>
         <ClienteAcciones perfil={perfil} tienePlan={!!meso} conIA={iaDisponible()} />
       </div>
@@ -111,6 +144,15 @@ export default async function ClientePage({
       ) : null}
       {tab === "nutricion" ? (
         <Comida perfil={perfil} fecha={fechaValida(searchParams?.fecha)} base={base} />
+      ) : null}
+      {tab === "mensajes" ? (
+        <HiloMensajes
+          userId={perfil.id}
+          soyEntrenador
+          inicial={await getMensajes(perfil.id, 60)}
+          conIA={iaDisponible()}
+          nombreCliente={perfil.nombre.split(" ")[0]}
+        />
       ) : null}
       {tab === "plan" ? (
         <PlanTxt userId={perfil.id} conIA={iaDisponible()} nombreBloque={meso?.nombre ?? null} />
