@@ -43,3 +43,33 @@ export async function procesarPago(datos: DatosTarjeta): Promise<ResultadoPago> 
   if (numero.endsWith("0002")) return { ok: false, error: "Pago rechazado por el banco (simulado)." };
   return { ok: true, referencia: `SIM-${Date.now().toString(36).toUpperCase()}` };
 }
+
+// ── Vigencia del mes ────────────────────────────────────────────
+
+export const DIAS_POR_PAGO = 30;
+
+export interface EstadoPago {
+  pagado: boolean;
+  vencido: boolean;
+  vence: string | null; // YYYY-MM-DD
+  diasRestantes: number | null; // negativo si venció
+}
+
+// Fecha hasta la que cubre un pago hecho hoy: 30 días desde hoy o desde
+// el vencimiento vigente si todavía no pasó (renovar antes no pierde días).
+export function nuevoVencimiento(venceActual: string | null, hoy: string): string {
+  const base = venceActual && venceActual > hoy ? venceActual : hoy;
+  const d = new Date(`${base}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + DIAS_POR_PAGO);
+  return d.toISOString().slice(0, 10);
+}
+
+export function estadoPago(
+  perfil: { estado_pago: "pendiente" | "pagado"; pago_vence_at: string | null },
+  hoy: string
+): EstadoPago {
+  if (perfil.estado_pago !== "pagado") return { pagado: false, vencido: false, vence: null, diasRestantes: null };
+  if (!perfil.pago_vence_at) return { pagado: true, vencido: false, vence: null, diasRestantes: null };
+  const dias = Math.round((new Date(`${perfil.pago_vence_at}T12:00:00Z`).getTime() - new Date(`${hoy}T12:00:00Z`).getTime()) / 86_400_000);
+  return { pagado: true, vencido: dias < 0, vence: perfil.pago_vence_at, diasRestantes: dias };
+}

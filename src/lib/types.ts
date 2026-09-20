@@ -62,6 +62,8 @@ export interface Profile {
   macros_manual: MacrosManual | null;
   acepto_descargo_at: string | null;
   ajuste_macros_at: string | null;
+  pago_vence_at: string | null;
+  pagado_at: string | null;
   onboarding_completo: boolean;
   estado_pago: "pendiente" | "pagado";
   activo: boolean;

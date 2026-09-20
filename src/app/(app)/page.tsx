@@ -17,6 +17,7 @@ import {
 } from "@/lib/data";
 import { fmtKcal, fmtLitros, horaLocal, hoyDiaSemana, hoyFecha, nombreDia } from "@/lib/format";
 import { recomendacionPara } from "@/lib/meal-plan-db";
+import { estadoPago } from "@/lib/pagos";
 import { adherenciaSemanaActual, checkinPendiente } from "@/lib/stats";
 import { macrosDe, objetivosCliente, sumarMacros } from "@/lib/nutrition";
 import { faseDe, nombreFase } from "@/lib/progression";
@@ -27,7 +28,7 @@ export const maxDuration = 60;
 export default async function Home({
   searchParams
 }: {
-  searchParams?: { bienvenida?: string; checkin?: string };
+  searchParams?: { bienvenida?: string; checkin?: string; renovado?: string };
 }) {
   const { userId, perfil } = await requireCliente();
 
@@ -75,7 +76,15 @@ export default async function Home({
     checkinPendiente(userId),
     getCheckins(userId, 3)
   ]);
-  const informe = checkins.find((c) => c.informe_estado === "aprobado" && c.informe_final);
+  const pago = estadoPago(perfil, fecha);
+  // Con el mes vencido no llegan informes nuevos hasta renovar
+  const informe = pago.vencido ? undefined : checkins.find((c) => c.informe_estado === "aprobado" && c.informe_final);
+  const avisoPago =
+    pago.pagado && pago.diasRestantes != null && (pago.vencido || pago.diasRestantes <= 3)
+      ? pago.vencido
+        ? { titulo: "Tu mes venció", texto: "Seguís viendo tu rutina y tu historial. Para cerrar semanas, recibir informes y arrancar el próximo bloque, renová →" }
+        : { titulo: pago.diasRestantes === 0 ? "Tu mes vence hoy" : `Tu mes vence en ${pago.diasRestantes} día${pago.diasRestantes === 1 ? "" : "s"}`, texto: "Renová ahora y los días que te quedan se suman →" }
+      : null;
 
   return (
     <main>
@@ -98,6 +107,23 @@ export default async function Home({
         </section>
       ) : null}
 
+      {searchParams?.renovado ? (
+        <section className="card mb-4 border-ok/40">
+          <p className="font-semibold">✓ Mes renovado</p>
+          <p className="mt-1 text-sm text-muted">Seguimos. Tu rutina, tu menú y tus informes siguen donde estaban.</p>
+        </section>
+      ) : null}
+
+      {avisoPago ? (
+        <Link href="/pago" className={`card mb-4 block ${pago.vencido ? "border-danger/50" : "border-warn/50"}`}>
+          <p className="font-semibold">{pago.vencido ? "⏸️" : "📅"} {avisoPago.titulo}</p>
+          <p className="mt-1 text-sm text-muted">{avisoPago.texto}</p>
+          {checkins.length >= 2 ? (
+            <span className="mt-1 block text-xs font-semibold text-accent">Antes, mirá tu mes: peso, cargas y adherencia</span>
+          ) : null}
+        </Link>
+      ) : null}
+
       {pendiente ? (
         <Link href="/checkin" className="card mb-4 block border-warn/50">
           <p className="font-semibold">📝 Check-in de la semana {pendiente.semana}</p>
@@ -116,6 +142,14 @@ export default async function Home({
         </h1>
         <p className="mt-0.5 text-sm text-accent">
           Fase {fase} · {nombreFase(fase)}
+          {checkins.length ? (
+            <>
+              {" · "}
+              <Link href="/mes" className="font-semibold underline-offset-2 hover:underline">
+                Tu mes →
+              </Link>
+            </>
+          ) : null}
         </p>
         <div className="mt-2 flex gap-1.5" aria-hidden>
           {Array.from({ length: meso.total_semanas }, (_, i) => (
@@ -235,7 +269,12 @@ export default async function Home({
       </section>
 
       <section className="mt-5">
-        {meso.estado === "activo" ? (
+        {pago.vencido ? (
+          <Link href="/pago" className="card block text-center">
+            <p className="font-semibold">Renová tu mes para cerrar la semana</p>
+            <p className="mt-1 text-sm text-muted">Tus registros se guardan igual; al renovar seguís exactamente donde estabas.</p>
+          </Link>
+        ) : meso.estado === "activo" ? (
           <CloseWeekButton
             mesoId={meso.id}
             semana={meso.semana_actual}

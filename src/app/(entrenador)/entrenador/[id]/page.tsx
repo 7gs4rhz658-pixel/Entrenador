@@ -32,6 +32,7 @@ import { informeATexto } from "@/lib/ai-informe";
 import { propuestaAjuste } from "@/lib/ajuste-macros";
 import { objetivosDeReferencia } from "@/lib/comidas-service";
 import { fmtTiempoRelativo, hoyFecha, nombreDia } from "@/lib/format";
+import { estadoPago } from "@/lib/pagos";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
 import { faseDe, nombreFase } from "@/lib/progression";
 import { db } from "@/lib/supabase/server";
@@ -79,6 +80,11 @@ export default async function ClientePage({
           <p className="text-sm text-muted">
             {perfil.email} · {ETIQUETAS_OBJETIVO[perfil.objetivo]}
             {perfil.peso_kg ? ` · ${perfil.peso_kg} kg` : ""} · entrenó {fmtTiempoRelativo(ultimo)}
+            {(() => {
+              const p = estadoPago(perfil, hoyFecha());
+              if (!p.vence) return null;
+              return ` · ${p.vencido ? "mes vencido el" : "mes vence el"} ${new Date(`${p.vence}T12:00:00`).toLocaleDateString("es-AR")}`;
+            })()}
           </p>
         </div>
         <ClienteAcciones perfil={perfil} tienePlan={!!meso} conIA={iaDisponible()} />

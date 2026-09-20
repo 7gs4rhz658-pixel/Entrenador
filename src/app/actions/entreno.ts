@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { resolverUsuario } from "@/lib/auth";
+import { requireSesion, resolverUsuario } from "@/lib/auth";
 import { exec, getMesociclo, getPlanes } from "@/lib/data";
+import { hoyFecha } from "@/lib/format";
+import { estadoPago } from "@/lib/pagos";
 import {
   cerrarSemana,
   crearNuevoBloque,
@@ -14,6 +16,17 @@ type Resultado = { ok?: boolean; error?: string };
 
 function mensaje(e: unknown): string {
   return e instanceof Error ? e.message : "Ocurrió un error inesperado.";
+}
+
+// Con el mes vencido el cliente sigue viendo y registrando, pero no
+// avanza de semana ni arranca bloques nuevos hasta renovar. El
+// entrenador no tiene esa restricción.
+async function exigirMesVigente(): Promise<void> {
+  const s = await requireSesion();
+  if (s.perfil.rol === "entrenador") return;
+  if (estadoPago(s.perfil, hoyFecha()).vencido) {
+    throw new Error("Tu mes venció. Renová desde Inicio para cerrar la semana y seguir con el plan.");
+  }
 }
 
 // El dueño del bloque es quien manda: el cliente solo puede tocar los
@@ -137,6 +150,7 @@ export async function registrarSegunPlan(input: {
 
 export async function finalizarSemana(mesoId: string): Promise<Resultado> {
   try {
+    await exigirMesVigente();
     await duenoDe(mesoId);
     await cerrarSemana(mesoId);
   } catch (e) {
@@ -148,6 +162,7 @@ export async function finalizarSemana(mesoId: string): Promise<Resultado> {
 
 export async function crearBloque(userIdObjetivo?: string): Promise<Resultado> {
   try {
+    await exigirMesVigente();
     const { userId } = await resolverUsuario(userIdObjetivo);
     await crearNuevoBloque(userId);
   } catch (e) {

@@ -109,7 +109,8 @@ desde el teléfono y que el link sea compartible.
    tal cual y que lo corra. Tiene que decir "Success". Repetí lo mismo con
    `supabase/migrations/0004_asistente.sql` (asistente de situaciones) y con
    `supabase/migrations/0005_checkins.sql` (check-in semanal e informe) y con
-   `supabase/migrations/0006_ajuste_macros.sql` (ajuste quincenal de calorías).
+   `supabase/migrations/0006_ajuste_macros.sql` (ajuste quincenal de calorías) y con
+   `supabase/migrations/0007_pago_vence.sql` (vencimiento del mes).
 
 4. **Configurar el login por correo.** Guiá: menú izquierdo → **Authentication**
    → **Providers** → **Email**. Recomendá **desactivar "Confirm email"** (el

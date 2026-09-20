@@ -9,6 +9,8 @@ import {
   interpretarPlanTxt
 } from "@/lib/ai";
 import { exec, getPerfil } from "@/lib/data";
+import { hoyFecha } from "@/lib/format";
+import { nuevoVencimiento } from "@/lib/pagos";
 import { normalizarPlan, planPlantilla } from "@/lib/plan-generator";
 import { aplicarPlan } from "@/lib/plan-import";
 import { db } from "@/lib/supabase/server";
@@ -84,9 +86,14 @@ export async function marcarPago(input: {
 }): Promise<Resultado> {
   try {
     await requireEntrenador();
-    await exec(
-      db().from("profiles").update({ estado_pago: input.estado }).eq("id", input.userId)
-    );
+    // "Marcar pagado" cubre 30 días desde hoy (o desde el vencimiento
+    // vigente si todavía no pasó)
+    const perfil = await getPerfil(input.userId);
+    const cambios =
+      input.estado === "pagado"
+        ? { estado_pago: "pagado", pagado_at: new Date().toISOString(), pago_vence_at: nuevoVencimiento(perfil.pago_vence_at, hoyFecha()) }
+        : { estado_pago: "pendiente" };
+    await exec(db().from("profiles").update(cambios).eq("id", input.userId));
   } catch (e) {
     return { error: mensaje(e) };
   }

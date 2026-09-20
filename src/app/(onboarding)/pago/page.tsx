@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import PagoForm from "@/components/PagoForm";
 import { requireSesion } from "@/lib/auth";
-import { PAGO_SIMULADO, PLAN } from "@/lib/pagos";
+import { hoyFecha } from "@/lib/format";
+import { PAGO_SIMULADO, PLAN, estadoPago } from "@/lib/pagos";
 
 // La acción de pago llama a la IA para generar el plan: le damos margen.
 export const maxDuration = 60;
@@ -10,15 +11,22 @@ export default async function PagoPage() {
   const { perfil } = await requireSesion();
   if (perfil.rol === "entrenador") redirect("/entrenador");
   if (!perfil.onboarding_completo) redirect("/cuestionario");
-  if (perfil.estado_pago === "pagado") redirect("/");
+  const estado = estadoPago(perfil, hoyFecha());
+  // Con el mes vigente solo se puede renovar cuando faltan 7 días o menos
+  const renovacion = estado.pagado;
+  if (renovacion && !estado.vencido && (estado.diasRestantes ?? 99) > 7) redirect("/");
 
   return (
     <main>
       <header className="mb-5 text-center">
         <div className="mb-2 text-4xl">💳</div>
-        <h1 className="text-2xl font-bold">Último paso</h1>
+        <h1 className="text-2xl font-bold">{renovacion ? "Renová tu mes" : "Último paso"}</h1>
         <p className="mt-1 text-muted">
-          Activá tu plan y en unos segundos tenés tu rutina lista.
+          {renovacion
+            ? estado.vencido
+              ? "Tu mes venció. Al renovar seguís con tu rutina, tus informes y tu menú sin perder nada."
+              : `Tu mes vence el ${new Date(`${estado.vence}T12:00:00`).toLocaleDateString("es-AR")}. Renová ahora y los días que te quedan se suman.`
+            : "Activá tu plan y en unos segundos tenés tu rutina lista."}
         </p>
       </header>
 
@@ -44,7 +52,7 @@ export default async function PagoPage() {
         </p>
       ) : null}
 
-      <PagoForm />
+      <PagoForm renovacion={renovacion} />
     </main>
   );
 }

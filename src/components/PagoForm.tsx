@@ -3,16 +3,22 @@
 import { useFormState, useFormStatus } from "react-dom";
 import { pagar } from "@/app/actions/onboarding";
 
-function BotonPagar() {
+function BotonPagar({ renovacion }: { renovacion: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button type="submit" className="btn-primary w-full" disabled={pending}>
-      {pending ? "Procesando pago y armando tu plan…" : "Pagar y activar mi plan"}
+      {pending
+        ? renovacion
+          ? "Procesando pago…"
+          : "Procesando pago y armando tu plan…"
+        : renovacion
+          ? "Renovar mi mes"
+          : "Pagar y activar mi plan"}
     </button>
   );
 }
 
-export default function PagoForm() {
+export default function PagoForm({ renovacion = false }: { renovacion?: boolean }) {
   const [estado, accion] = useFormState(pagar, {});
   return (
     <form action={accion} className="card flex flex-col gap-4">
@@ -76,10 +82,12 @@ export default function PagoForm() {
       {estado.error ? (
         <p className="text-sm font-medium text-danger">✗ {estado.error}</p>
       ) : null}
-      <BotonPagar />
-      <p className="text-center text-xs text-muted">
-        La generación del plan puede tardar hasta un minuto.
-      </p>
+      <BotonPagar renovacion={renovacion} />
+      {!renovacion ? (
+        <p className="text-center text-xs text-muted">
+          La generación del plan puede tardar hasta un minuto.
+        </p>
+      ) : null}
     </form>
   );
 }

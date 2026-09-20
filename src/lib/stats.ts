@@ -156,3 +156,74 @@ export async function checkinPendiente(userId: string): Promise<{ mesoId: string
   const ultimo = [...cierres].reverse().find((c) => !hechos.has(c.semana));
   return ultimo ? { mesoId: meso.id, semana: ultimo.semana } : null;
 }
+
+// ── Tu mes: últimas 4 semanas cerradas ──────────────────────────
+
+export interface ResumenMes {
+  semanas: number;
+  desde: string;
+  hasta: string;
+  peso_inicial: number | null;
+  peso_final: number | null;
+  cintura_inicial: number | null;
+  cintura_final: number | null;
+  entrenos_hechos: number;
+  entrenos_planificados: number;
+  series: number;
+  comidas_menu_hechas: number;
+  comidas_menu_esperadas: number;
+  cargas: { ejercicio: string; inicio_kg: number; fin_kg: number }[];
+  energia_promedio: number | null;
+  sueno_promedio: number | null;
+  informes_aprobados: number;
+}
+
+export async function resumenMes(perfil: Profile): Promise<ResumenMes | null> {
+  const checkins = (await getCheckins(perfil.id, 8)).filter((c) => c.resumen).slice(0, 4).reverse();
+  if (!checkins.length) return null;
+  const meso = await getBloque(perfil.id);
+  const prom = (xs: (number | null)[]) => {
+    const v = xs.filter((x): x is number => x != null);
+    return v.length ? Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 10) / 10 : null;
+  };
+  const suma = (f: (r: ResumenSemana) => number) => checkins.reduce((a, c) => a + f(c.resumen!), 0);
+
+  // Cargas: peso planificado en la primera semana del bloque vs la actual
+  const cargas: ResumenMes["cargas"] = [];
+  if (meso) {
+    const [ejercicios, inicio, actual] = await Promise.all([
+      getEjercicios(perfil.id),
+      getPlanes(meso.id, 1),
+      getPlanes(meso.id, meso.semana_actual)
+    ]);
+    const mIni = planesPorEjercicio(inicio);
+    for (const p of actual) {
+      const ex = ejercicios.find((e) => e.id === p.exercise_id);
+      const ini = mIni[p.exercise_id];
+      if (!ex || !ini || ini.peso_kg == null || p.peso_kg == null || p.peso_kg <= ini.peso_kg) continue;
+      cargas.push({ ejercicio: ex.nombre, inicio_kg: ini.peso_kg, fin_kg: p.peso_kg });
+    }
+    cargas.sort((a, b) => b.fin_kg - b.inicio_kg - (a.fin_kg - a.inicio_kg));
+  }
+
+  const primero = checkins[0];
+  const ultimo = checkins[checkins.length - 1];
+  return {
+    semanas: checkins.length,
+    desde: sumarDias(primero.fecha, -6),
+    hasta: ultimo.fecha,
+    peso_inicial: primero.resumen!.peso_anterior_kg ?? primero.peso_kg,
+    peso_final: ultimo.peso_kg,
+    cintura_inicial: checkins.find((c) => c.cintura_cm != null)?.cintura_cm ?? null,
+    cintura_final: [...checkins].reverse().find((c) => c.cintura_cm != null)?.cintura_cm ?? null,
+    entrenos_hechos: suma((r) => r.entrenos_hechos),
+    entrenos_planificados: suma((r) => r.entrenos_planificados),
+    series: suma((r) => r.series_registradas),
+    comidas_menu_hechas: suma((r) => r.comidas_menu_hechas),
+    comidas_menu_esperadas: suma((r) => r.comidas_menu_esperadas),
+    cargas: cargas.slice(0, 8),
+    energia_promedio: prom(checkins.map((c) => c.energia)),
+    sueno_promedio: prom(checkins.map((c) => c.sueno)),
+    informes_aprobados: checkins.filter((c) => c.informe_estado === "aprobado").length
+  };
+}

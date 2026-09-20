@@ -5,8 +5,9 @@ import { redirect } from "next/navigation";
 import { requireSesion } from "@/lib/auth";
 import { generarPlanInicial, iaDisponible } from "@/lib/ai";
 import { aplicarRecomendacion, prepararRecomendacionIA } from "@/lib/comidas-service";
-import { exec, getPerfil } from "@/lib/data";
-import { procesarPago } from "@/lib/pagos";
+import { exec, getBloque, getPerfil } from "@/lib/data";
+import { hoyFecha } from "@/lib/format";
+import { nuevoVencimiento, procesarPago } from "@/lib/pagos";
 import { planPlantilla } from "@/lib/plan-generator";
 import { aplicarPlan } from "@/lib/plan-import";
 import { db } from "@/lib/supabase/server";
@@ -153,10 +154,28 @@ export async function pagar(_prev: Estado, formData: FormData): Promise<Estado> 
   });
   if (!r.ok) return { error: r.error };
 
+  // Renovación: ya tiene rutina, solo se extiende el mes
+  const renovacion = !!(await getBloque(sesion.userId));
   try {
     await exec(
-      db().from("profiles").update({ estado_pago: "pagado" }).eq("id", sesion.userId)
+      db()
+        .from("profiles")
+        .update({
+          estado_pago: "pagado",
+          pagado_at: new Date().toISOString(),
+          pago_vence_at: nuevoVencimiento(sesion.perfil.pago_vence_at, hoyFecha())
+        })
+        .eq("id", sesion.userId)
     );
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+  if (renovacion) {
+    revalidatePath("/", "layout");
+    redirect("/?renovado=1");
+  }
+
+  try {
     const perfil = await getPerfil(sesion.userId);
     let plan;
     let origen: "ia" | "plantilla" = "plantilla";

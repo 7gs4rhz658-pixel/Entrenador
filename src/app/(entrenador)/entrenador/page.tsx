@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { propuestaAjuste } from "@/lib/ajuste-macros";
 import { getBloque, getClientes, getInformesPendientes, getUltimoRegistro } from "@/lib/data";
-import { fmtTiempoRelativo } from "@/lib/format";
+import { fmtTiempoRelativo, hoyFecha } from "@/lib/format";
+import { estadoPago } from "@/lib/pagos";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
 
 export default async function ClientesPage() {
@@ -13,6 +14,7 @@ export default async function ClientesPage() {
       return { c, meso, ultimo, ajuste };
     })
   );
+  const hoy = hoyFecha();
   const activos = filas.filter((f) => f.c.activo);
   const inactivos = filas.filter((f) => !f.c.activo);
 
@@ -36,6 +38,9 @@ export default async function ClientesPage() {
           const pendientes: string[] = [];
           if (!c.onboarding_completo) pendientes.push("cuestionario");
           if (c.estado_pago !== "pagado") pendientes.push("pago");
+          const pago = estadoPago(c, hoy);
+          if (pago.vencido) pendientes.push("mes vencido");
+          else if (pago.diasRestantes != null && pago.diasRestantes <= 3) pendientes.push(`vence en ${pago.diasRestantes} d`);
           if (c.onboarding_completo && c.estado_pago === "pagado" && !meso) pendientes.push("sin plan");
           if (conInforme.has(c.id)) pendientes.push("informe por aprobar");
           if (ajuste) pendientes.push("ajuste de kcal sugerido");
