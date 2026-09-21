@@ -49,7 +49,7 @@ export async function interpretarTxt(input: {
 export async function aplicarPlanCliente(input: {
   userId: string;
   plan: PlanGenerado;
-  origen: "txt" | "ia";
+  origen: "txt" | "ia" | "plantilla";
 }): Promise<Resultado> {
   try {
     await requireEntrenador();

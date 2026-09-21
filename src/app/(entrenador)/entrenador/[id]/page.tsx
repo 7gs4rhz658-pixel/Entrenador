@@ -35,6 +35,7 @@ import {
   getPerfil,
   getPlanComidas,
   getPlanes,
+  getPlantillas,
   getRecords,
   getSesionesSemana,
   getUltimoRegistro,
@@ -180,7 +181,12 @@ export default async function ClientePage({
         />
       ) : null}
       {tab === "plan" ? (
-        <PlanTxt userId={perfil.id} conIA={iaDisponible()} nombreBloque={meso?.nombre ?? null} />
+        <PlanTxt
+          userId={perfil.id}
+          conIA={iaDisponible()}
+          nombreBloque={meso?.nombre ?? null}
+          plantillas={(await getPlantillas()).map((p) => ({ id: p.id, nombre: p.nombre, descripcion: p.descripcion, dias: p.plan.dias.length }))}
+        />
       ) : null}
     </main>
   );

@@ -2,8 +2,8 @@
 // ejercicios y el plan de la semana 1.
 
 import { db } from "./supabase/server";
-import { contarBloques, exec, getBloque } from "./data";
-import type { PlanGenerado } from "./types";
+import { contarBloques, ejerciciosPorDia, exec, getBloque, getDias, getEjercicios, getPlanes, planesPorEjercicio } from "./data";
+import type { DiaGenerado, PlanGenerado } from "./types";
 
 // ── Escritura en la base ────────────────────────────────────────
 
@@ -124,4 +124,41 @@ export async function aplicarPlan(
   await exec(supabase.from("planned_sets").insert(filasPlan));
 
   return { mesocycleId };
+}
+
+// ── Lectura: rutina vigente → plan generado ─────────────────────
+
+// Arma un PlanGenerado con la rutina actual del cliente (días, ejercicios
+// y series/rangos). Sin pesos: la plantilla sirve para otros clientes y
+// cada uno define los suyos en el primer entreno.
+export async function planDesdeRutina(userId: string): Promise<PlanGenerado | null> {
+  const meso = await getBloque(userId, { conBorrador: true });
+  const [dias, ejercicios] = await Promise.all([getDias(userId), getEjercicios(userId)]);
+  if (!ejercicios.length) return null;
+  const planes = meso ? planesPorEjercicio(await getPlanes(meso.id, meso.semana_actual)) : {};
+  const porDia = ejerciciosPorDia(ejercicios);
+  const diasPlan: DiaGenerado[] = dias
+    .filter((d) => !d.es_descanso && (porDia[d.id] ?? []).length > 0)
+    .map((d) => ({
+      dia_semana: d.dia_semana,
+      nombre: d.nombre ?? "",
+      ejercicios: (porDia[d.id] ?? [])
+        .sort((a, b) => a.orden - b.orden)
+        .map((e) => ({
+          nombre: e.nombre,
+          grupo_muscular: e.grupo_muscular ?? "otro",
+          unidad: e.unidad,
+          progresion: e.progresion,
+          series: planes[e.id]?.series ?? 3,
+          rep_min: e.rep_min ?? 8,
+          rep_max: e.rep_max ?? 12,
+          peso_inicial_kg: null,
+          incremento_kg: e.incremento_kg,
+          descanso_seg: e.descanso_seg,
+          descripcion: e.descripcion ?? undefined,
+          tips: e.tips
+        }))
+    }));
+  if (!diasPlan.length) return null;
+  return { nombre_bloque: meso?.nombre.replace(/^Bloque \d+ · /, "") ?? "Rutina", dias: diasPlan };
 }

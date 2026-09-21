@@ -453,3 +453,15 @@ export interface RecordPersonal {
   fecha: string;
   created_at: string;
 }
+
+// ── Plantillas de rutina ────────────────────────────────────────
+
+export interface PlantillaRutina {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  plan: PlanGenerado;
+  creado_por: string | null;
+  created_at: string;
+  updated_at: string;
+}

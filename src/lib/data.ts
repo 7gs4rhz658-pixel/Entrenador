@@ -15,6 +15,7 @@ import type {
   MealPlan,
   MealPlanItem,
   Mesocycle,
+  PlantillaRutina,
   PlannedSet,
   Profile,
   TrainingDay
@@ -525,4 +526,14 @@ export async function maximoHistorico(
       !(f.mesocycle_id === excluir.mesoId && f.exercise_id === excluir.exerciseId && f.semana === excluir.semana && f.serie === excluir.serie)
   );
   return previa?.valor ?? null;
+}
+
+// ── Plantillas de rutina ────────────────────────────────────────
+
+export async function getPlantillas(): Promise<PlantillaRutina[]> {
+  return q<PlantillaRutina[]>(db().from("plantillas_rutina").select("*").order("nombre"));
+}
+
+export async function getPlantilla(id: string): Promise<PlantillaRutina | null> {
+  return q<PlantillaRutina | null>(db().from("plantillas_rutina").select("*").eq("id", id).maybeSingle());
 }

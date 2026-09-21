@@ -2,21 +2,33 @@
 
 import { useState, useTransition } from "react";
 import { aplicarPlanCliente, interpretarTxt, previsualizarPlan } from "@/app/actions/entrenador";
+import { borrarPlantilla, cargarPlantilla, guardarPlantillaDesdeCliente } from "@/app/actions/plantillas";
 import { nombreDia } from "@/lib/format";
 import type { PlanGenerado } from "@/lib/types";
 
 // Rutina nueva para el cliente: la propone la IA desde el cuestionario o
 // la escribe el entrenador en un .txt → vista previa → queda como
 // borrador hasta que el entrenador la envía.
+export interface PlantillaResumen {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  dias: number;
+}
+
 export default function PlanTxt({
   userId,
   conIA,
-  nombreBloque
+  nombreBloque,
+  plantillas = []
 }: {
   userId: string;
   conIA: boolean;
   nombreBloque: string | null;
+  plantillas?: PlantillaResumen[];
 }) {
+  const [plantillaSel, setPlantillaSel] = useState(plantillas[0]?.id ?? "");
+  const [avisoPlantilla, setAvisoPlantilla] = useState<string | null>(null);
   const [texto, setTexto] = useState("");
   const [plan, setPlan] = useState<PlanGenerado | null>(null);
   const [origen, setOrigen] = useState<"txt" | "ia" | "plantilla">("txt");
@@ -35,6 +47,39 @@ export default function PlanTxt({
         setPlan(r.plan);
         setOrigen(r.origen ?? "plantilla");
       }
+    });
+  }
+
+  function usarPlantilla() {
+    if (!plantillaSel) return;
+    setError(null);
+    setPlan(null);
+    setOk(false);
+    iniciar(async () => {
+      const r = await cargarPlantilla({ id: plantillaSel });
+      if (r.error || !r.plan) setError(r.error ?? "No se pudo cargar la plantilla.");
+      else {
+        setPlan(r.plan);
+        setOrigen("plantilla");
+      }
+    });
+  }
+
+  function guardarComoPlantilla() {
+    const nombre = window.prompt("Nombre de la plantilla (ej. \"Full body 3 días principiante\"):", nombreBloque ?? "");
+    if (!nombre) return;
+    setAvisoPlantilla(null);
+    iniciar(async () => {
+      const r = await guardarPlantillaDesdeCliente({ userId, nombre });
+      setAvisoPlantilla(r.error ? `✗ ${r.error}` : "✓ Plantilla guardada. Ya la podés usar con otros clientes.");
+    });
+  }
+
+  function quitarPlantilla(id: string, nombre: string) {
+    if (!window.confirm(`¿Borrar la plantilla "${nombre}"?`)) return;
+    iniciar(async () => {
+      const r = await borrarPlantilla({ id });
+      setAvisoPlantilla(r.error ? `✗ ${r.error}` : "✓ Plantilla borrada.");
     });
   }
 
@@ -67,7 +112,7 @@ export default function PlanTxt({
       return;
     setError(null);
     iniciar(async () => {
-      const r = await aplicarPlanCliente({ userId, plan, origen: origen === "plantilla" ? "ia" : origen });
+      const r = await aplicarPlanCliente({ userId, plan, origen });
       if (r.error) setError(r.error);
       else {
         setOk(true);
@@ -90,6 +135,42 @@ export default function PlanTxt({
         <button type="button" onClick={generar} disabled={pendiente} className="btn-primary mt-3 w-full">
           {pendiente && !plan ? "Generando…" : conIA ? "Generar con IA desde el cuestionario" : "Generar con plantilla"}
         </button>
+        <p className="mt-4 text-sm font-semibold">O usá una plantilla tuya</p>
+        {plantillas.length ? (
+          <div className="mt-2 flex gap-2">
+            <select value={plantillaSel} onChange={(e) => setPlantillaSel(e.target.value)} className="input flex-1 py-1.5 text-sm">
+              {plantillas.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre} · {p.dias} día{p.dias === 1 ? "" : "s"}
+                </option>
+              ))}
+            </select>
+            <button type="button" onClick={usarPlantilla} disabled={pendiente || !plantillaSel} className="btn-ghost px-3 py-1.5 text-sm">
+              Cargar
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const p = plantillas.find((x) => x.id === plantillaSel);
+                if (p) quitarPlantilla(p.id, p.nombre);
+              }}
+              disabled={pendiente || !plantillaSel}
+              className="text-xs text-danger"
+              aria-label="Borrar plantilla"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <p className="mt-1 text-xs text-muted">Todavía no guardaste ninguna. Guardá la rutina de un cliente como plantilla y la reutilizás con otros en un clic.</p>
+        )}
+        {nombreBloque ? (
+          <button type="button" onClick={guardarComoPlantilla} disabled={pendiente} className="mt-2 text-sm font-semibold text-accent">
+            + Guardar la rutina actual de este cliente como plantilla
+          </button>
+        ) : null}
+        {avisoPlantilla ? <p className="mt-1 text-sm">{avisoPlantilla}</p> : null}
+
         <p className="mt-4 text-sm font-semibold">O cargá tu .txt</p>
         {!conIA ? (
           <p className="mt-2 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">
@@ -131,7 +212,7 @@ export default function PlanTxt({
           <h2 className="font-bold">
             Vista previa: {plan.nombre_bloque}
             <span className="ml-2 text-xs font-normal text-muted">
-              {origen === "txt" ? "de tu .txt" : origen === "ia" ? "generada con IA" : "plantilla"}
+              {origen === "txt" ? "de tu .txt" : origen === "ia" ? "generada con IA" : "de plantilla"}
             </span>
           </h2>
           {plan.notas ? <p className="mt-1 text-sm text-muted">{plan.notas}</p> : null}
