@@ -4,7 +4,8 @@ import {
   getBloque,
   getDias,
   getEjercicios,
-  getLogsEjercicio
+  getLogsEjercicio,
+  getSesiones
 } from "@/lib/data";
 import { fmtNum, nombreDia } from "@/lib/format";
 
@@ -19,11 +20,14 @@ export default async function ProgresoCliente({
   ejercicioSel?: string;
   base: string; // ruta a la que apuntan los chips (?e=)
 }) {
-  const [meso, dias, ejercicios] = await Promise.all([
-    getBloque(userId),
+  const [meso, dias, ejercicios, sesiones] = await Promise.all([
+    getBloque(userId, { conBorrador: true }),
     getDias(userId),
-    getEjercicios(userId)
+    getEjercicios(userId),
+    getSesiones(userId, 8)
   ]);
+  const ultimas = sesiones.slice(0, 4);
+  const minutosProm = ultimas.length ? Math.round(ultimas.reduce((a, x) => a + x.duracion_seg, 0) / ultimas.length / 60) : null;
 
   if (!meso || ejercicios.length === 0) {
     return (
@@ -71,6 +75,7 @@ export default async function ProgresoCliente({
     <>
       <p className="mb-3 text-sm text-muted">
         {meso.nombre} · {esKg ? "mejor peso" : "mejores reps"} por semana
+        {minutosProm ? ` · sesiones de ~${minutosProm} min (últimas ${ultimas.length})` : ""}
       </p>
 
       <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">

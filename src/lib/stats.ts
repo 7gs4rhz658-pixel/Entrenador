@@ -15,6 +15,7 @@ import {
   getPlanComidas,
   getPlanes,
   getSemanasCerradas,
+  getSesionesSemana,
   logsPorEjercicio,
   planesPorEjercicio
 } from "./data";
@@ -95,7 +96,7 @@ export async function resumenDeSemana(perfil: Profile, meso: Mesocycle, semana: 
   const hasta = cierre.slice(0, 10);
   const desde = sumarDias(hasta, -6);
 
-  const [dias, ejercicios, planes, planesPrev, logs, comidas, plan, checkins, consultas, medidas] = await Promise.all([
+  const [dias, ejercicios, planes, planesPrev, logs, comidas, plan, checkins, consultas, medidas, sesiones] = await Promise.all([
     getDias(perfil.id),
     getEjercicios(perfil.id),
     getPlanes(meso.id, semana),
@@ -105,7 +106,8 @@ export async function resumenDeSemana(perfil: Profile, meso: Mesocycle, semana: 
     getPlanComidas(perfil.id),
     getCheckins(perfil.id, 2),
     getConsultasAsistente(perfil.id, { limite: 50 }),
-    getMedidas(perfil.id, 30)
+    getMedidas(perfil.id, 30),
+    getSesionesSemana(meso.id, semana)
   ]);
 
   const entreno = dias.filter((d) => !d.es_descanso);
@@ -166,7 +168,10 @@ export async function resumenDeSemana(perfil: Profile, meso: Mesocycle, semana: 
     peso_actual_kg: null,
     mejoras_carga: mejoras,
     consultas_asistente: consultas.filter((c) => c.fecha >= desde && c.fecha <= hasta).length,
-    cambios_medidas: cambiosMedidas(medidas, desde, hasta)
+    cambios_medidas: cambiosMedidas(medidas, desde, hasta),
+    minutos_promedio: sesiones.length
+      ? Math.round(sesiones.reduce((a, x) => a + x.duracion_seg, 0) / sesiones.length / 60)
+      : null
   };
 }
 

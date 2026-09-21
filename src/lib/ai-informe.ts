@@ -16,7 +16,7 @@ function describirSemana(nombre: string, objetivo: string, c: Checkin, r: Resume
         : "Peso: no cargó";
   return [
     `Cliente: ${nombre || "sin nombre"} · objetivo: ${objetivo} · semana ${r.semana} del bloque`,
-    `Entrenos: ${r.entrenos_hechos} de ${r.entrenos_planificados} · series registradas: ${r.series_registradas}`,
+    `Entrenos: ${r.entrenos_hechos} de ${r.entrenos_planificados} · series registradas: ${r.series_registradas}${r.minutos_promedio ? ` · duración promedio ${r.minutos_promedio} min` : ""}`,
     r.mejoras_carga.length
       ? `Subió carga en: ${r.mejoras_carga.map((m) => `${m.ejercicio} ${m.antes_kg}→${m.ahora_kg} kg`).join(", ")}`
       : "No hubo subidas de carga planificadas esta semana",

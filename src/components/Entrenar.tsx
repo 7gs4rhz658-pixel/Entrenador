@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { resumenSemanaPasada } from "./ExerciseLogger";
 import RestTimer from "./RestTimer";
 import Stepper from "./Stepper";
-import { guardarSerie } from "@/app/actions/entreno";
+import { guardarSerie, guardarSesion } from "@/app/actions/entreno";
 import { guardarDescanso } from "@/app/actions/rutina";
-import { fmtNum, resumenPlan } from "@/lib/format";
+import { fmtNum, fmtSegundos, resumenPlan } from "@/lib/format";
 import type { Exercise, LoggedSet, PlannedSet } from "@/lib/types";
 
 interface SerieHecha {
@@ -75,6 +75,28 @@ export default function Entrenar({
   const [error, setError] = useState<string | null>(null);
   const [pendiente, iniciar] = useTransition();
 
+  // Reloj de la sesión: arranca al abrir "Comenzar rutina" y sobrevive a
+  // cerrar la app (queda en el teléfono). Si quedó abierto más de 6 h es
+  // de otro día: se reinicia.
+  const claveReloj = `sesion:${mesoId}:${semana}:${diaId}`;
+  const [inicio] = useState<number>(() => {
+    if (typeof window === "undefined") return Date.now();
+    try {
+      const guardado = Number(localStorage.getItem(claveReloj));
+      if (guardado && Date.now() - guardado < 6 * 3600 * 1000) return guardado;
+      localStorage.setItem(claveReloj, String(Date.now()));
+    } catch {}
+    return Date.now();
+  });
+  const [ahora, setAhora] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setAhora(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const transcurrido = Math.max(0, Math.floor((ahora - inicio) / 1000));
+  const [duracionFinal, setDuracionFinal] = useState<number | null>(null);
+  const sesionGuardada = useRef(false);
+
   const ex = ejercicios[indice] as Exercise | undefined;
   const plan = ex ? planes[ex.id] ?? null : null;
   const conPeso = ex?.unidad === "kg";
@@ -136,9 +158,23 @@ export default function Entrenar({
     void guardarDescanso({ exerciseId: ex.id, descanso_seg: seg });
   }
 
+  // Al terminar se guarda la sesión una sola vez y se limpia el reloj
+  const terminado = !ex;
+  const totalHechasSesion = Object.values(hechas).reduce((n, l) => n + l.length, 0);
+  useEffect(() => {
+    if (!terminado || sesionGuardada.current) return;
+    sesionGuardada.current = true;
+    void guardarSesion({ mesoId, diaId, semana, inicioIso: new Date(inicio).toISOString(), series: totalHechasSesion }).then((r) => {
+      setDuracionFinal(r.duracion_seg ?? 0);
+      try {
+        localStorage.removeItem(claveReloj);
+      } catch {}
+    });
+  }, [terminado, mesoId, diaId, semana, inicio, totalHechasSesion, claveReloj]);
+
   // ── Pantalla final ────────────────────────────────────────────
   if (!ex) {
-    const totalHechas = Object.values(hechas).reduce((n, l) => n + l.length, 0);
+    const totalHechas = totalHechasSesion;
     const volumen = Object.values(hechas)
       .flat()
       .reduce((n, s) => n + (s.peso ?? 0) * s.reps, 0);
@@ -149,7 +185,8 @@ export default function Entrenar({
           <h1 className="text-2xl font-bold">¡Entrenamiento terminado!</h1>
           <p className="mt-2 text-muted">
             {totalHechas} series registradas
-            {volumen > 0 ? ` · ${fmtNum(Math.round(volumen))} kg movidos` : ""}.
+            {volumen > 0 ? ` · ${fmtNum(Math.round(volumen))} kg movidos` : ""}
+            {duracionFinal ? ` · ${Math.round(duracionFinal / 60)} min` : ""}.
           </p>
           <Link href={`/dia/${diaId}`} className="btn-ghost mt-5 w-full">
             Ver y corregir el detalle
@@ -172,8 +209,8 @@ export default function Entrenar({
           <Link href={`/dia/${diaId}`} className="text-sm font-medium text-accent">
             ← Salir
           </Link>
-          <span className="text-sm text-muted">
-            Ejercicio {indice + 1} de {ejercicios.length}
+          <span className="text-sm text-muted" style={{ fontVariantNumeric: "tabular-nums" }}>
+            ⏱ {fmtSegundos(transcurrido)} · {indice + 1}/{ejercicios.length}
           </span>
         </div>
         <p className="mt-2 text-xs font-medium uppercase tracking-wide text-muted">{titulo}</p>

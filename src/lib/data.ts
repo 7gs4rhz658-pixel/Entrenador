@@ -3,6 +3,7 @@ import type {
   AsistenteLog,
   Checkin,
   Medida,
+  SesionEntreno,
   Mensaje,
   PushSubscriptionRow,
   Exercise,
@@ -454,5 +455,19 @@ export async function getReferidos(userId: string): Promise<Profile[]> {
 export async function getMedidas(userId: string, limite = 24): Promise<Medida[]> {
   return q<Medida[]>(
     db().from("medidas").select("*").eq("user_id", userId).order("fecha", { ascending: false }).limit(limite)
+  );
+}
+
+// ── Sesiones de entrenamiento ───────────────────────────────────
+
+export async function getSesiones(userId: string, limite = 30): Promise<SesionEntreno[]> {
+  return q<SesionEntreno[]>(
+    db().from("sesiones_entreno").select("*").eq("user_id", userId).order("fin_at", { ascending: false }).limit(limite)
+  );
+}
+
+export async function getSesionesSemana(mesoId: string, semana: number): Promise<SesionEntreno[]> {
+  return q<SesionEntreno[]>(
+    db().from("sesiones_entreno").select("*").eq("mesocycle_id", mesoId).eq("semana", semana)
   );
 }

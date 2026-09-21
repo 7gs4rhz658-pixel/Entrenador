@@ -171,3 +171,46 @@ export async function crearBloque(userIdObjetivo?: string): Promise<Resultado> {
   revalidatePath("/", "layout");
   return { ok: true };
 }
+
+// ── Duración de la sesión ───────────────────────────────────────
+
+// Al terminar la rutina guiada: guarda cuánto duró (una sesión por día
+// y semana; si se repite, se queda con la última).
+export async function guardarSesion(input: {
+  mesoId: string;
+  diaId: string;
+  semana: number;
+  inicioIso: string;
+  series: number;
+}): Promise<Resultado & { duracion_seg?: number }> {
+  const inicio = new Date(input.inicioIso).getTime();
+  if (!Number.isFinite(inicio)) return { error: "Inicio inválido." };
+  const fin = Date.now();
+  // Entre 1 minuto y 6 horas: fuera de eso el reloj quedó abierto de otro día
+  const duracion = Math.round((fin - inicio) / 1000);
+  if (duracion < 60 || duracion > 6 * 3600) return { ok: true, duracion_seg: 0 };
+  try {
+    const userId = await duenoDe(input.mesoId);
+    await exec(
+      db()
+        .from("sesiones_entreno")
+        .upsert(
+          {
+            user_id: userId,
+            mesocycle_id: input.mesoId,
+            training_day_id: input.diaId,
+            semana: input.semana,
+            inicio_at: new Date(inicio).toISOString(),
+            fin_at: new Date(fin).toISOString(),
+            duracion_seg: duracion,
+            series: Math.max(0, Math.round(input.series))
+          },
+          { onConflict: "mesocycle_id,training_day_id,semana" }
+        )
+    );
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true, duracion_seg: duracion };
+}

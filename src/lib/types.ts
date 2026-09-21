@@ -327,6 +327,7 @@ export interface ResumenSemana {
   mejoras_carga: { ejercicio: string; antes_kg: number; ahora_kg: number }[];
   consultas_asistente: number;
   cambios_medidas?: { medida: string; antes: number; ahora: number }[];
+  minutos_promedio?: number | null;
 }
 
 export interface Informe {
@@ -409,3 +410,18 @@ export type Medida = {
   notas: string;
   created_at: string;
 } & Record<CampoMedida, number | null>;
+
+// ── Sesiones de entrenamiento (duración) ────────────────────────
+
+export interface SesionEntreno {
+  id: string;
+  user_id: string;
+  mesocycle_id: string;
+  training_day_id: string;
+  semana: number;
+  inicio_at: string;
+  fin_at: string;
+  duracion_seg: number;
+  series: number;
+  created_at: string;
+}

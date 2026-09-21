@@ -32,6 +32,7 @@ import {
   getPerfil,
   getPlanComidas,
   getPlanes,
+  getSesionesSemana,
   getUltimoRegistro,
   logsPorEjercicio,
   planesPorEjercicio,
@@ -201,10 +202,11 @@ async function Resumen({ perfil }: { perfil: Profile }) {
     );
   }
 
-  const [dias, ejercicios, logs] = await Promise.all([
+  const [dias, ejercicios, logs, sesiones] = await Promise.all([
     getDias(perfil.id),
     getEjercicios(perfil.id),
-    getLogs(meso.id, meso.semana_actual)
+    getLogs(meso.id, meso.semana_actual),
+    getSesionesSemana(meso.id, meso.semana_actual)
   ]);
   const porDia = ejerciciosPorDia(ejercicios);
   const logsEj = logsPorEjercicio(logs);
@@ -242,6 +244,10 @@ async function Resumen({ perfil }: { perfil: Profile }) {
                   <span>
                     {nombreDia(d.dia_semana)}
                     {d.nombre ? ` — ${d.nombre}` : ""}
+                    {(() => {
+                      const s = sesiones.find((x) => x.training_day_id === d.id);
+                      return s ? <span className="ml-1 text-xs text-muted">· {Math.round(s.duracion_seg / 60)} min</span> : null;
+                    })()}
                   </span>
                   <span
                     className={`chip ${

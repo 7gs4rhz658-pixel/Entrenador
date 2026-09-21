@@ -83,7 +83,8 @@ Facts · Vercel.
    `supabase/migrations/0007_pago_vence.sql` (vencimiento del mes) y
    `supabase/migrations/0008_mensajes_push_referidos.sql` (mensajes, push, referidos) y
    `supabase/migrations/0009_revision_entrenador.sql` (borradores hasta que el entrenador envía) y
-   `supabase/migrations/0010_medidas.sql` (medidas corporales).
+   `supabase/migrations/0010_medidas.sql` (medidas corporales) y
+   `supabase/migrations/0011_sesiones_entreno.sql` (duración de sesiones).
 5. Authentication → Providers → Email: recomendado **desactivar "Confirm
    email"** (el SMTP gratuito manda muy pocos correos por hora). Si lo dejás,
    la app muestra la pantalla "Confirmá tu correo".
@@ -180,7 +181,7 @@ src/
     nutrition.ts          TMB, macros por objetivo, regla de tres
     off.ts                Open Food Facts + caché en `ingredients`
     pagos.ts              checkout simulado (punto de cambio a pago real)
-supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes) · 0003 recomendación de comidas · 0004 asistente · 0005 check-ins · 0006 ajuste de macros · 0007 vencimiento del pago · 0008 mensajes, push y referidos · 0009 revisión del entrenador · 0010 medidas
+supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes) · 0003 recomendación de comidas · 0004 asistente · 0005 check-ins · 0006 ajuste de macros · 0007 vencimiento del pago · 0008 mensajes, push y referidos · 0009 revisión del entrenador · 0010 medidas · 0011 sesiones
 scripts/                  tests: progresión, planes/nutrición, RLS
 ```
 
