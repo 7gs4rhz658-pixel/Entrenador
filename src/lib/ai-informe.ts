@@ -31,6 +31,7 @@ function describirSemana(nombre: string, objetivo: string, c: Checkin, r: Resume
     `Energía: ${ETIQUETA_1A5[c.energia ?? 3]} · sueño: ${ETIQUETA_1A5[c.sueno ?? 3]} · adherencia percibida: ${ETIQUETA_1A5[c.adherencia ?? 3]}`,
     r.consultas_asistente ? `Consultas al asistente de situaciones: ${r.consultas_asistente}` : "",
     r.cambios_medidas?.length ? `Medidas: ${r.cambios_medidas.map((m) => `${m.medida} ${m.antes}→${m.ahora} cm`).join(", ")}` : "",
+    r.records?.length ? `Récords personales de la semana: ${r.records.map((x) => `${x.ejercicio} ${x.valor} ${x.tipo === "peso" ? "kg" : "reps"}`).join(", ")}` : "",
     c.comentario ? `Comentario del cliente: "${c.comentario}"` : ""
   ]
     .filter(Boolean)

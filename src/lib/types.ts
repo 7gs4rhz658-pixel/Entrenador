@@ -328,6 +328,7 @@ export interface ResumenSemana {
   consultas_asistente: number;
   cambios_medidas?: { medida: string; antes: number; ahora: number }[];
   minutos_promedio?: number | null;
+  records?: { ejercicio: string; valor: number; tipo: "peso" | "reps" }[];
 }
 
 export interface Informe {
@@ -436,5 +437,19 @@ export interface FotoProgreso {
   fecha: string;
   vista: VistaFoto;
   path: string;
+  created_at: string;
+}
+
+// ── Récords personales ──────────────────────────────────────────
+
+export interface RecordPersonal {
+  id: string;
+  user_id: string;
+  ejercicio: string;
+  tipo: "peso" | "reps";
+  valor: number;
+  reps: number | null;
+  anterior: number | null;
+  fecha: string;
   created_at: string;
 }

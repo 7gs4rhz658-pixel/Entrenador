@@ -35,6 +35,7 @@ import {
   getPerfil,
   getPlanComidas,
   getPlanes,
+  getRecords,
   getSesionesSemana,
   getUltimoRegistro,
   logsPorEjercicio,
@@ -272,6 +273,8 @@ async function Resumen({ perfil }: { perfil: Profile }) {
         </ul>
       </section>
 
+      <Records userId={perfil.id} />
+
       <Informes userId={perfil.id} />
 
       {c ? (
@@ -372,6 +375,26 @@ async function FotosEntrenador({ userId }: { userId: string }) {
       <FotosForm hoy={hoyFecha()} userId={userId} />
       <FotosGaleria fotos={conUrl} />
     </>
+  );
+}
+
+async function Records({ userId }: { userId: string }) {
+  const records = await getRecords(userId, 6);
+  if (!records.length) return null;
+  return (
+    <section className="card text-sm">
+      <h2 className="mb-2 font-bold">🏆 Últimos récords</h2>
+      <ul className="flex flex-col gap-1">
+        {records.map((r) => (
+          <li key={r.id} className="flex justify-between gap-2">
+            <span className="truncate">{r.ejercicio}</span>
+            <span className="shrink-0 font-semibold text-ok">
+              {Number(r.valor)} {r.tipo === "peso" ? "kg" : "reps"} <span className="font-normal text-muted">· {new Date(`${r.fecha}T12:00:00`).toLocaleDateString("es-AR")}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

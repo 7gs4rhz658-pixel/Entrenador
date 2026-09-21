@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { resumenSemanaPasada } from "./ExerciseLogger";
 import RestTimer from "./RestTimer";
 import Stepper from "./Stepper";
-import { guardarSerie, guardarSesion } from "@/app/actions/entreno";
+import { guardarSerie, guardarSesion, type RecordDetectado } from "@/app/actions/entreno";
 import { guardarDescanso } from "@/app/actions/rutina";
 import { fmtNum, fmtSegundos, resumenPlan } from "@/lib/format";
 import type { Exercise, LoggedSet, PlannedSet } from "@/lib/types";
@@ -96,6 +96,8 @@ export default function Entrenar({
   const transcurrido = Math.max(0, Math.floor((ahora - inicio) / 1000));
   const [duracionFinal, setDuracionFinal] = useState<number | null>(null);
   const sesionGuardada = useRef(false);
+  // Récords logrados en esta sesión (se muestran al momento y al final)
+  const [records, setRecords] = useState<RecordDetectado[]>([]);
 
   const ex = ejercicios[indice] as Exercise | undefined;
   const plan = ex ? planes[ex.id] ?? null : null;
@@ -149,6 +151,7 @@ export default function Entrenar({
       }));
       setBorrador(null);
       setDisparo((d) => d + 1);
+      if (r.record) setRecords((l) => [...l, r.record!]);
     });
   }
 
@@ -188,6 +191,16 @@ export default function Entrenar({
             {volumen > 0 ? ` · ${fmtNum(Math.round(volumen))} kg movidos` : ""}
             {duracionFinal ? ` · ${Math.round(duracionFinal / 60)} min` : ""}.
           </p>
+          {records.length ? (
+            <ul className="mt-3 flex flex-col gap-1 text-sm">
+              {records.map((r, i) => (
+                <li key={i} className="rounded-xl border border-ok/40 bg-ok/10 px-3 py-1.5 font-semibold text-ok">
+                  🏆 Récord en {r.ejercicio}: {fmtNum(r.valor)} {r.tipo === "peso" ? "kg" : "reps"}
+                  {r.anterior != null ? <span className="font-normal text-muted"> (antes {fmtNum(r.anterior)})</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <Link href={`/dia/${diaId}`} className="btn-ghost mt-5 w-full">
             Ver y corregir el detalle
           </Link>
@@ -346,6 +359,12 @@ export default function Entrenar({
             </div>
           </div>
           {error ? <p className="mt-2 text-sm font-medium text-danger">✗ {error}</p> : null}
+          {records.filter((r) => r.ejercicio === ex.nombre).slice(-1).map((r) => (
+            <p key={r.valor} className="mt-2 rounded-xl border border-ok/40 bg-ok/10 px-3 py-1.5 text-sm font-semibold text-ok">
+              🏆 ¡Récord! {fmtNum(r.valor)} {r.tipo === "peso" ? "kg" : "reps"}
+              {r.anterior != null ? ` (antes ${fmtNum(r.anterior)})` : ""}
+            </p>
+          ))}
           <button
             type="button"
             onClick={registrar}

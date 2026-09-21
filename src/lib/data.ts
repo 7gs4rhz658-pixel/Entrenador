@@ -7,6 +7,7 @@ import type {
   SesionEntreno,
   Mensaje,
   PushSubscriptionRow,
+  RecordPersonal,
   Exercise,
   Ingredient,
   LoggedSet,
@@ -486,4 +487,42 @@ export async function urlFoto(path: string): Promise<string | null> {
   const { data, error } = await db().storage.from("fotos").createSignedUrl(path, 3600);
   if (error) return null;
   return data.signedUrl;
+}
+
+// ── Récords ─────────────────────────────────────────────────────
+
+export async function getRecords(userId: string, limite = 20): Promise<RecordPersonal[]> {
+  return q<RecordPersonal[]>(
+    db().from("records").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(limite)
+  );
+}
+
+// Máximo histórico (peso o reps) del ejercicio por nombre, en todos los
+// bloques del usuario, sin contar la serie que se está guardando.
+export async function maximoHistorico(
+  userId: string,
+  nombreEjercicio: string,
+  campo: "peso_kg" | "reps",
+  excluir: { mesoId: string; exerciseId: string; semana: number; serie: number }
+): Promise<number | null> {
+  const ejercicios = await q<{ id: string }[]>(
+    db().from("exercises").select("id").eq("user_id", userId).ilike("nombre", nombreEjercicio)
+  );
+  if (!ejercicios.length) return null;
+  const filas = await q<{ exercise_id: string; semana: number; serie: number; mesocycle_id: string; valor: number | null }[]>(
+    db()
+      .from("logged_sets")
+      .select(`exercise_id, semana, serie, mesocycle_id, valor:${campo}`)
+      .eq("user_id", userId)
+      .eq("completado", true)
+      .in("exercise_id", ejercicios.map((e) => e.id))
+      .gt(campo, 0)
+      .order(campo, { ascending: false })
+      .limit(5)
+  );
+  const previa = filas.find(
+    (f) =>
+      !(f.mesocycle_id === excluir.mesoId && f.exercise_id === excluir.exerciseId && f.semana === excluir.semana && f.serie === excluir.serie)
+  );
+  return previa?.valor ?? null;
 }

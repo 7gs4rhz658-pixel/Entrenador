@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireSesion, resolverUsuario } from "@/lib/auth";
-import { exec, getMesociclo, getPlanes } from "@/lib/data";
+import { exec, getEjercicio, getMesociclo, getPlanes, maximoHistorico } from "@/lib/data";
 import { hoyFecha } from "@/lib/format";
 import { estadoPago } from "@/lib/pagos";
 import {
@@ -51,7 +51,7 @@ export interface SerieInput {
   descanso_seg?: number | null;
 }
 
-export async function guardarSerie(input: SerieInput): Promise<Resultado> {
+export async function guardarSerie(input: SerieInput): Promise<Resultado & { record?: RecordDetectado | null }> {
   try {
     const userId = await duenoDe(input.mesoId);
     await exec(
@@ -77,11 +77,45 @@ export async function guardarSerie(input: SerieInput): Promise<Resultado> {
     );
     // Semana ya cerrada → la siguiente se recalcula sola
     await recalcularSemanaSiguiente(input.mesoId, input.semana);
+    const record = await detectarRecord(userId, input);
+    revalidatePath("/", "layout");
+    return { ok: true, record };
   } catch (e) {
     return { error: mensaje(e) };
   }
-  revalidatePath("/", "layout");
-  return { ok: true };
+}
+
+export interface RecordDetectado {
+  tipo: "peso" | "reps";
+  valor: number;
+  anterior: number | null;
+  ejercicio: string;
+}
+
+// ¿La serie supera el máximo histórico del ejercicio? Peso en los que
+// usan kg (con al menos 1 rep), reps en los demás. Se guarda como récord
+// y se devuelve para mostrarlo en el momento.
+async function detectarRecord(userId: string, input: SerieInput): Promise<RecordDetectado | null> {
+  const ex = await getEjercicio(input.exerciseId);
+  if (!ex || ex.progresion === "al_fallo") return null;
+  const excluir = { mesoId: input.mesoId, exerciseId: input.exerciseId, semana: input.semana, serie: input.serie };
+  const esPeso = ex.unidad === "kg";
+  const valor = esPeso ? input.peso_kg : input.reps;
+  if (valor == null || valor <= 0 || (esPeso && (input.reps ?? 0) < 1)) return null;
+  const anterior = await maximoHistorico(userId, ex.nombre, esPeso ? "peso_kg" : "reps", excluir);
+  // Sin historial previo (o solo series a 0 kg) no es un récord, es la primera vez
+  if (anterior == null || anterior <= 0 || valor <= anterior) return null;
+  await exec(
+    db().from("records").insert({
+      user_id: userId,
+      ejercicio: ex.nombre,
+      tipo: esPeso ? "peso" : "reps",
+      valor,
+      reps: esPeso ? input.reps : null,
+      anterior
+    })
+  );
+  return { tipo: esPeso ? "peso" : "reps", valor, anterior, ejercicio: ex.nombre };
 }
 
 export async function borrarSerie(input: {

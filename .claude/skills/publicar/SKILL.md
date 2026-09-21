@@ -115,7 +115,8 @@ desde el teléfono y que el link sea compartible.
    `supabase/migrations/0009_revision_entrenador.sql` (revisión del entrenador) y con
    `supabase/migrations/0010_medidas.sql` (medidas corporales) y con
    `supabase/migrations/0011_sesiones_entreno.sql` (duración de sesiones) y con
-   `supabase/migrations/0012_fotos_progreso.sql` (fotos de progreso).
+   `supabase/migrations/0012_fotos_progreso.sql` (fotos de progreso) y con
+   `supabase/migrations/0013_records.sql` (récords personales).
 
 4. **Configurar el login por correo.** Guiá: menú izquierdo → **Authentication**
    → **Providers** → **Email**. Recomendá **desactivar "Confirm email"** (el

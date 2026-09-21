@@ -5,9 +5,10 @@ import {
   getDias,
   getEjercicios,
   getLogsEjercicio,
+  getRecords,
   getSesiones
 } from "@/lib/data";
-import { fmtNum, nombreDia } from "@/lib/format";
+import { fmtFechaCorta, fmtNum, nombreDia } from "@/lib/format";
 
 // Sección de progreso reutilizable: la ve el cliente en /progreso y el
 // entrenador dentro de la ficha de cada cliente. Server component.
@@ -20,11 +21,12 @@ export default async function ProgresoCliente({
   ejercicioSel?: string;
   base: string; // ruta a la que apuntan los chips (?e=)
 }) {
-  const [meso, dias, ejercicios, sesiones] = await Promise.all([
+  const [meso, dias, ejercicios, sesiones, records] = await Promise.all([
     getBloque(userId, { conBorrador: true }),
     getDias(userId),
     getEjercicios(userId),
-    getSesiones(userId, 8)
+    getSesiones(userId, 8),
+    getRecords(userId, 10)
   ]);
   const ultimas = sesiones.slice(0, 4);
   const minutosProm = ultimas.length ? Math.round(ultimas.reduce((a, x) => a + x.duracion_seg, 0) / ultimas.length / 60) : null;
@@ -137,6 +139,26 @@ export default async function ProgresoCliente({
               ))}
             </tbody>
           </table>
+        </section>
+      ) : null}
+
+      {records.length ? (
+        <section className="card mt-3">
+          <h2 className="font-bold">🏆 Récords personales</h2>
+          <ul className="mt-2 flex flex-col gap-1.5 text-sm">
+            {records.map((r) => (
+              <li key={r.id} className="flex items-center justify-between gap-2">
+                <span className="truncate">
+                  {r.ejercicio}
+                  <span className="ml-1 text-xs text-muted">{fmtFechaCorta(r.fecha)}</span>
+                </span>
+                <span className="shrink-0 font-semibold text-ok" style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {fmtNum(Number(r.valor))} {r.tipo === "peso" ? "kg" : "reps"}
+                  {r.anterior != null ? <span className="font-normal text-muted"> (antes {fmtNum(Number(r.anterior))})</span> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
     </>
