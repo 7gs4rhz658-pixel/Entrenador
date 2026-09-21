@@ -3,16 +3,21 @@
 import { useState, useTransition } from "react";
 import { pedirRecetas } from "@/app/actions/nutricion";
 import type { Receta } from "@/lib/ai";
-import type { Macros } from "@/lib/nutrition";
+import { nombreMomento, type Macros } from "@/lib/nutrition";
+import type { Momento } from "@/lib/types";
 
+// Una idea por cada comida que todavía falta hoy (según los horarios del
+// cliente y lo que ya registró), con lo que le queda de macros.
 export default function Recetas({
   restantes,
   preferencias,
-  conIA
+  conIA,
+  momentos
 }: {
   restantes: Macros;
   preferencias: string;
   conIA: boolean;
+  momentos: Momento[]; // comidas pendientes de hoy, en orden
 }) {
   const [recetas, setRecetas] = useState<Receta[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,13 +26,21 @@ export default function Recetas({
   function pedir() {
     setError(null);
     iniciar(async () => {
-      const r = await pedirRecetas({ restantes, preferencias });
+      const r = await pedirRecetas({ restantes, preferencias, momentos });
       if (r.error) setError(r.error);
       else setRecetas(r.recetas ?? []);
     });
   }
 
   if (!conIA) return null;
+  if (!momentos.length) {
+    return (
+      <section className="card text-sm text-muted">
+        <p className="font-semibold text-ink">Ideas para lo que te queda</p>
+        <p className="mt-1">Ya registraste todas tus comidas de hoy. Mañana hay más.</p>
+      </section>
+    );
+  }
 
   return (
     <section className="card">
@@ -35,7 +48,7 @@ export default function Recetas({
         <div>
           <h2 className="font-bold">Ideas para lo que te queda</h2>
           <p className="text-xs text-muted">
-            {restantes.kcal} kcal · P {restantes.prot_g} g · C {restantes.carb_g} g · G {restantes.grasa_g} g
+            {momentos.map(nombreMomento).join(" + ")} · {restantes.kcal} kcal · P {restantes.prot_g} g · C {restantes.carb_g} g · G {restantes.grasa_g} g
           </p>
         </div>
         <button type="button" onClick={pedir} disabled={pendiente} className="btn-ghost shrink-0 text-sm">
@@ -49,7 +62,7 @@ export default function Recetas({
             <li key={i} className="rounded-xl border border-line p-3">
               <p className="font-semibold">{r.nombre}</p>
               <p className="text-xs text-muted" style={{ fontVariantNumeric: "tabular-nums" }}>
-                {r.momento} · ~{r.macros_aprox?.kcal} kcal · P {r.macros_aprox?.prot_g} · C {r.macros_aprox?.carb_g} · G {r.macros_aprox?.grasa_g}
+                {nombreMomento(r.momento as Momento)} · ~{r.macros_aprox?.kcal} kcal · P {r.macros_aprox?.prot_g} · C {r.macros_aprox?.carb_g} · G {r.macros_aprox?.grasa_g}
               </p>
               <p className="mt-1.5 text-sm">
                 {r.ingredientes.map((ing) => `${ing.nombre} ${ing.gramos} g`).join(" · ")}

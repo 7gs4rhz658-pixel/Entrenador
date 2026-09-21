@@ -45,6 +45,11 @@ export default async function NutricionDia({
   const porMomento = new Map<Momento, typeof comidas>();
   for (const c of comidas) (porMomento.get(c.momento) ?? porMomento.set(c.momento, []).get(c.momento)!).push(c);
 
+  // Comidas que todavía faltan hoy: las que eligió el cliente (o las 4
+  // clásicas) sin nada registrado en ese momento
+  const momentosCliente: Momento[] = perfil.cuestionario_nutricion?.comidas.map((c) => c.momento) ?? ["desayuno", "almuerzo", "merienda", "cena"];
+  const momentosPendientes = momentosCliente.filter((m) => !porMomento.has(m));
+
   const restantes = objetivo
     ? {
         kcal: Math.max(0, objetivo.kcal - consumido.kcal),
@@ -149,6 +154,7 @@ export default async function NutricionDia({
 
       {restantes ? (
         <Recetas
+          momentos={momentosPendientes}
           restantes={restantes}
           preferencias={[perfil.cuestionario?.preferencias, perfil.cuestionario_nutricion?.alergias ? `alergias: ${perfil.cuestionario_nutricion.alergias}` : "", perfil.cuestionario_nutricion?.no_come ? `evita: ${perfil.cuestionario_nutricion.no_come}` : ""].filter(Boolean).join(". ")}
           conIA={conIA}

@@ -298,6 +298,7 @@ export async function aplicarSustitucion(input: {
 export async function pedirRecetas(input: {
   restantes: Macros;
   preferencias: string;
+  momentos: Momento[];
 }): Promise<{ recetas?: Receta[]; error?: string }> {
   if (!iaDisponible()) {
     return { error: "Las recetas necesitan la IA configurada (GROQ_API_KEY o GEMINI_API_KEY)." };
@@ -310,7 +311,8 @@ export async function pedirRecetas(input: {
     const recetas = await sugerirRecetas(
       input.restantes,
       input.preferencias.slice(0, 300),
-      base.map((b) => b.nombre)
+      base.map((b) => b.nombre),
+      (input.momentos ?? []).filter((m) => MOMENTOS.includes(m)).slice(0, 6)
     );
     return { recetas };
   } catch (e) {

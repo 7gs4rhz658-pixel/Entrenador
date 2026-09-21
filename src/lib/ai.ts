@@ -3,7 +3,7 @@
 // nunca llega al navegador. Toda función devuelve JSON tipado y, si la IA
 // no está configurada o falla, quien la llama tiene un camino sin IA.
 
-import type { Cuestionario, PlanGenerado, Profile } from "./types";
+import type { Cuestionario, Momento, PlanGenerado, Profile } from "./types";
 import type { Macros } from "./nutrition";
 import { normalizarPlan } from "./plan-generator";
 
@@ -48,8 +48,16 @@ export async function generarJSON<T>(instrucciones: string, prompt: string, opci
 }
 
 // El plan gratuito de Groq limita tokens por minuto: si pide esperar
-// unos segundos (429), esperamos y reintentamos hasta dos veces.
-async function llamarGroq(instrucciones: string, prompt: string, opciones: Opciones, intento = 0): Promise<string> {
+// unos segundos (429), esperamos y reintentamos hasta dos veces. Si el
+// modo JSON estricto falla al validar (400), se repite sin él y el JSON
+// se extrae del texto.
+async function llamarGroq(
+  instrucciones: string,
+  prompt: string,
+  opciones: Opciones,
+  intento = 0,
+  modoJson = true
+): Promise<string> {
   const modelo = process.env.GROQ_MODEL || MODELO_GROQ_DEFAULT;
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -63,7 +71,7 @@ async function llamarGroq(instrucciones: string, prompt: string, opciones: Opcio
         { role: "system", content: instrucciones },
         { role: "user", content: prompt }
       ],
-      response_format: { type: "json_object" },
+      ...(modoJson ? { response_format: { type: "json_object" } } : {}),
       temperature: opciones.temperatura ?? 0.3,
       max_tokens: opciones.maxTokens ?? 8192,
       // gpt-oss razona antes de responder; con esfuerzo alto gasta miles
@@ -78,15 +86,26 @@ async function llamarGroq(instrucciones: string, prompt: string, opciones: Opcio
       const seg = Number(cuerpo.match(/try again in ([\d.]+)s/i)?.[1] ?? res.headers.get("retry-after") ?? 0);
       if (seg > 0 && seg <= 25) {
         await new Promise((r) => setTimeout(r, Math.ceil(seg * 1000) + 500));
-        return llamarGroq(instrucciones, prompt, opciones, intento + 1);
+        return llamarGroq(instrucciones, prompt, opciones, intento + 1, modoJson);
       }
+    }
+    if (res.status === 400 && modoJson && cuerpo.includes("json_validate_failed")) {
+      return llamarGroq(instrucciones, prompt, opciones, intento, false);
     }
     throw new ErrorIA(`Groq respondió ${res.status}: ${cuerpo.slice(0, 300)}`);
   }
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const texto = data.choices?.[0]?.message?.content ?? "";
   if (!texto) throw new ErrorIA("Groq devolvió una respuesta vacía.");
-  return texto;
+  return modoJson ? texto : extraerJSON(texto);
+}
+
+// Del texto libre del modelo, el primer objeto JSON completo
+function extraerJSON(texto: string): string {
+  const inicio = texto.indexOf("{");
+  const fin = texto.lastIndexOf("}");
+  if (inicio === -1 || fin === -1 || fin <= inicio) throw new ErrorIA("La IA no devolvió JSON.");
+  return texto.slice(inicio, fin + 1);
 }
 
 async function llamarGemini(instrucciones: string, prompt: string, opciones: Opciones): Promise<string> {
@@ -274,16 +293,24 @@ export interface Receta {
   macros_aprox: Macros;
 }
 
+// Una idea por cada comida que al cliente todavía le falta hoy, repartiendo
+// lo que le queda de macros entre ellas.
 export async function sugerirRecetas(
   restantes: Macros,
   preferencias: string,
-  base: string[]
+  base: string[],
+  momentos: Momento[]
 ): Promise<Receta[]> {
+  const lista: Momento[] = momentos.length ? momentos : ["cena"];
   const data = await generarJSON<{ recetas: Receta[] }>(
-    `Sos un cocinero fitness. Proponés 3 recetas simples (máx. 6 ingredientes, 20 minutos) que entren en los macros que le quedan al usuario hoy, priorizando llegar a la proteína sin pasarse de calorías. Preferí ingredientes de la lista base disponible (para que se puedan registrar) y cantidades en gramos. Los macros son aproximados: calculalos vos con valores estándar por 100 g. Español rioplatense. Devolvé SOLO JSON: {"recetas": [{"nombre": string, "momento": "desayuno"|"almuerzo"|"merienda"|"cena"|"snack", "ingredientes": [{"nombre": string, "gramos": number}], "pasos": [string], "macros_aprox": {"kcal": number, "prot_g": number, "carb_g": number, "grasa_g": number}}]}`,
+    `Sos un cocinero fitness. Al cliente le faltan hoy estas comidas, en este orden: ${lista.join(", ")}. Proponé EXACTAMENTE una receta por cada una (mismo "momento", mismo orden), simples (máx. 6 ingredientes, 20 minutos), repartiendo entre todas los macros que le quedan de modo que la suma cierre en las calorías restantes y priorizando llegar a la proteína. Cada receta tiene que ser acorde a su momento (desayuno o merienda livianos, almuerzo y cena completos, snack chico). Preferí ingredientes de la lista base disponible (para que se puedan registrar) y cantidades en gramos. Los macros son aproximados: calculalos vos con valores estándar por 100 g. Español rioplatense. Devolvé SOLO JSON: {"recetas": [{"nombre": string, "momento": "desayuno"|"almuerzo"|"merienda"|"cena"|"snack", "ingredientes": [{"nombre": string, "gramos": number}], "pasos": [string], "macros_aprox": {"kcal": number, "prot_g": number, "carb_g": number, "grasa_g": number}}]}`,
     `Macros restantes hoy: ${restantes.kcal} kcal · ${restantes.prot_g} g proteína · ${restantes.carb_g} g carbos · ${restantes.grasa_g} g grasa.\nPreferencias / restricciones: ${preferencias || "ninguna"}.\nIngredientes base disponibles: ${base.join(", ")}.`,
     { temperatura: 0.7 }
   );
   if (!Array.isArray(data?.recetas)) throw new ErrorIA("Respuesta de recetas inválida.");
-  return data.recetas.slice(0, 3);
+  // Una por momento pedido, en el orden pedido
+  const porMomento = new Map<string, Receta>();
+  for (const r of data.recetas) if (r?.momento && !porMomento.has(r.momento)) porMomento.set(r.momento, r);
+  const ordenadas = lista.map((m) => porMomento.get(m)).filter((r): r is Receta => !!r);
+  return (ordenadas.length ? ordenadas : data.recetas).slice(0, 6);
 }
