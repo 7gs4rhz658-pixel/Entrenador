@@ -4,7 +4,7 @@
 
 import webpush from "web-push";
 import { db } from "./supabase/server";
-import { exec, getSuscripcionesPush } from "./data";
+import { exec, getEntrenadores, getSuscripcionesPush } from "./data";
 
 export interface CargaPush {
   titulo: string;
@@ -56,5 +56,13 @@ export async function enviarPush(userId: string, carga: CargaPush): Promise<numb
       }
     }
   }
+  return ok;
+}
+
+// Aviso a todos los entrenadores (cliente nuevo, check-in, mensaje…)
+export async function avisarEntrenadores(carga: CargaPush): Promise<number> {
+  if (!preparar()) return 0;
+  let ok = 0;
+  for (const e of await getEntrenadores()) ok += await enviarPush(e.id, carga);
   return ok;
 }

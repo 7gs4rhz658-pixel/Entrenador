@@ -1,5 +1,6 @@
 import Link from "next/link";
 import LogoutButton from "@/components/LogoutButton";
+import RegistrarSW from "@/components/RegistrarSW";
 import { requireEntrenador } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ export default async function EntrenadorLayout({
           </div>
         </div>
       </header>
+      <RegistrarSW />
       {children}
     </div>
   );

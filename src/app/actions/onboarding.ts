@@ -3,13 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSesion } from "@/lib/auth";
-import { generarPlanInicial, iaDisponible } from "@/lib/ai";
-import { aplicarRecomendacion, prepararRecomendacionIA } from "@/lib/comidas-service";
-import { exec, getBloque, getPerfil } from "@/lib/data";
+import { exec, getBloque } from "@/lib/data";
 import { hoyFecha } from "@/lib/format";
 import { nuevoVencimiento, procesarPago } from "@/lib/pagos";
-import { planPlantilla } from "@/lib/plan-generator";
-import { aplicarPlan } from "@/lib/plan-import";
+import { avisarEntrenadores } from "@/lib/push";
 import { db } from "@/lib/supabase/server";
 import type { Cuestionario, CuestionarioNutricion, Momento, NivelActividad, Objetivo, Sexo } from "@/lib/types";
 
@@ -139,9 +136,9 @@ export async function guardarCuestionarioNutricion(
   redirect(sesion.perfil.estado_pago === "pagado" ? "/" : "/pago");
 }
 
-// Checkout (simulado) + generación del plan inicial. Si la IA no está
-// configurada o falla, se usa la plantilla para que el cliente nunca
-// quede sin rutina; el entrenador puede regenerarla desde su panel.
+// Checkout (simulado). Marca el mes pagado y avisa al entrenador; la
+// rutina y el menú los arma él desde su panel y los envía cuando los
+// revisó. Renovar solo extiende el vencimiento.
 export async function pagar(_prev: Estado, formData: FormData): Promise<Estado> {
   const sesion = await requireSesion();
   if (!sesion.perfil.onboarding_completo) redirect("/cuestionario");
@@ -155,7 +152,7 @@ export async function pagar(_prev: Estado, formData: FormData): Promise<Estado> 
   if (!r.ok) return { error: r.error };
 
   // Renovación: ya tiene rutina, solo se extiende el mes
-  const renovacion = !!(await getBloque(sesion.userId));
+  const renovacion = !!(await getBloque(sesion.userId, { conBorrador: true }));
   try {
     await exec(
       db()
@@ -175,22 +172,17 @@ export async function pagar(_prev: Estado, formData: FormData): Promise<Estado> 
     redirect("/?renovado=1");
   }
 
+  // Alta nueva: la rutina y el menú los arma y revisa el entrenador desde
+  // su panel; acá solo le avisamos que tiene un cliente nuevo.
   try {
-    const perfil = await getPerfil(sesion.userId);
-    let plan;
-    let origen: "ia" | "plantilla" = "plantilla";
-    if (iaDisponible()) {
-      try {
-        plan = await generarPlanInicial(perfil);
-        origen = "ia";
-      } catch (e) {
-        console.error("Plan IA falló, uso plantilla:", mensaje(e));
-      }
-    }
-    if (!plan) plan = planPlantilla(perfil.cuestionario);
-    await aplicarPlan(sesion.userId, plan, origen);
+    await avisarEntrenadores({
+      titulo: "Cliente nuevo para armar",
+      cuerpo: `${sesion.perfil.nombre || sesion.email} ya pagó: armale la rutina y el menú desde su ficha.`,
+      url: "/entrenador",
+      tag: "nuevo-cliente"
+    });
   } catch (e) {
-    return { error: mensaje(e) };
+    console.error("Aviso al entrenador falló:", mensaje(e));
   }
   revalidatePath("/", "layout");
   redirect("/?bienvenida=1");

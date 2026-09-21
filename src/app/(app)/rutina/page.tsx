@@ -21,6 +21,17 @@ export default async function RutinaPage() {
     : {};
   const porDia = ejerciciosPorDia(ejercicios);
 
+  if (!meso) {
+    return (
+      <main>
+        <h1 className="mb-3 text-2xl font-bold">Rutina</h1>
+        <p className="card text-center text-sm text-muted">
+          Tu entrenador está armando tu rutina. Cuando la envíe te llega un aviso y la ves acá.
+        </p>
+      </main>
+    );
+  }
+
   return (
     <main>
       <h1 className="mb-1 text-2xl font-bold">Rutina</h1>

@@ -1,17 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { marcarActivo, marcarPago, regenerarPlan } from "@/app/actions/entrenador";
+import Link from "next/link";
+import { marcarActivo, marcarPago } from "@/app/actions/entrenador";
 import type { Profile } from "@/lib/types";
 
 export default function ClienteAcciones({
   perfil,
-  tienePlan,
-  conIA
+  tienePlan
 }: {
   perfil: Profile;
   tienePlan: boolean;
-  conIA: boolean;
 }) {
   const [pendiente, iniciar] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -59,24 +58,9 @@ export default function ClienteAcciones({
         </button>
       </div>
       {perfil.onboarding_completo ? (
-        <button
-          type="button"
-          disabled={pendiente}
-          onClick={() => {
-            if (
-              tienePlan &&
-              !window.confirm(
-                "¿Generar un plan nuevo desde el cuestionario? La rutina actual se reemplaza por completo (el historial se conserva)."
-              )
-            )
-              return;
-            correr(() => regenerarPlan(perfil.id));
-          }}
-          className="btn-ghost px-3 py-1.5 text-sm"
-        >
-          {pendiente ? "Generando…" : tienePlan ? "Regenerar plan" : "Generar plan"}
-          {conIA ? " con IA" : " (plantilla)"}
-        </button>
+        <Link href={`/entrenador/${perfil.id}?tab=plan`} className="btn-ghost px-3 py-1.5 text-sm">
+          {tienePlan ? "Rutina nueva" : "Armar rutina"}
+        </Link>
       ) : null}
       {error ? <p className="text-sm font-medium text-danger">✗ {error}</p> : null}
     </div>

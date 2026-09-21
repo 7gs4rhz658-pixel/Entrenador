@@ -8,9 +8,11 @@ import {
   iaDisponible,
   interpretarPlanTxt
 } from "@/lib/ai";
-import { exec, getPerfil } from "@/lib/data";
+import { exec, getBloqueBorrador, getPerfil } from "@/lib/data";
 import { hoyFecha } from "@/lib/format";
+import { publicarPlanComidas } from "@/lib/meal-plan-db";
 import { nuevoVencimiento } from "@/lib/pagos";
+import { enviarPush } from "@/lib/push";
 import { normalizarPlan, planPlantilla } from "@/lib/plan-generator";
 import { aplicarPlan } from "@/lib/plan-import";
 import { db } from "@/lib/supabase/server";
@@ -60,19 +62,72 @@ export async function aplicarPlanCliente(input: {
   return { ok: true };
 }
 
-// Regenera el plan desde el cuestionario (IA si está, plantilla si no).
-export async function regenerarPlan(userId: string): Promise<Resultado> {
+// Propone un plan desde el cuestionario (IA si está, plantilla si no)
+// para que el entrenador lo revise antes de aplicarlo como borrador.
+export async function previsualizarPlan(input: {
+  userId: string;
+}): Promise<{ plan?: PlanGenerado; origen?: "ia" | "plantilla"; error?: string }> {
   try {
     await requireEntrenador();
-    const perfil = await getPerfil(userId);
-    let plan: PlanGenerado | null = null;
-    let origen: "ia" | "plantilla" = "plantilla";
-    if (iaDisponible()) {
-      plan = await generarPlanInicial(perfil);
-      origen = "ia";
-    }
-    if (!plan) plan = planPlantilla(perfil.cuestionario);
-    await aplicarPlan(userId, plan, origen);
+    const perfil = await getPerfil(input.userId);
+    if (iaDisponible()) return { plan: await generarPlanInicial(perfil), origen: "ia" };
+    return { plan: planPlantilla(perfil.cuestionario), origen: "plantilla" };
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+}
+
+// "Enviar al cliente": publica el borrador de rutina, le avisa y le deja
+// un mensaje en el hilo.
+export async function enviarRutina(input: { userId: string }): Promise<Resultado> {
+  try {
+    await requireEntrenador();
+    const borrador = await getBloqueBorrador(input.userId);
+    if (!borrador) return { error: "No hay una rutina pendiente de enviar." };
+    await exec(
+      db()
+        .from("mesocycles")
+        .update({ publicado: true, publicado_at: new Date().toISOString() })
+        .eq("id", borrador.id)
+    );
+    await exec(
+      db().from("mensajes").insert({
+        user_id: input.userId,
+        de: "entrenador",
+        texto: `Tu rutina "${borrador.nombre}" ya está lista. Entrá a Inicio y arrancá con el día de hoy.`
+      })
+    );
+    await enviarPush(input.userId, {
+      titulo: "Tu rutina está lista",
+      cuerpo: "Tu entrenador ya la revisó. Entrá y mirá tu semana.",
+      url: "/",
+      tag: "rutina"
+    });
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function enviarMenu(input: { userId: string }): Promise<Resultado> {
+  try {
+    await requireEntrenador();
+    const publicado = await publicarPlanComidas(input.userId);
+    if (!publicado) return { error: "No hay una recomendación de comidas pendiente de enviar." };
+    await exec(
+      db().from("mensajes").insert({
+        user_id: input.userId,
+        de: "entrenador",
+        texto: "Tu recomendación de comidas ya está lista: la ves en Comida, con la lista de compras y la guía para cocinar la semana."
+      })
+    );
+    await enviarPush(input.userId, {
+      titulo: "Tu menú está listo",
+      cuerpo: "Tu entrenador ya lo revisó. Mirá qué te toca hoy en Comida.",
+      url: "/nutricion",
+      tag: "menu"
+    });
   } catch (e) {
     return { error: mensaje(e) };
   }

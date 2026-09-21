@@ -37,10 +37,11 @@ export default async function Home({
   if (!meso) {
     return (
       <main className="card mt-10 text-center">
-        <p className="text-lg font-semibold">Tu plan todavía no está generado</p>
+        <p className="text-lg font-semibold">Tu entrenador está armando tu plan</p>
         <p className="mt-2 text-sm text-muted">
-          Tu entrenador lo va a activar en breve. Si acabás de pagar, recargá
-          esta página en unos segundos.
+          Está revisando tu rutina y tu recomendación de comidas con tus datos. Cuando te las
+          envíe te llega un aviso y aparecen acá. Mientras tanto podés activar los avisos en
+          Perfil.
         </p>
       </main>
     );

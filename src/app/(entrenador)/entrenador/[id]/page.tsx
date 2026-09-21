@@ -4,6 +4,7 @@ import AjusteMacros from "@/components/AjusteMacros";
 import ClienteAcciones from "@/components/ClienteAcciones";
 import HiloMensajes from "@/components/HiloMensajes";
 import InformesEntrenador from "@/components/InformesEntrenador";
+import PendienteEnviar from "@/components/PendienteEnviar";
 import CloseWeekButton from "@/components/CloseWeekButton";
 import NewBlockButton from "@/components/NewBlockButton";
 import NutricionDia from "@/components/NutricionDia";
@@ -52,7 +53,7 @@ const TABS = [
   { id: "progreso", texto: "Progreso" },
   { id: "nutricion", texto: "Comida" },
   { id: "mensajes", texto: "Mensajes" },
-  { id: "plan", texto: "Plan .txt" }
+  { id: "plan", texto: "Rutina nueva" }
 ] as const;
 type Tab = (typeof TABS)[number]["id"];
 
@@ -73,13 +74,14 @@ export default async function ClientePage({
 
   const tab: Tab = (TABS.find((t) => t.id === searchParams?.tab)?.id ?? "resumen") as Tab;
   const base = `/entrenador/${perfil.id}?tab=${tab}`;
-  const [meso, ultimo, ultimaActividad, noLeidos, referidos, referente] = await Promise.all([
-    getBloque(perfil.id),
+  const [meso, ultimo, ultimaActividad, noLeidos, referidos, referente, planComidas] = await Promise.all([
+    getBloque(perfil.id, { conBorrador: true }),
     getUltimoRegistro(perfil.id),
     getUltimaActividad(perfil.id),
     contarNoLeidos(perfil.id, "cliente"),
     getReferidos(perfil.id),
-    perfil.referido_por ? getPerfil(perfil.referido_por).catch(() => null) : Promise.resolve(null)
+    perfil.referido_por ? getPerfil(perfil.referido_por).catch(() => null) : Promise.resolve(null),
+    getPlanComidas(perfil.id, { conBorrador: true })
   ]);
   const diasSinActividad = ultimaActividad ? Math.floor((Date.now() - new Date(ultimaActividad).getTime()) / 86_400_000) : null;
 
@@ -120,7 +122,15 @@ export default async function ClientePage({
             ) : null}
           </div>
         </div>
-        <ClienteAcciones perfil={perfil} tienePlan={!!meso} conIA={iaDisponible()} />
+        <ClienteAcciones perfil={perfil} tienePlan={!!meso} />
+      </div>
+
+      <div className="mt-4">
+        <PendienteEnviar
+          userId={perfil.id}
+          rutina={meso && !meso.publicado ? meso.nombre : null}
+          menu={planComidas && !planComidas.plan.publicado ? planComidas.plan.nombre : null}
+        />
       </div>
 
       <nav className="my-4 flex gap-2 overflow-x-auto pb-1">
@@ -167,7 +177,7 @@ function fechaValida(f?: string): string {
 }
 
 async function Resumen({ perfil }: { perfil: Profile }) {
-  const meso = await getBloque(perfil.id);
+  const meso = await getBloque(perfil.id, { conBorrador: true });
   const c = perfil.cuestionario;
   if (!meso) {
     return (
@@ -178,7 +188,7 @@ async function Resumen({ perfil }: { perfil: Profile }) {
             ? "El cliente todavía no completó el cuestionario."
             : perfil.estado_pago !== "pagado"
               ? "El cliente todavía no pagó. Podés marcarlo como pagado arriba y generar el plan."
-              : "Generá el plan con el botón de arriba o subí un .txt en la pestaña Plan."}
+              : "Armá la rutina en la pestaña \"Rutina nueva\" (con IA o con tu .txt) y después enviala."}
         </p>
       </section>
     );
@@ -199,7 +209,10 @@ async function Resumen({ perfil }: { perfil: Profile }) {
   return (
     <div className="flex flex-col gap-3">
       <section className="card">
-        <p className="text-sm text-muted">{meso.nombre} · origen: {meso.origen}</p>
+        <p className="text-sm text-muted">
+          {meso.nombre} · origen: {meso.origen}
+          {!meso.publicado ? <span className="ml-2 chip border-warn/40 text-warn">borrador sin enviar</span> : null}
+        </p>
         <p className="text-xl font-bold">
           Semana {meso.semana_actual} de {meso.total_semanas}
         </p>
@@ -296,7 +309,7 @@ async function Resumen({ perfil }: { perfil: Profile }) {
 // Recomendación de comidas (referencia, generar/IA, .txt, menú activo) y
 // el registro del día del cliente.
 async function Comida({ perfil, fecha, base }: { perfil: Profile; fecha: string; base: string }) {
-  const [plan, ajuste] = await Promise.all([getPlanComidas(perfil.id), propuestaAjuste(perfil)]);
+  const [plan, ajuste] = await Promise.all([getPlanComidas(perfil.id, { conBorrador: true }), propuestaAjuste(perfil)]);
   return (
     <div className="flex flex-col gap-3">
       {ajuste ? <AjusteMacros userId={perfil.id} propuesta={ajuste} /> : null}
@@ -355,7 +368,7 @@ async function ConsultasCliente({ userId }: { userId: string }) {
 
 async function Rutina({ userId }: { userId: string }) {
   const [meso, dias, ejercicios] = await Promise.all([
-    getBloque(userId),
+    getBloque(userId, { conBorrador: true }),
     getDias(userId),
     getEjercicios(userId)
   ]);

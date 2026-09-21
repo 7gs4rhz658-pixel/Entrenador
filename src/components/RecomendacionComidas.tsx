@@ -136,7 +136,8 @@ export default function RecomendacionComidas({
           <h2 className="font-bold">{tienePlan ? "Reemplazar la recomendación" : "Crear la recomendación de comidas"}</h2>
           <p className="mt-1 text-sm text-muted">
             Un menú para día de entreno y otro para descanso, con los momentos y horarios que eligió el
-            cliente. Antes de aplicarlo ves y editás cada ingrediente.
+            cliente. Ves y editás cada ingrediente, lo guardás como borrador y el cliente lo recibe
+            cuando lo enviás.
           </p>
           {!conIA ? (
             <p className="mt-2 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">
@@ -211,7 +212,7 @@ export default function RecomendacionComidas({
                 setModoTxt(false);
               }
               return r;
-            }, "Recomendación aplicada. El cliente ya la ve en Comida.")
+            }, "Recomendación guardada como borrador. Revisala abajo y enviala desde arriba cuando esté bien.")
           }
         />
       )}
@@ -471,7 +472,7 @@ function VistaPrevia({
           className="btn-primary flex-1"
           disabled={pendiente || sinResolver > 0 || items.length === 0}
         >
-          {pendiente ? "Aplicando…" : "Aplicar al cliente"}
+          {pendiente ? "Guardando…" : "Guardar como borrador"}
         </button>
       </div>
     </section>

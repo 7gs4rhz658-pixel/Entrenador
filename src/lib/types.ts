@@ -82,6 +82,8 @@ export interface Mesocycle {
   semana_actual: number;
   estado: "activo" | "finalizado";
   origen: "ia" | "txt" | "plantilla" | "manual";
+  publicado: boolean;
+  publicado_at: string | null;
 }
 
 export interface TrainingDay {
@@ -178,6 +180,8 @@ export interface MealPlan {
   activo: boolean;
   notas: string | null;
   batch_cooking: BatchCooking | null;
+  publicado: boolean;
+  publicado_at: string | null;
   created_at: string;
 }
 

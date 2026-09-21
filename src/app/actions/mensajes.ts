@@ -7,7 +7,7 @@ import { requireEntrenador, requireSesion } from "@/lib/auth";
 import { exec, getCheckins, getPerfil, getUltimaActividad } from "@/lib/data";
 import { hoyFecha } from "@/lib/format";
 import { estadoPago } from "@/lib/pagos";
-import { enviarPush } from "@/lib/push";
+import { avisarEntrenadores, enviarPush } from "@/lib/push";
 import { adherenciaSemanaActual, checkinPendiente } from "@/lib/stats";
 import { db } from "@/lib/supabase/server";
 import type { Mensaje } from "@/lib/types";
@@ -40,6 +40,13 @@ export async function enviarMensaje(input: { userId?: string; texto: string }): 
         url: "/mensajes",
         tag: "mensaje"
       });
+    } else {
+      await avisarEntrenadores({
+        titulo: `Mensaje de ${sesion.perfil.nombre.split(" ")[0] || sesion.email}`,
+        cuerpo: texto.length > 120 ? `${texto.slice(0, 117)}…` : texto,
+        url: `/entrenador/${userId}?tab=mensajes`,
+        tag: "mensaje-cliente"
+      }).catch(() => 0);
     }
     revalidatePath("/", "layout");
     return { mensaje: data as Mensaje };

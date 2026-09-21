@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ActivarAvisos from "@/components/ActivarAvisos";
 import { propuestaAjuste } from "@/lib/ajuste-macros";
 import { contarNoLeidos, getBloque, getClientes, getInformesPendientes, getUltimaActividad, getUltimoRegistro } from "@/lib/data";
 import { fmtTiempoRelativo, hoyFecha } from "@/lib/format";
@@ -11,7 +12,7 @@ export default async function ClientesPage() {
   const filas = await Promise.all(
     clientes.map(async (c) => {
       const [meso, ultimo, ajuste, ultimaActividad, noLeidos] = await Promise.all([
-        getBloque(c.id),
+        getBloque(c.id, { conBorrador: true }),
         getUltimoRegistro(c.id),
         propuestaAjuste(c),
         getUltimaActividad(c.id),
@@ -19,12 +20,15 @@ export default async function ClientesPage() {
       ]);
       const diasSin = ultimaActividad ? Math.floor((Date.now() - new Date(ultimaActividad).getTime()) / 86_400_000) : null;
       // Sin registros hace 4+ días: candidato a abandono, va arriba
-      const abandono = c.activo && c.estado_pago === "pagado" && meso != null && (diasSin == null || diasSin >= 4);
-      return { c, meso, ultimo, ajuste, diasSin, noLeidos, abandono };
+      const abandono = c.activo && c.estado_pago === "pagado" && meso != null && meso.publicado && (diasSin == null || diasSin >= 4);
+      const nuevo = c.activo && c.onboarding_completo && c.estado_pago === "pagado" && (!meso || !meso.publicado);
+      return { c, meso, ultimo, ajuste, diasSin, noLeidos, abandono, nuevo };
     })
   );
   const hoy = hoyFecha();
-  const activos = filas.filter((f) => f.c.activo).sort((a, b) => Number(b.abandono) - Number(a.abandono));
+  const activos = filas
+    .filter((f) => f.c.activo)
+    .sort((a, b) => Number(b.nuevo) - Number(a.nuevo) || Number(b.abandono) - Number(a.abandono));
   const inactivos = filas.filter((f) => !f.c.activo);
 
   return (
@@ -50,7 +54,8 @@ export default async function ClientesPage() {
           const pago = estadoPago(c, hoy);
           if (pago.vencido) pendientes.push("mes vencido");
           else if (pago.diasRestantes != null && pago.diasRestantes <= 3) pendientes.push(`vence en ${pago.diasRestantes} d`);
-          if (c.onboarding_completo && c.estado_pago === "pagado" && !meso) pendientes.push("sin plan");
+          if (c.onboarding_completo && c.estado_pago === "pagado" && !meso) pendientes.push("nuevo: armar rutina y menú");
+          if (meso && !meso.publicado) pendientes.push("rutina sin enviar");
           if (conInforme.has(c.id)) pendientes.push("informe por aprobar");
           if (ajuste) pendientes.push("ajuste de kcal sugerido");
           if (abandono) pendientes.push(diasSin == null ? "nunca registró" : `sin registros hace ${diasSin} d`);
@@ -84,6 +89,8 @@ export default async function ClientesPage() {
           );
         })}
       </ul>
+
+      <ActivarAvisos vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null} entrenador />
     </main>
   );
 }

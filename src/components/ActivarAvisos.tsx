@@ -16,7 +16,7 @@ type Estado = "cargando" | "no_soportado" | "bloqueado" | "apagado" | "activo";
 // Avisos al teléfono: "mañana te toca", check-in pendiente, mensajes del
 // entrenador y vencimiento del mes. En iPhone hace falta instalar la app
 // en la pantalla de inicio primero.
-export default function ActivarAvisos({ vapidKey }: { vapidKey: string | null }) {
+export default function ActivarAvisos({ vapidKey, entrenador = false }: { vapidKey: string | null; entrenador?: boolean }) {
   const [estado, setEstado] = useState<Estado>("cargando");
   const [error, setError] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -80,7 +80,9 @@ export default function ActivarAvisos({ vapidKey }: { vapidKey: string | null })
         <div>
           <p className="font-semibold">Avisos en el teléfono</p>
           <p className="mt-0.5 text-muted">
-            Qué te toca mañana, check-in pendiente, mensajes de tu entrenador y tu renovación.
+            {entrenador
+              ? "Clientes nuevos por armar, check-ins e informes por aprobar y mensajes de tus clientes."
+              : "Qué te toca mañana, check-in pendiente, mensajes de tu entrenador y tu renovación."}
           </p>
         </div>
         {estado === "activo" ? (

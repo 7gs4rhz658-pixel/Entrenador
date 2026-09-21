@@ -42,6 +42,10 @@ export async function getPerfil(userId: string): Promise<Profile> {
   return perfil;
 }
 
+export async function getEntrenadores(): Promise<Profile[]> {
+  return q<Profile[]>(db().from("profiles").select("*").eq("rol", "entrenador"));
+}
+
 export async function getClientes(): Promise<Profile[]> {
   return q<Profile[]>(
     db()
@@ -54,14 +58,26 @@ export async function getClientes(): Promise<Profile[]> {
 
 // ── Bloques ─────────────────────────────────────────────────────
 
-// Último bloque creado del usuario (activo o finalizado). Null si nunca
-// se generó un plan.
-export async function getBloque(userId: string): Promise<Mesocycle | null> {
+// Último bloque del usuario (activo o finalizado). Por defecto solo los
+// publicados (lo que ve el cliente); el entrenador pide también el
+// borrador pendiente de enviar. Null si nunca se generó un plan.
+export async function getBloque(
+  userId: string,
+  opciones: { conBorrador?: boolean } = {}
+): Promise<Mesocycle | null> {
+  let consulta = db().from("mesocycles").select("*").eq("user_id", userId);
+  if (!opciones.conBorrador) consulta = consulta.eq("publicado", true);
+  return q<Mesocycle | null>(consulta.order("created_at", { ascending: false }).limit(1).maybeSingle());
+}
+
+// Borrador de rutina sin enviar (más nuevo que lo publicado), si hay
+export async function getBloqueBorrador(userId: string): Promise<Mesocycle | null> {
   return q<Mesocycle | null>(
     db()
       .from("mesocycles")
       .select("*")
       .eq("user_id", userId)
+      .eq("publicado", false)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -267,10 +283,13 @@ export interface PlanComidasActivo {
   items: MealPlanItem[];
 }
 
-export async function getPlanComidas(userId: string): Promise<PlanComidasActivo | null> {
-  const plan = await q<MealPlan | null>(
-    db().from("meal_plans").select("*").eq("user_id", userId).eq("activo", true).maybeSingle()
-  );
+export async function getPlanComidas(
+  userId: string,
+  opciones: { conBorrador?: boolean } = {}
+): Promise<PlanComidasActivo | null> {
+  let consulta = db().from("meal_plans").select("*").eq("user_id", userId).eq("activo", true);
+  if (!opciones.conBorrador) consulta = consulta.eq("publicado", true);
+  const plan = await q<MealPlan | null>(consulta.maybeSingle());
   if (!plan) return null;
   const items = await q<MealPlanItem[]>(
     db()

@@ -13,11 +13,15 @@ import type { PlanGenerado } from "./types";
 export async function aplicarPlan(
   userId: string,
   plan: PlanGenerado,
-  origen: "ia" | "txt" | "plantilla"
+  origen: "ia" | "txt" | "plantilla",
+  opciones: { publicado?: boolean } = {}
 ): Promise<{ mesocycleId: string }> {
   const supabase = db();
+  // Por defecto queda como borrador: el cliente lo ve cuando el
+  // entrenador lo envía.
+  const publicado = opciones.publicado ?? false;
 
-  const anterior = await getBloque(userId);
+  const anterior = await getBloque(userId, { conBorrador: true });
   if (anterior && anterior.estado === "activo") {
     await exec(
       supabase.from("mesocycles").update({ estado: "finalizado" }).eq("id", anterior.id)
@@ -56,7 +60,9 @@ export async function aplicarPlan(
       nombre: n === 0 ? plan.nombre_bloque : `Bloque ${n + 1} · ${plan.nombre_bloque}`,
       fecha_inicio: new Date().toISOString().slice(0, 10),
       total_semanas: 8,
-      origen
+      origen,
+      publicado,
+      publicado_at: publicado ? new Date().toISOString() : null
     })
     .select("id")
     .single();

@@ -7,6 +7,7 @@ import { informeATexto, redactarInforme } from "@/lib/ai-informe";
 import { requireCliente, requireEntrenador } from "@/lib/auth";
 import { exec, getCheckin, getMesociclo, getPerfil } from "@/lib/data";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
+import { avisarEntrenadores } from "@/lib/push";
 import { resumenDeSemana } from "@/lib/stats";
 import { db } from "@/lib/supabase/server";
 import type { Checkin } from "@/lib/types";
@@ -88,6 +89,12 @@ export async function guardarCheckin(_prev: Estado, formData: FormData): Promise
         console.error("Informe IA falló:", mensaje(e));
       }
     }
+    await avisarEntrenadores({
+      titulo: "Check-in para revisar",
+      cuerpo: `${perfil.nombre.split(" ")[0] || perfil.email} cerró la semana ${semana}: hay un informe por aprobar.`,
+      url: `/entrenador/${userId}?tab=resumen`,
+      tag: "checkin"
+    }).catch(() => 0);
   } catch (e) {
     return { error: mensaje(e) };
   }

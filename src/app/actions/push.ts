@@ -1,6 +1,6 @@
 "use server";
 
-import { requireCliente } from "@/lib/auth";
+import { requireSesion } from "@/lib/auth";
 import { exec } from "@/lib/data";
 import { db } from "@/lib/supabase/server";
 
@@ -20,7 +20,7 @@ export async function guardarSuscripcionPush(input: {
     return { error: "Suscripción inválida." };
   }
   try {
-    const { userId } = await requireCliente();
+    const { userId } = await requireSesion();
     await exec(
       db()
         .from("push_subscriptions")
@@ -34,7 +34,7 @@ export async function guardarSuscripcionPush(input: {
 
 export async function borrarSuscripcionPush(input: { endpoint: string }): Promise<Resultado> {
   try {
-    const { userId } = await requireCliente();
+    const { userId } = await requireSesion();
     await exec(db().from("push_subscriptions").delete().eq("user_id", userId).eq("endpoint", input.endpoint));
   } catch (e) {
     return { error: mensaje(e) };

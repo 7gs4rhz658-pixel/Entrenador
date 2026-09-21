@@ -77,8 +77,13 @@ async function resolverNombre(
   const clave = normalizarTexto(`${nombre}|${nota}`);
   if (cache.has(clave)) return cache.get(clave)!;
   let ing: Ingredient | null = null;
+  // Los intentos usan las palabras originales (con acento): el ilike de
+  // la base no ignora acentos, "salmon" no encuentra "Salmón".
   const intentos = [nombre];
-  const ps = palabras(nombre);
+  const ps = nombre
+    .replace(/[()]/g, " ")
+    .split(/\s+/)
+    .filter((p) => p && !STOP.has(normalizarTexto(p)));
   if (ps.length > 2) intentos.push(ps.slice(0, 2).join(" "));
   if (ps.length > 1 && ps[0].length >= 4) intentos.push(ps[0]);
   for (const t of intentos) {
@@ -125,7 +130,8 @@ export async function aplicarPlanComidas(
   userId: string,
   plan: PlanComidasResuelto,
   origen: "ia" | "txt",
-  batch: BatchCooking | null
+  batch: BatchCooking | null,
+  publicado = false
 ): Promise<{ mealPlanId: string }> {
   const validos = plan.items.filter((i) => i.ingredient && i.cantidad_g > 0);
   if (!validos.length) throw new Error("La recomendación no tiene ingredientes válidos.");
@@ -136,7 +142,15 @@ export async function aplicarPlanComidas(
   await exec(supabase.from("meal_plans").update({ activo: false }).eq("user_id", userId).eq("activo", true));
   const { data: nuevo, error } = await supabase
     .from("meal_plans")
-    .insert({ user_id: userId, nombre: plan.nombre, origen, notas: plan.notas, batch_cooking: batch })
+    .insert({
+      user_id: userId,
+      nombre: plan.nombre,
+      origen,
+      notas: plan.notas,
+      batch_cooking: batch,
+      publicado,
+      publicado_at: publicado ? new Date().toISOString() : null
+    })
     .select("id")
     .single();
   if (error || !nuevo) throw new Error(`Base de datos: ${error?.message ?? "no se pudo crear la recomendación"}`);
@@ -161,6 +175,19 @@ export async function aplicarPlanComidas(
 
 export async function quitarPlanComidas(userId: string): Promise<void> {
   await exec(db().from("meal_plans").update({ activo: false }).eq("user_id", userId).eq("activo", true));
+}
+
+// "Enviar al cliente": el borrador activo pasa a publicado
+export async function publicarPlanComidas(userId: string): Promise<boolean> {
+  const { data, error } = await db()
+    .from("meal_plans")
+    .update({ publicado: true, publicado_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("activo", true)
+    .eq("publicado", false)
+    .select("id");
+  if (error) throw new Error(`Base de datos: ${error.message}`);
+  return (data ?? []).length > 0;
 }
 
 // ── 9. Lectura para las pantallas del cliente ───────────────────

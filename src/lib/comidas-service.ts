@@ -70,8 +70,9 @@ async function guiaBatch(perfil: Profile, plan: PlanComidasResuelto): Promise<Ba
 export async function aplicarRecomendacion(
   perfil: Profile,
   plan: PlanComidasResuelto,
-  origen: "ia" | "txt"
+  origen: "ia" | "txt",
+  publicado = false
 ): Promise<void> {
   const batch = await guiaBatch(perfil, plan);
-  await aplicarPlanComidas(perfil.id, plan, origen, batch);
+  await aplicarPlanComidas(perfil.id, plan, origen, batch, publicado);
 }
