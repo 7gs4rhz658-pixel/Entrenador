@@ -105,7 +105,10 @@ export default async function Home({
         <section className="card mb-4 border-ok/40">
           <p className="font-semibold">✓ Check-in enviado</p>
           <p className="mt-1 text-sm text-muted">
-            Tu entrenador revisa el informe de la semana y te lo manda acá mismo.
+            Tu entrenador revisa el informe de la semana y te lo manda acá mismo.{" "}
+            <Link href="/progreso?tab=medidas" className="font-semibold text-accent">
+              ¿Cargás tus medidas de la semana? →
+            </Link>
           </p>
         </section>
       ) : null}

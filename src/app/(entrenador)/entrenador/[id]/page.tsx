@@ -4,6 +4,8 @@ import AjusteMacros from "@/components/AjusteMacros";
 import ClienteAcciones from "@/components/ClienteAcciones";
 import HiloMensajes from "@/components/HiloMensajes";
 import InformesEntrenador from "@/components/InformesEntrenador";
+import MedidasForm from "@/components/MedidasForm";
+import MedidasHistorial from "@/components/MedidasHistorial";
 import PendienteEnviar from "@/components/PendienteEnviar";
 import CloseWeekButton from "@/components/CloseWeekButton";
 import NewBlockButton from "@/components/NewBlockButton";
@@ -20,6 +22,7 @@ import {
   contarNoLeidos,
   getCheckins,
   getConsultasAsistente,
+  getMedidas,
   getMensajes,
   getReferidos,
   getUltimaActividad,
@@ -150,7 +153,11 @@ export default async function ClientePage({
       {tab === "resumen" ? <Resumen perfil={perfil} /> : null}
       {tab === "rutina" ? <Rutina userId={perfil.id} /> : null}
       {tab === "progreso" ? (
-        <ProgresoCliente userId={perfil.id} ejercicioSel={searchParams?.e} base={base} />
+        <div className="flex flex-col gap-3">
+          <ProgresoCliente userId={perfil.id} ejercicioSel={searchParams?.e} base={base} />
+          <h2 className="mt-2 text-lg font-bold">Medidas corporales</h2>
+          <MedidasEntrenador perfil={perfil} />
+        </div>
       ) : null}
       {tab === "nutricion" ? (
         <Comida perfil={perfil} fecha={fechaValida(searchParams?.fecha)} base={base} />
@@ -332,6 +339,16 @@ async function Comida({ perfil, fecha, base }: { perfil: Profile; fecha: string;
       <h2 className="mt-2 text-lg font-bold">Registro del día</h2>
       <NutricionDia perfil={perfil} fecha={fecha} base={base} paraEntrenador />
     </div>
+  );
+}
+
+async function MedidasEntrenador({ perfil }: { perfil: Profile }) {
+  const medidas = await getMedidas(perfil.id);
+  return (
+    <>
+      <MedidasForm hoy={hoyFecha()} ultima={medidas[0] ?? null} pesoActual={perfil.peso_kg} userId={perfil.id} />
+      <MedidasHistorial medidas={medidas} />
+    </>
   );
 }
 

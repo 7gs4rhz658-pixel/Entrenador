@@ -326,6 +326,7 @@ export interface ResumenSemana {
   peso_actual_kg: number | null;
   mejoras_carga: { ejercicio: string; antes_kg: number; ahora_kg: number }[];
   consultas_asistente: number;
+  cambios_medidas?: { medida: string; antes: number; ahora: number }[];
 }
 
 export interface Informe {
@@ -377,3 +378,34 @@ export interface PushSubscriptionRow {
   created_at: string;
   ultimo_envio_at: string | null;
 }
+
+// ── Medidas corporales ──────────────────────────────────────────
+
+export const CAMPOS_MEDIDA = [
+  "cuello",
+  "hombros",
+  "pecho",
+  "cintura",
+  "cadera",
+  "brazo_izq",
+  "brazo_izq_contraido",
+  "brazo_der",
+  "brazo_der_contraido",
+  "antebrazo_izq",
+  "antebrazo_der",
+  "muslo_izq",
+  "muslo_der",
+  "pantorrilla_izq",
+  "pantorrilla_der"
+] as const;
+
+export type CampoMedida = (typeof CAMPOS_MEDIDA)[number];
+
+export type Medida = {
+  id: string;
+  user_id: string;
+  fecha: string;
+  peso_kg: number | null;
+  notas: string;
+  created_at: string;
+} & Record<CampoMedida, number | null>;

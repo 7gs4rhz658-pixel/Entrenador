@@ -11,6 +11,7 @@ import {
   getEjercicios,
   getLogs,
   getLogsRango,
+  getMedidas,
   getPlanComidas,
   getPlanes,
   getSemanasCerradas,
@@ -18,8 +19,28 @@ import {
   planesPorEjercicio
 } from "./data";
 import { diaSemanaDe, hoyDiaSemana, hoyFecha, sumarDias } from "./format";
+import { ETIQUETAS_MEDIDA } from "./medidas";
 import { macrosDe, objetivosCliente, sumarMacros } from "./nutrition";
-import type { Mesocycle, Profile, ResumenSemana } from "./types";
+import { CAMPOS_MEDIDA, type Medida, type Mesocycle, type Profile, type ResumenSemana } from "./types";
+
+// Cambios de medidas entre la última toma del período y la última toma
+// anterior a él (solo campos presentes en las dos)
+export function cambiosMedidas(medidas: Medida[], desde: string, hasta: string): { medida: string; antes: number; ahora: number }[] {
+  const enRango = medidas.filter((m) => m.fecha >= desde && m.fecha <= hasta);
+  if (!enRango.length) return [];
+  const ultima = enRango[0];
+  const previas = medidas.filter((m) => m.fecha < desde);
+  const out: { medida: string; antes: number; ahora: number }[] = [];
+  for (const campo of CAMPOS_MEDIDA) {
+    if (ultima[campo] == null) continue;
+    const previa = previas.find((m) => m[campo] != null) ?? enRango.slice(1).find((m) => m[campo] != null);
+    if (!previa) continue;
+    const antes = Number(previa[campo]);
+    const ahora = Number(ultima[campo]);
+    if (antes !== ahora) out.push({ medida: ETIQUETAS_MEDIDA[campo], antes, ahora });
+  }
+  return out;
+}
 
 // Comidas del menú por día (según lo que eligió el cliente)
 function comidasPorDia(perfil: Profile): number {
@@ -74,7 +95,7 @@ export async function resumenDeSemana(perfil: Profile, meso: Mesocycle, semana: 
   const hasta = cierre.slice(0, 10);
   const desde = sumarDias(hasta, -6);
 
-  const [dias, ejercicios, planes, planesPrev, logs, comidas, plan, checkins, consultas] = await Promise.all([
+  const [dias, ejercicios, planes, planesPrev, logs, comidas, plan, checkins, consultas, medidas] = await Promise.all([
     getDias(perfil.id),
     getEjercicios(perfil.id),
     getPlanes(meso.id, semana),
@@ -83,7 +104,8 @@ export async function resumenDeSemana(perfil: Profile, meso: Mesocycle, semana: 
     getComidasRango(perfil.id, desde, hasta),
     getPlanComidas(perfil.id),
     getCheckins(perfil.id, 2),
-    getConsultasAsistente(perfil.id, { limite: 50 })
+    getConsultasAsistente(perfil.id, { limite: 50 }),
+    getMedidas(perfil.id, 30)
   ]);
 
   const entreno = dias.filter((d) => !d.es_descanso);
@@ -143,7 +165,8 @@ export async function resumenDeSemana(perfil: Profile, meso: Mesocycle, semana: 
     peso_anterior_kg: anterior?.peso_kg ?? perfil.peso_kg,
     peso_actual_kg: null,
     mejoras_carga: mejoras,
-    consultas_asistente: consultas.filter((c) => c.fecha >= desde && c.fecha <= hasta).length
+    consultas_asistente: consultas.filter((c) => c.fecha >= desde && c.fecha <= hasta).length,
+    cambios_medidas: cambiosMedidas(medidas, desde, hasta)
   };
 }
 
@@ -176,6 +199,7 @@ export interface ResumenMes {
   energia_promedio: number | null;
   sueno_promedio: number | null;
   informes_aprobados: number;
+  medidas: { medida: string; antes: number; ahora: number }[];
 }
 
 export async function resumenMes(perfil: Profile): Promise<ResumenMes | null> {
@@ -208,10 +232,13 @@ export async function resumenMes(perfil: Profile): Promise<ResumenMes | null> {
 
   const primero = checkins[0];
   const ultimo = checkins[checkins.length - 1];
+  const desde = sumarDias(primero.fecha, -6);
+  const medidas = await getMedidas(perfil.id, 40);
   return {
     semanas: checkins.length,
-    desde: sumarDias(primero.fecha, -6),
+    desde,
     hasta: ultimo.fecha,
+    medidas: cambiosMedidas(medidas, desde, ultimo.fecha),
     peso_inicial: primero.resumen!.peso_anterior_kg ?? primero.peso_kg,
     peso_final: ultimo.peso_kg,
     cintura_inicial: checkins.find((c) => c.cintura_cm != null)?.cintura_cm ?? null,

@@ -112,7 +112,8 @@ desde el teléfono y que el link sea compartible.
    `supabase/migrations/0006_ajuste_macros.sql` (ajuste quincenal de calorías) y con
    `supabase/migrations/0007_pago_vence.sql` (vencimiento del mes) y con
    `supabase/migrations/0008_mensajes_push_referidos.sql` (mensajes, avisos y referidos) y con
-   `supabase/migrations/0009_revision_entrenador.sql` (revisión del entrenador).
+   `supabase/migrations/0009_revision_entrenador.sql` (revisión del entrenador) y con
+   `supabase/migrations/0010_medidas.sql` (medidas corporales).
 
 4. **Configurar el login por correo.** Guiá: menú izquierdo → **Authentication**
    → **Providers** → **Email**. Recomendá **desactivar "Confirm email"** (el

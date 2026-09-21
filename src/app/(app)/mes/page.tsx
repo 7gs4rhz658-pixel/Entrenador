@@ -86,6 +86,30 @@ export default async function MesPage() {
         )}
       </section>
 
+      {mes.medidas.length ? (
+        <section className="card mt-3">
+          <h2 className="font-bold">Medidas</h2>
+          <ul className="mt-2 flex flex-col gap-1.5 text-sm">
+            {mes.medidas.map((c) => (
+              <li key={c.medida} className="flex items-center justify-between gap-2">
+                <span>{c.medida}</span>
+                <span className={`shrink-0 font-semibold ${c.medida === "Cintura" || c.medida === "Cadera" ? (c.ahora < c.antes ? "text-ok" : "text-warn") : c.ahora > c.antes ? "text-ok" : "text-warn"}`} style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {c.antes} → {c.ahora} cm ({signo(Math.round((c.ahora - c.antes) * 10) / 10)})
+                </span>
+              </li>
+            ))}
+          </ul>
+          <Link href="/progreso?tab=medidas" className="mt-2 block text-right text-xs font-semibold text-accent">
+            Todas las medidas →
+          </Link>
+        </section>
+      ) : (
+        <Link href="/progreso?tab=medidas" className="card mt-3 block text-sm">
+          <p className="font-semibold">Medidas</p>
+          <p className="mt-1 text-muted">Cargá tus medidas una vez por semana y acá ves el antes y después →</p>
+        </Link>
+      )}
+
       <section className="card mt-3 text-sm">
         <h2 className="font-bold">Cómo te sentiste</h2>
         <p className="mt-1 text-muted">

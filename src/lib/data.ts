@@ -2,6 +2,7 @@ import { db } from "./supabase/server";
 import type {
   AsistenteLog,
   Checkin,
+  Medida,
   Mensaje,
   PushSubscriptionRow,
   Exercise,
@@ -446,4 +447,12 @@ export async function getSuscripcionesPush(userId: string): Promise<PushSubscrip
 
 export async function getReferidos(userId: string): Promise<Profile[]> {
   return q<Profile[]>(db().from("profiles").select("*").eq("referido_por", userId).order("created_at"));
+}
+
+// ── Medidas corporales ──────────────────────────────────────────
+
+export async function getMedidas(userId: string, limite = 24): Promise<Medida[]> {
+  return q<Medida[]>(
+    db().from("medidas").select("*").eq("user_id", userId).order("fecha", { ascending: false }).limit(limite)
+  );
 }
