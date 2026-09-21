@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireCliente } from "@/lib/auth";
+import { getFotos, urlFoto } from "@/lib/data";
 import { fmtFechaCorta, hoyFecha } from "@/lib/format";
 import { estadoPago } from "@/lib/pagos";
 import { resumenMes } from "@/lib/stats";
@@ -20,7 +21,12 @@ function Dato({ etiqueta, valor, sub }: { etiqueta: string; valor: string; sub?:
 // números reales. Es el momento de renovar: el recordatorio va acá.
 export default async function MesPage() {
   const { perfil } = await requireCliente();
-  const [mes, pago] = await Promise.all([resumenMes(perfil), Promise.resolve(estadoPago(perfil, hoyFecha()))]);
+  const [mes, pago, fotos] = await Promise.all([resumenMes(perfil), Promise.resolve(estadoPago(perfil, hoyFecha())), getFotos(perfil.id)]);
+  // Antes/después de frente: la foto más vieja y la más nueva
+  const frentes = fotos.filter((f) => f.vista === "frente");
+  const fotoAntes = frentes.length >= 2 ? frentes[frentes.length - 1] : null;
+  const fotoDespues = frentes.length >= 2 ? frentes[0] : null;
+  const [urlAntes, urlDespues] = await Promise.all([fotoAntes ? urlFoto(fotoAntes.path) : null, fotoDespues ? urlFoto(fotoDespues.path) : null]);
 
   if (!mes) {
     return (
@@ -85,6 +91,31 @@ export default async function MesPage() {
           <p className="mt-1 text-sm text-muted">Todavía no hay subidas de carga planificadas. Llegan con las semanas.</p>
         )}
       </section>
+
+      {urlAntes && urlDespues && fotoAntes && fotoDespues ? (
+        <section className="card mt-3">
+          <h2 className="font-bold">Antes y después</h2>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {[
+              { t: "Antes", f: fotoAntes, u: urlAntes },
+              { t: "Después", f: fotoDespues, u: urlDespues }
+            ].map((c) => (
+              <div key={c.t}>
+                <p className="mb-1 text-xs text-muted">
+                  {c.t} · {fmtFechaCorta(c.f.fecha)}
+                </p>
+                <div className="aspect-[3/4] overflow-hidden rounded-xl border border-line bg-surface2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={c.u} alt={`${c.t} de frente`} className="h-full w-full object-cover" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <Link href="/progreso?tab=fotos" className="mt-2 block text-right text-xs font-semibold text-accent">
+            Todas las fotos →
+          </Link>
+        </section>
+      ) : null}
 
       {mes.medidas.length ? (
         <section className="card mt-3">

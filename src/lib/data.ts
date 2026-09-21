@@ -2,6 +2,7 @@ import { db } from "./supabase/server";
 import type {
   AsistenteLog,
   Checkin,
+  FotoProgreso,
   Medida,
   SesionEntreno,
   Mensaje,
@@ -470,4 +471,19 @@ export async function getSesionesSemana(mesoId: string, semana: number): Promise
   return q<SesionEntreno[]>(
     db().from("sesiones_entreno").select("*").eq("mesocycle_id", mesoId).eq("semana", semana)
   );
+}
+
+// ── Fotos de progreso ───────────────────────────────────────────
+
+export async function getFotos(userId: string, limite = 60): Promise<FotoProgreso[]> {
+  return q<FotoProgreso[]>(
+    db().from("fotos_progreso").select("*").eq("user_id", userId).order("fecha", { ascending: false }).limit(limite)
+  );
+}
+
+// URL firmada (1 hora) para ver una foto del bucket privado
+export async function urlFoto(path: string): Promise<string | null> {
+  const { data, error } = await db().storage.from("fotos").createSignedUrl(path, 3600);
+  if (error) return null;
+  return data.signedUrl;
 }

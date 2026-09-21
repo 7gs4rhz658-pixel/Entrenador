@@ -4,6 +4,8 @@ import AjusteMacros from "@/components/AjusteMacros";
 import ClienteAcciones from "@/components/ClienteAcciones";
 import HiloMensajes from "@/components/HiloMensajes";
 import InformesEntrenador from "@/components/InformesEntrenador";
+import FotosForm from "@/components/FotosForm";
+import FotosGaleria from "@/components/FotosGaleria";
 import MedidasForm from "@/components/MedidasForm";
 import MedidasHistorial from "@/components/MedidasHistorial";
 import PendienteEnviar from "@/components/PendienteEnviar";
@@ -22,6 +24,7 @@ import {
   contarNoLeidos,
   getCheckins,
   getConsultasAsistente,
+  getFotos,
   getMedidas,
   getMensajes,
   getReferidos,
@@ -35,6 +38,7 @@ import {
   getSesionesSemana,
   getUltimoRegistro,
   logsPorEjercicio,
+  urlFoto,
   planesPorEjercicio,
   q
 } from "@/lib/data";
@@ -158,6 +162,8 @@ export default async function ClientePage({
           <ProgresoCliente userId={perfil.id} ejercicioSel={searchParams?.e} base={base} />
           <h2 className="mt-2 text-lg font-bold">Medidas corporales</h2>
           <MedidasEntrenador perfil={perfil} />
+          <h2 className="mt-2 text-lg font-bold">Fotos de progreso</h2>
+          <FotosEntrenador userId={perfil.id} />
         </div>
       ) : null}
       {tab === "nutricion" ? (
@@ -354,6 +360,17 @@ async function MedidasEntrenador({ perfil }: { perfil: Profile }) {
     <>
       <MedidasForm hoy={hoyFecha()} ultima={medidas[0] ?? null} pesoActual={perfil.peso_kg} userId={perfil.id} />
       <MedidasHistorial medidas={medidas} />
+    </>
+  );
+}
+
+async function FotosEntrenador({ userId }: { userId: string }) {
+  const fotos = await getFotos(userId);
+  const conUrl = await Promise.all(fotos.map(async (f) => ({ ...f, url: await urlFoto(f.path) })));
+  return (
+    <>
+      <FotosForm hoy={hoyFecha()} userId={userId} />
+      <FotosGaleria fotos={conUrl} />
     </>
   );
 }

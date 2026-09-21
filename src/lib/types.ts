@@ -425,3 +425,16 @@ export interface SesionEntreno {
   series: number;
   created_at: string;
 }
+
+// ── Fotos de progreso ───────────────────────────────────────────
+
+export type VistaFoto = "frente" | "perfil" | "espalda";
+
+export interface FotoProgreso {
+  id: string;
+  user_id: string;
+  fecha: string;
+  vista: VistaFoto;
+  path: string;
+  created_at: string;
+}
