@@ -1,6 +1,6 @@
 # Plan: Nutrición prescrita + asistente de situaciones + retención mensual
 
-Fecha: 2026-09-19 · Estado: **fases 1 a 6 implementadas y verificadas end-to-end (2026-09-19/20)**. Pendiente: conectar Vercel (guía `/publicar`) y, más adelante, el pago real (Mercado Pago).
+Fecha: 2026-09-19 · Estado: **fases 1 a 6 implementadas y verificadas end-to-end (2026-09-19/20)**; **ronda 2 (ajustes tras probar como cliente) implementada y verificada (2026-09-20/21)**. Publicado en Vercel: https://entrenador-rho.vercel.app (deploy automático con cada `git push`). Pendiente más adelante: el pago real (Mercado Pago).
 
 ## Qué quedó hecho (resumen)
 
@@ -14,7 +14,22 @@ Fecha: 2026-09-19 · Estado: **fases 1 a 6 implementadas y verificadas end-to-en
 | 6 Mensajes con borradores IA, abandono, push (PWA + cron), referidos | ✓ | migración 0008, `push.ts`, `avisos.ts`, `ai-mensajes.ts` |
 | — Pago real (Mercado Pago) | pendiente | `pagos.ts` (mock) |
 
+### Ronda 2 — ajustes tras probar la app como cliente (2026-09-20/21)
+
+| # | Ajuste | Estado | Dónde |
+|---|---|---|---|
+| 1 | Rutina y menú quedan **en borrador** hasta que el entrenador los revisa y los **envía**; al pagar ya no se genera nada solo, el cliente ve "tu entrenador está armando tu plan" | ✓ | migración 0009, `PendienteEnviar.tsx`, `PlanTxt.tsx`, `actions/entrenador.ts` |
+| 2 | **Medidas corporales** (cuello, hombros, pecho, cintura, cadera, brazos relajados/contraídos, antebrazos, muslos, pantorrillas) con comparación, gráfica e integración en informe y mes | ✓ | migración 0010, `lib/medidas.ts`, `MedidasForm.tsx`, `MedidasHistorial.tsx` |
+| 3 | **Cronómetro** de tiempo total al comenzar la rutina; duración guardada por sesión y promedio en progreso/informe | ✓ | migración 0011, `Entrenar.tsx`, `guardarSesion` |
+| 4 | "Ideas para lo que te queda" propone **una receta por cada comida pendiente** del cliente (antes faltaba la cena) | ✓ | `sugerirRecetas(momentos)`, `Recetas.tsx`, `NutricionDia.tsx` |
+| 5 | **Fotos de progreso** privadas (frente/perfil/espalda) con antes/después | ✓ | migración 0012, bucket `fotos`, `FotosForm.tsx`, `FotosGaleria.tsx` |
+| 6 | **Récords personales** automáticos al registrar una serie (🏆 en el momento, historial y en el informe) | ✓ | migración 0013, `detectarRecord`, `getRecords` |
+| 7 | **Plantillas de rutina** del entrenador (guardar la de un cliente, cargarla en otro) | ✓ | migración 0014, `actions/plantillas.ts`, `planDesdeRutina` |
+| 8 | Panel **"Hoy"** del entrenador: nuevos sin plan, informes listos, mensajes, check-ins, caídos, pagos por vencer, quién entrena hoy | ✓ | `(entrenador)/entrenador/page.tsx` |
+
 No verificado en local: la entrega real de notificaciones push (requiere teléfono + claves en Vercel + `SUPABASE_SERVICE_ROLE_KEY`); sí se verificó el service worker, la suscripción, la ruta del cron con su protección y el contenido del aviso (`/api/avisos/preview`).
+
+Nota de despliegue: Vercel bloquea los deploys automáticos si el email del commit no pertenece a la cuenta de GitHub conectada (`BLOCKED`, "Git author must have access"). El repo usa el email *noreply* de GitHub de la cuenta (`git config user.email`) para que cada `git push` despliegue solo.
 
 ## Decisiones tomadas (2026-09-19)
 
