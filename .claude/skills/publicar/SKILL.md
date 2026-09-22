@@ -268,6 +268,12 @@ Una vez que entra y ve la rutina:
 - Ofrecé probar juntos una función (registrar un entreno con "Comenzar rutina",
   cerrar una semana para ver la progresión ondulada, subir un `.txt` desde el
   panel).
+- **Si un `git push` no despliega** (en Vercel el deploy figura `BLOCKED`,
+  "Git author must have access to the project"): el email con el que se hizo
+  el commit no pertenece a la cuenta de GitHub conectada. Arreglo definitivo:
+  `git config user.email "<id>+<usuario>@users.noreply.github.com"` en el repo
+  (el `<id>` sale de `gh api user --jq .id`) y volver a pushear. Verificá
+  siempre con `list_deployments` que el último quede `READY`.
 
 ## Cierre
 
