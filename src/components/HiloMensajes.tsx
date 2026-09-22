@@ -6,7 +6,7 @@ import type { Mensaje } from "@/lib/types";
 
 function fmt(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString("es-AR", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString("es-MX", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
 }
 
 // Hilo entrenador ↔ cliente. `soyEntrenador` habilita los borradores con

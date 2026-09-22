@@ -17,7 +17,7 @@ export function nombreDia(diaSemana: number): string {
 // Día de la semana "de hoy" (1 = lunes ... 7 = domingo) en la zona horaria
 // de la app, para que el server en UTC no corra el día.
 export function hoyDiaSemana(): number {
-  const tz = process.env.TZ_APP || "America/Argentina/Buenos_Aires";
+  const tz = process.env.TZ_APP || "America/Mexico_City";
   const dia = new Intl.DateTimeFormat("en-US", {
     timeZone: tz,
     weekday: "short"
@@ -29,7 +29,7 @@ export function hoyDiaSemana(): number {
 }
 
 export function fmtNum(n: number): string {
-  return n.toLocaleString("es-AR", { maximumFractionDigits: 2 });
+  return n.toLocaleString("es-MX", { maximumFractionDigits: 2 });
 }
 
 export function fmtPeso(n: number | null | undefined): string {
@@ -38,11 +38,11 @@ export function fmtPeso(n: number | null | undefined): string {
 }
 
 export function fmtLitros(ml: number): string {
-  return `${(ml / 1000).toLocaleString("es-AR", { maximumFractionDigits: 1 })} L`;
+  return `${(ml / 1000).toLocaleString("es-MX", { maximumFractionDigits: 1 })} L`;
 }
 
 export function fmtKcal(n: number): string {
-  return `${n.toLocaleString("es-AR")} kcal`;
+  return `${n.toLocaleString("es-MX")} kcal`;
 }
 
 export function resumenPlan(
@@ -62,7 +62,7 @@ export function resumenPlan(
 
 // Fecha de "hoy" (YYYY-MM-DD) en la zona horaria de la app.
 export function hoyFecha(): string {
-  const tz = process.env.TZ_APP || "America/Argentina/Buenos_Aires";
+  const tz = process.env.TZ_APP || "America/Mexico_City";
   const partes = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
     year: "numeric",
@@ -81,7 +81,7 @@ export function sumarDias(fecha: string, dias: number): string {
 }
 
 export function fmtFechaCorta(fecha: string): string {
-  return new Date(`${fecha}T12:00:00`).toLocaleDateString("es-AR", {
+  return new Date(`${fecha}T12:00:00`).toLocaleDateString("es-MX", {
     weekday: "short",
     day: "numeric",
     month: "short"
@@ -112,7 +112,7 @@ export function fmtTiempoRelativo(iso: string | null): string {
 // Hora actual (0-23) en la zona horaria de la app, para decidir cuándo
 // mostrar "mañana te toca".
 export function horaLocal(): number {
-  const tz = process.env.TZ_APP || "America/Argentina/Buenos_Aires";
+  const tz = process.env.TZ_APP || "America/Mexico_City";
   const h = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", hour12: false }).format(new Date());
   const n = parseInt(h, 10);
   return Number.isFinite(n) ? n % 24 : 12;

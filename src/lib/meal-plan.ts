@@ -171,7 +171,7 @@ function practico(nombre: string, gramos: number): string {
     const cant = Math.ceil(gramos / u.gramos);
     return `${cant} ${cant === 1 ? u.uno : u.varios}`;
   }
-  if (gramos >= 1000) return `${(Math.ceil(gramos / 50) * 50 / 1000).toLocaleString("es-AR", { maximumFractionDigits: 2 })} kg`;
+  if (gramos >= 1000) return `${(Math.ceil(gramos / 50) * 50 / 1000).toLocaleString("es-MX", { maximumFractionDigits: 2 })} kg`;
   return `${Math.ceil(gramos / 10) * 10} g`;
 }
 

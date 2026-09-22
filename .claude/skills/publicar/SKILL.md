@@ -200,7 +200,8 @@ datos** que va a pedir, así después es solo pegar:
   las cuentas nuevas suelen quedar en Prepago sin saldo y no responden.
 - Opcional: **`GROQ_MODEL`** (por defecto `openai/gpt-oss-120b`),
   **`GEMINI_MODEL`** (por defecto `gemini-3.6-flash`) y **`TZ_APP`**
-  (zona horaria, por defecto `America/Argentina/Buenos_Aires`).
+  (zona horaria, por defecto `America/Mexico_City`) y **`PLAN_PRECIO_USD`** (precio
+  del mes en dólares que ve el cliente al pagar; por defecto 50).
 - **Avisos al teléfono (opcional, recomendado).** Cinco variables más; sin
   ellas la app funciona igual, solo no manda notificaciones:
   - **`NEXT_PUBLIC_VAPID_PUBLIC_KEY`** y **`VAPID_PRIVATE_KEY`**: generalas
@@ -213,7 +214,7 @@ datos** que va a pedir, así después es solo pegar:
     la clave **service_role** (o "Secret"). **Es secreta**: solo la usa el
     aviso diario, que corre sin usuario. Que la pegue directo en Vercel.
   - El aviso diario ya está programado en `vercel.json` (todos los días a las
-    22:00 UTC = 19:00 Argentina). En el plan Hobby de Vercel un cron diario
+    01:00 UTC = 19:00 México, sin horario de verano). En el plan Hobby de Vercel un cron diario
     está permitido. El cliente activa los avisos desde **Perfil → "Avisos en el
     teléfono"**; en iPhone primero tiene que agregar la app a la pantalla de
     inicio.

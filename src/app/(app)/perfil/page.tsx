@@ -26,7 +26,7 @@ export default async function PerfilPage() {
           <p className="mt-1 text-muted">
             {meso.nombre} · Semana {meso.semana_actual} de {meso.total_semanas} ·{" "}
             {meso.estado === "activo" ? "en curso" : "finalizado"} · inicio{" "}
-            {new Date(`${meso.fecha_inicio}T12:00:00`).toLocaleDateString("es-AR")}
+            {new Date(`${meso.fecha_inicio}T12:00:00`).toLocaleDateString("es-MX")}
           </p>
         </section>
       ) : null}

@@ -121,7 +121,9 @@ git push -u origin main
 ```
 En Vercel: importar el repo, cargar `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `GROQ_API_KEY` (o `GEMINI_API_KEY`), Deploy. Las páginas que
-llaman a la IA declaran `maxDuration = 60`.
+llaman a la IA declaran `maxDuration = 60`. Opcionales: `TZ_APP` (zona horaria,
+por defecto `America/Mexico_City`) y `PLAN_PRECIO_USD` (precio del mes en dólares,
+por defecto 50; el pago sigue siendo simulado).
 
 Avisos al teléfono (opcional): `NEXT_PUBLIC_VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY`
 (`npx web-push generate-vapid-keys`), `VAPID_SUBJECT`, `CRON_SECRET` y

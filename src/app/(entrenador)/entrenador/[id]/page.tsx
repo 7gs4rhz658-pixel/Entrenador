@@ -109,7 +109,7 @@ export default async function ClientePage({
             {(() => {
               const p = estadoPago(perfil, hoyFecha());
               if (!p.vence) return null;
-              return ` · ${p.vencido ? "mes vencido el" : "mes vence el"} ${new Date(`${p.vence}T12:00:00`).toLocaleDateString("es-AR")}`;
+              return ` · ${p.vencido ? "mes vencido el" : "mes vence el"} ${new Date(`${p.vence}T12:00:00`).toLocaleDateString("es-MX")}`;
             })()}
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -395,7 +395,7 @@ async function Records({ userId }: { userId: string }) {
           <li key={r.id} className="flex justify-between gap-2">
             <span className="truncate">{r.ejercicio}</span>
             <span className="shrink-0 font-semibold text-ok">
-              {Number(r.valor)} {r.tipo === "peso" ? "kg" : "reps"} <span className="font-normal text-muted">· {new Date(`${r.fecha}T12:00:00`).toLocaleDateString("es-AR")}</span>
+              {Number(r.valor)} {r.tipo === "peso" ? "kg" : "reps"} <span className="font-normal text-muted">· {new Date(`${r.fecha}T12:00:00`).toLocaleDateString("es-MX")}</span>
             </span>
           </li>
         ))}
@@ -423,7 +423,7 @@ async function ConsultasCliente({ userId }: { userId: string }) {
         {consultas.map((c) => (
           <li key={c.id} className="rounded-xl border border-line px-3 py-2">
             <p className="text-xs text-muted">
-              {new Date(`${c.fecha}T12:00:00`).toLocaleDateString("es-AR")} · {c.tipo}
+              {new Date(`${c.fecha}T12:00:00`).toLocaleDateString("es-MX")} · {c.tipo}
               {c.aplicado ? " · usó la respuesta como ajuste del día" : ""}
             </p>
             <p className="mt-0.5">&ldquo;{c.pregunta}&rdquo;</p>

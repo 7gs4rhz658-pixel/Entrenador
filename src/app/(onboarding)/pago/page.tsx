@@ -4,7 +4,7 @@ import { requireSesion } from "@/lib/auth";
 import { hoyFecha } from "@/lib/format";
 import { PAGO_SIMULADO, PLAN, estadoPago } from "@/lib/pagos";
 
-// La acción de pago llama a la IA para generar el plan: le damos margen.
+// Margen por si el aviso al entrenador (push) tarda.
 export const maxDuration = 60;
 
 export default async function PagoPage() {
@@ -25,8 +25,8 @@ export default async function PagoPage() {
           {renovacion
             ? estado.vencido
               ? "Tu mes venció. Al renovar seguís con tu rutina, tus informes y tu menú sin perder nada."
-              : `Tu mes vence el ${new Date(`${estado.vence}T12:00:00`).toLocaleDateString("es-AR")}. Renová ahora y los días que te quedan se suman.`
-            : "Activá tu plan y en unos segundos tenés tu rutina lista."}
+              : `Tu mes vence el ${new Date(`${estado.vence}T12:00:00`).toLocaleDateString("es-MX")}. Renová ahora y los días que te quedan se suman.`
+            : "Activá tu plan: tu entrenador arma tu rutina y tu menú a tu medida y te los envía."}
         </p>
       </header>
 
@@ -34,7 +34,8 @@ export default async function PagoPage() {
         <div className="flex items-baseline justify-between">
           <p className="font-semibold">{PLAN.nombre}</p>
           <p className="text-xl font-bold">
-            {PLAN.moneda} {PLAN.precio.toLocaleString("es-AR")}
+            {PLAN.simbolo} {PLAN.precio.toLocaleString("es-MX")}
+            <span className="text-sm font-normal text-muted"> / mes</span>
           </p>
         </div>
         <ul className="mt-3 flex flex-col gap-1.5 text-sm text-muted">

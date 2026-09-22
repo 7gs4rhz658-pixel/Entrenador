@@ -17,7 +17,7 @@ export default function PlanComidasResumen({
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="font-bold">{plan.plan.nombre}</h2>
         <span className="text-xs text-muted">
-          origen: {plan.plan.origen} · {new Date(plan.plan.created_at).toLocaleDateString("es-AR")}
+          origen: {plan.plan.origen} · {new Date(plan.plan.created_at).toLocaleDateString("es-MX")}
           {!plan.plan.publicado ? <span className="ml-2 chip border-warn/40 text-warn">borrador sin enviar</span> : null}
         </span>
       </div>

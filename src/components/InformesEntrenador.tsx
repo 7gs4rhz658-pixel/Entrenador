@@ -58,7 +58,7 @@ export default function InformesEntrenador({
                   <p className="font-semibold">
                     Semana {c.semana}
                     <span className="ml-2 text-xs font-normal text-muted">
-                      {new Date(`${c.fecha}T12:00:00`).toLocaleDateString("es-AR")}
+                      {new Date(`${c.fecha}T12:00:00`).toLocaleDateString("es-MX")}
                     </span>
                   </p>
                   <p className="text-xs text-muted">

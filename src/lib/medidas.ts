@@ -78,5 +78,5 @@ export function fmtDelta(n: number | null): string {
   if (n == null) return "";
   const r = Math.round(n * 10) / 10;
   if (r === 0) return "=";
-  return `${r > 0 ? "+" : ""}${r.toLocaleString("es-AR")}`;
+  return `${r > 0 ? "+" : ""}${r.toLocaleString("es-MX")}`;
 }

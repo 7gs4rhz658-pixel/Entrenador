@@ -4,10 +4,20 @@
 // (Mercado Pago Checkout Pro o Stripe Checkout): el resto de la app solo
 // mira `profiles.estado_pago`, así que el cambio queda contenido acá.
 
+// El precio se cambia desde Vercel (variable PLAN_PRECIO_USD) sin tocar
+// código; si no está definida vale 50.
+function precioMes(): number {
+  const n = Number(process.env.PLAN_PRECIO_USD);
+  return Number.isFinite(n) && n > 0 ? n : 50;
+}
+
 export const PLAN = {
   nombre: "Plan mensual con seguimiento",
-  precio: 25000,
-  moneda: "ARS",
+  get precio() {
+    return precioMes();
+  },
+  moneda: "USD",
+  simbolo: "US$",
   incluye: [
     "Rutina personalizada de 8 semanas con progresión ondulada",
     "Ajustes de carga semana a semana",

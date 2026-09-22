@@ -85,7 +85,7 @@ export default function PagoForm({ renovacion = false }: { renovacion?: boolean 
       <BotonPagar renovacion={renovacion} />
       {!renovacion ? (
         <p className="text-center text-xs text-muted">
-          La generación del plan puede tardar hasta un minuto.
+          Al activar, tu entrenador recibe el aviso, arma tu rutina y te la envía.
         </p>
       ) : null}
     </form>
