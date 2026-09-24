@@ -23,8 +23,9 @@ export async function marcarItemHoy(input: {
   // Hoy o ayer (si se olvidó de marcar a la noche)
   if (input.fecha !== hoy && input.fecha !== sumarDias(hoy, -1)) return { error: "Solo puedes marcar hoy o ayer." };
   if (!CLAVE.test(input.key)) return { error: "Casilla inválida." };
+  // Fuera del try: si la sesión no es válida, que redirija
+  const { userId } = await resolverUsuario(input.userId);
   try {
-    const { userId } = await resolverUsuario(input.userId);
     if (input.hecho) {
       await exec(
         db()

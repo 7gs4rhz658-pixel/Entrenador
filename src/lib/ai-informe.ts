@@ -32,6 +32,9 @@ function describirSemana(nombre: string, objetivo: string, c: Checkin, r: Resume
     r.consultas_asistente ? `Consultas al asistente de situaciones: ${r.consultas_asistente}` : "",
     r.cambios_medidas?.length ? `Medidas: ${r.cambios_medidas.map((m) => `${m.medida} ${m.antes}→${m.ahora} cm`).join(", ")}` : "",
     r.records?.length ? `Récords personales de la semana: ${r.records.map((x) => `${x.ejercicio} ${x.valor} ${x.tipo === "peso" ? "kg" : "reps"}`).join(", ")}` : "",
+    r.checklist?.promedio != null
+      ? `Checklist diario (comidas, entreno, agua y protocolo): ${r.checklist.promedio} % promedio de la semana${r.checklist.por_area.length ? ` · por área: ${r.checklist.por_area.map((a) => `${a.area} ${a.pct} %`).join(", ")}` : ""}`
+      : "",
     c.comentario ? `Comentario del cliente: "${c.comentario}"` : ""
   ]
     .filter(Boolean)

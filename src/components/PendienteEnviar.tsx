@@ -2,21 +2,24 @@
 
 import { useState, useTransition } from "react";
 import { enviarMenu, enviarRutina } from "@/app/actions/entrenador";
+import { enviarProtocolo } from "@/app/actions/protocolo";
 
 // Borradores del cliente que el entrenador todavía no envió: hasta que
 // toque "Enviar", el cliente ve "tu entrenador está armando tu plan".
 export default function PendienteEnviar({
   userId,
   rutina,
-  menu
+  menu,
+  protocolo = null
 }: {
   userId: string;
   rutina: string | null; // nombre del bloque en borrador
   menu: string | null; // nombre del menú en borrador
+  protocolo?: string | null; // nombre del protocolo en borrador
 }) {
   const [pendiente, iniciar] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  if (!rutina && !menu) return null;
+  if (!rutina && !menu && !protocolo) return null;
 
   function correr(fn: () => Promise<{ error?: string }>) {
     setError(null);
@@ -30,7 +33,7 @@ export default function PendienteEnviar({
     <section className="card mb-4 border-warn/50">
       <p className="text-xs font-semibold uppercase tracking-wide text-warn">Pendiente de enviar</p>
       <p className="mt-1 text-sm text-muted">
-        El cliente todavía no lo ve. Revisalo en las pestañas (Rutina / Comida) y cuando esté bien,
+        El cliente todavía no lo ve. Revisalo en las pestañas (Rutina / Comida / Protocolo) y cuando esté bien,
         envialo: le llega un aviso y un mensaje tuyo.
       </p>
       <div className="mt-3 flex flex-col gap-2">
@@ -63,6 +66,22 @@ export default function PendienteEnviar({
               className="btn-primary shrink-0 px-3 py-1.5 text-sm"
             >
               {pendiente ? "…" : "Enviar menú"}
+            </button>
+          </div>
+        ) : null}
+        {protocolo ? (
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-line px-3 py-2">
+            <div className="min-w-0">
+              <p className="truncate font-semibold">✨ {protocolo}</p>
+              <p className="text-xs text-muted">Protocolo con cambios sin enviar</p>
+            </div>
+            <button
+              type="button"
+              disabled={pendiente}
+              onClick={() => correr(() => enviarProtocolo({ userId }))}
+              className="btn-primary shrink-0 px-3 py-1.5 text-sm"
+            >
+              {pendiente ? "…" : "Enviar protocolo"}
             </button>
           </div>
         ) : null}

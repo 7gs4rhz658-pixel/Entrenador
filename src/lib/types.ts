@@ -332,6 +332,7 @@ export interface ResumenSemana {
   cambios_medidas?: { medida: string; antes: number; ahora: number }[];
   minutos_promedio?: number | null;
   records?: { ejercicio: string; valor: number; tipo: "peso" | "reps" }[];
+  checklist?: { promedio: number | null; por_area: { area: string; pct: number }[] };
 }
 
 export interface Informe {

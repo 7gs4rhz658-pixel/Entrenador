@@ -2,7 +2,8 @@ import Link from "next/link";
 import ActivarAvisos from "@/components/ActivarAvisos";
 import { propuestaAjuste } from "@/lib/ajuste-macros";
 import { contarNoLeidos, getBloque, getClientes, getDias, getInformesPendientes, getUltimaActividad, getUltimoRegistro } from "@/lib/data";
-import { fechaLocal, fmtTiempoRelativo, hoyDiaSemana, hoyFecha } from "@/lib/format";
+import { fechaLocal, fmtTiempoRelativo, hoyDiaSemana, hoyFecha, sumarDias } from "@/lib/format";
+import { cumplimientoRango } from "@/lib/hoy-db";
 import { checkinPendiente } from "@/lib/stats";
 import { estadoPago } from "@/lib/pagos";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
@@ -12,14 +13,16 @@ export default async function ClientesPage() {
   const conInforme = new Set(pendientesInforme.map((p) => p.user_id));
   const filas = await Promise.all(
     clientes.map(async (c) => {
-      const [meso, ultimo, ajuste, ultimaActividad, noLeidos, dias, checkin] = await Promise.all([
+      const ayer = sumarDias(hoyFecha(), -1);
+      const [meso, ultimo, ajuste, ultimaActividad, noLeidos, dias, checkin, cumplioAyer] = await Promise.all([
         getBloque(c.id, { conBorrador: true }),
         getUltimoRegistro(c.id),
         propuestaAjuste(c),
         getUltimaActividad(c.id),
         contarNoLeidos(c.id, "cliente"),
         getDias(c.id),
-        checkinPendiente(c.id)
+        checkinPendiente(c.id),
+        c.activo && c.estado_pago === "pagado" ? cumplimientoRango(c, ayer, ayer).then((r) => r.promedio) : Promise.resolve(null)
       ]);
       const diaHoy = dias.find((d) => d.dia_semana === hoyDiaSemana());
       const entrenaHoy = !!diaHoy && !diaHoy.es_descanso && !!meso?.publicado;
@@ -28,7 +31,9 @@ export default async function ClientesPage() {
       // Sin registros hace 4+ días: candidato a abandono, va arriba
       const abandono = c.activo && c.estado_pago === "pagado" && meso != null && meso.publicado && (diasSin == null || diasSin >= 4);
       const nuevo = c.activo && c.onboarding_completo && c.estado_pago === "pagado" && (!meso || !meso.publicado);
-      return { c, meso, ultimo, ajuste, diasSin, noLeidos, abandono, nuevo, entrenaHoy, entrenoHoy, checkin, diaHoy };
+      // Ayer cumplió menos de la mitad del checklist (y no está ya como caído)
+      const flojoAyer = !abandono && !nuevo && cumplioAyer != null && cumplioAyer < 50;
+      return { c, meso, ultimo, ajuste, diasSin, noLeidos, abandono, nuevo, entrenaHoy, entrenoHoy, checkin, diaHoy, cumplioAyer, flojoAyer };
     })
   );
   const hoy = hoyFecha();
@@ -121,6 +126,8 @@ function PanelHoy({
     entrenoHoy: boolean;
     checkin: { semana: number } | null;
     diaHoy: { nombre: string | null } | undefined;
+    cumplioAyer: number | null;
+    flojoAyer: boolean;
   }[];
   conInforme: Set<string>;
   hoy: string;
@@ -132,6 +139,7 @@ function PanelHoy({
   const checkins = filas.filter((f) => f.checkin && !f.nuevo);
   const entrenan = filas.filter((f) => f.entrenaHoy);
   const caidos = filas.filter((f) => f.abandono);
+  const flojos = filas.filter((f) => f.flojoAyer);
   const vencen = filas.filter((f) => {
     const p = estadoPago(f.c, hoy);
     return p.vencido || (p.diasRestantes != null && p.diasRestantes <= 3);
@@ -142,6 +150,7 @@ function PanelHoy({
     { titulo: "Mensajes sin leer", lista: mensajes, tab: "mensajes", color: "text-accent" },
     { titulo: "Check-in pendiente", lista: checkins, tab: "resumen", color: "text-muted" },
     { titulo: "Sin registros hace días", lista: caidos, tab: "mensajes", color: "text-danger" },
+    { titulo: "Ayer menos de 50 %", lista: flojos, tab: "resumen", color: "text-warn" },
     { titulo: "Mes por vencer o vencido", lista: vencen, tab: "resumen", color: "text-danger" }
   ].filter((g) => g.lista.length);
 
@@ -165,6 +174,7 @@ function PanelHoy({
                   {nombre(f)}
                   {g.titulo.startsWith("Sin registros") && f.diasSin != null ? ` · ${f.diasSin} d` : ""}
                   {g.titulo.startsWith("Mensajes") ? ` · ${f.noLeidos}` : ""}
+                  {g.titulo.startsWith("Ayer") ? ` · ${f.cumplioAyer} %` : ""}
                 </Link>
               ))}
             </li>

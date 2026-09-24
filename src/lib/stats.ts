@@ -21,6 +21,7 @@ import {
   planesPorEjercicio
 } from "./data";
 import { diaSemanaDe, fechaLocal, hoyDiaSemana, hoyFecha, sumarDias } from "./format";
+import { cumplimientoRango } from "./hoy-db";
 import { ETIQUETAS_MEDIDA } from "./medidas";
 import { macrosDe, objetivosCliente, sumarMacros } from "./nutrition";
 import { CAMPOS_MEDIDA, type Medida, type Mesocycle, type Profile, type ResumenSemana } from "./types";
@@ -100,7 +101,7 @@ export async function resumenDeSemana(perfil: Profile, meso: Mesocycle, semana: 
   const hasta = fechaLocal(cierre);
   const desde = sumarDias(hasta, -6);
 
-  const [dias, ejercicios, planes, planesPrev, logs, comidas, plan, checkins, consultas, medidas, sesiones, records] = await Promise.all([
+  const [dias, ejercicios, planes, planesPrev, logs, comidas, plan, checkins, consultas, medidas, sesiones, records, checklist] = await Promise.all([
     getDias(perfil.id),
     getEjercicios(perfil.id),
     getPlanes(meso.id, semana),
@@ -112,7 +113,8 @@ export async function resumenDeSemana(perfil: Profile, meso: Mesocycle, semana: 
     getConsultasAsistente(perfil.id, { limite: 50 }),
     getMedidas(perfil.id, 30),
     getSesionesSemana(meso.id, semana),
-    getRecords(perfil.id, 30)
+    getRecords(perfil.id, 30),
+    cumplimientoRango(perfil, desde, hasta)
   ]);
 
   const entreno = dias.filter((d) => !d.es_descanso);
@@ -179,7 +181,8 @@ export async function resumenDeSemana(perfil: Profile, meso: Mesocycle, semana: 
       : null,
     records: records
       .filter((r) => r.fecha >= desde && r.fecha <= hasta)
-      .map((r) => ({ ejercicio: r.ejercicio, valor: Number(r.valor), tipo: r.tipo }))
+      .map((r) => ({ ejercicio: r.ejercicio, valor: Number(r.valor), tipo: r.tipo })),
+    checklist: { promedio: checklist.promedio, por_area: checklist.porArea }
   };
 }
 

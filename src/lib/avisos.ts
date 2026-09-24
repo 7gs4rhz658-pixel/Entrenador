@@ -2,8 +2,9 @@
 // arma el cron a la tarde y también se puede previsualizar desde el
 // panel del entrenador. Determinista, sin IA.
 
-import { getDias, getUltimaActividad } from "./data";
-import { hoyDiaSemana, hoyFecha, nombreDia } from "./format";
+import { getDias, getProtocolo, getUltimaActividad } from "./data";
+import { hoyDiaSemana, hoyFecha, nombreDia, sumarDias } from "./format";
+import { aplicaHoy, semanaDelProtocolo } from "./hoy";
 import { recomendacionPara } from "./meal-plan-db";
 import { estadoPago } from "./pagos";
 import type { CargaPush } from "./push";
@@ -48,7 +49,13 @@ export async function armarAvisoDiario(c: Profile): Promise<CargaPush> {
   const cabeza = entrena ? `${nombreDia(manana)}: ${diaM?.nombre || "entreno"}` : `${nombreDia(manana)}: descanso`;
   const comida = primera ? ` · ${primera.plato || primera.momento}` : "";
   const aviso = reco?.avisos[0] ? ` · ${reco.avisos[0]}` : "";
-  partes.unshift(`${cabeza}${comida}${aviso}`);
+  const protocolo = await getProtocolo(c.id);
+  const fechaM = sumarDias(hoy, 1);
+  const delProtocolo = protocolo
+    ? protocolo.items.filter((i) => aplicaHoy(i, manana, entrena, semanaDelProtocolo(protocolo.inicio, fechaM))).length
+    : 0;
+  const extra = delProtocolo ? ` · ${delProtocolo} de tu protocolo` : "";
+  partes.unshift(`${cabeza}${comida}${aviso}${extra}`);
 
   return {
     titulo: partes.length > 1 ? "Mañana te toca (y algo más)" : "Mañana te toca",

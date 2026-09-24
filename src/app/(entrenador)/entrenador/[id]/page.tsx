@@ -9,6 +9,8 @@ import FotosGaleria from "@/components/FotosGaleria";
 import MedidasForm from "@/components/MedidasForm";
 import MedidasHistorial from "@/components/MedidasHistorial";
 import PendienteEnviar from "@/components/PendienteEnviar";
+import ChecklistHoy from "@/components/ChecklistHoy";
+import ProtocoloEditor from "@/components/ProtocoloEditor";
 import CloseWeekButton from "@/components/CloseWeekButton";
 import NewBlockButton from "@/components/NewBlockButton";
 import NutricionDia from "@/components/NutricionDia";
@@ -36,6 +38,7 @@ import {
   getPlanComidas,
   getPlanes,
   getPlantillas,
+  getProtocolo,
   getRecords,
   getSesionesSemana,
   getUltimoRegistro,
@@ -47,7 +50,8 @@ import {
 import { informeATexto } from "@/lib/ai-informe";
 import { propuestaAjuste } from "@/lib/ajuste-macros";
 import { objetivosDeReferencia } from "@/lib/comidas-service";
-import { fmtTiempoRelativo, hoyFecha, nombreDia } from "@/lib/format";
+import { fmtTiempoRelativo, horaLocal, hoyDiaSemana, hoyFecha, nombreDia } from "@/lib/format";
+import { checklistHoy } from "@/lib/hoy-db";
 import { estadoPago } from "@/lib/pagos";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
 import { faseDe, nombreFase } from "@/lib/progression";
@@ -62,6 +66,7 @@ const TABS = [
   { id: "rutina", texto: "Rutina" },
   { id: "progreso", texto: "Progreso" },
   { id: "nutricion", texto: "Comida" },
+  { id: "protocolo", texto: "Protocolo" },
   { id: "mensajes", texto: "Mensajes" },
   { id: "plan", texto: "Rutina nueva" }
 ] as const;
@@ -84,14 +89,15 @@ export default async function ClientePage({
 
   const tab: Tab = (TABS.find((t) => t.id === searchParams?.tab)?.id ?? "resumen") as Tab;
   const base = `/entrenador/${perfil.id}?tab=${tab}`;
-  const [meso, ultimo, ultimaActividad, noLeidos, referidos, referente, planComidas] = await Promise.all([
+  const [meso, ultimo, ultimaActividad, noLeidos, referidos, referente, planComidas, protocoloBorrador] = await Promise.all([
     getBloque(perfil.id, { conBorrador: true }),
     getUltimoRegistro(perfil.id),
     getUltimaActividad(perfil.id),
     contarNoLeidos(perfil.id, "cliente"),
     getReferidos(perfil.id),
     perfil.referido_por ? getPerfil(perfil.referido_por).catch(() => null) : Promise.resolve(null),
-    getPlanComidas(perfil.id, { conBorrador: true })
+    getPlanComidas(perfil.id, { conBorrador: true }),
+    getProtocolo(perfil.id, { borrador: true })
   ]);
   const diasSinActividad = ultimaActividad ? Math.floor((Date.now() - new Date(ultimaActividad).getTime()) / 86_400_000) : null;
 
@@ -140,6 +146,7 @@ export default async function ClientePage({
           userId={perfil.id}
           rutina={meso && !meso.publicado ? meso.nombre : null}
           menu={planComidas && !planComidas.plan.publicado ? planComidas.plan.nombre : null}
+          protocolo={protocoloBorrador && protocoloBorrador.items.length ? protocoloBorrador.protocolo.nombre : null}
         />
       </div>
 
@@ -171,6 +178,14 @@ export default async function ClientePage({
       {tab === "nutricion" ? (
         <Comida perfil={perfil} fecha={fechaValida(searchParams?.fecha)} base={base} />
       ) : null}
+      {tab === "protocolo" ? (
+        <ProtocoloEditor
+          userId={perfil.id}
+          borrador={protocoloBorrador}
+          publicado={await getProtocolo(perfil.id)}
+          cn={perfil.cuestionario_nutricion}
+        />
+      ) : null}
       {tab === "mensajes" ? (
         <HiloMensajes
           userId={perfil.id}
@@ -195,6 +210,43 @@ export default async function ClientePage({
 function fechaValida(f?: string): string {
   const hoy = hoyFecha();
   return f && /^\d{4}-\d{2}-\d{2}$/.test(f) && f <= hoy ? f : hoy;
+}
+
+// Lo que el cliente tiene hoy y cómo viene en los últimos 14 días
+async function ChecklistCliente({ perfil }: { perfil: Profile }) {
+  const datos = await checklistHoy(perfil);
+  return (
+    <>
+      <ChecklistHoy
+        datos={datos}
+        ahoraMin={horaLocal() * 60}
+        diaNombre={`Hoy, ${nombreDia(hoyDiaSemana()).toLowerCase()}`}
+        soloLectura
+      />
+      {datos.porArea.length ? (
+        <section className="card -mt-1">
+          <h2 className="font-bold">Cumplimiento por área</h2>
+          <p className="text-xs text-muted">Últimos 14 días (sin contar hoy)</p>
+          <ul className="mt-2 flex flex-col gap-1.5 text-sm">
+            {datos.porArea.map((a) => (
+              <li key={a.area} className="flex items-center gap-2">
+                <span className="w-28 shrink-0 truncate">{a.area}</span>
+                <span className="h-2 flex-1 overflow-hidden rounded-full bg-line">
+                  <span
+                    className={`block h-full rounded-full ${a.pct >= 70 ? "bg-ok" : a.pct >= 40 ? "bg-warn" : "bg-danger"}`}
+                    style={{ width: `${a.pct}%` }}
+                  />
+                </span>
+                <span className="w-10 shrink-0 text-right font-semibold" style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {a.pct} %
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </>
+  );
 }
 
 async function Resumen({ perfil }: { perfil: Profile }) {
@@ -243,6 +295,8 @@ async function Resumen({ perfil }: { perfil: Profile }) {
           Semanas cerradas: {cerradas.length ? cerradas.map((w) => w.semana).join(", ") : "ninguna"}
         </p>
       </section>
+
+      <ChecklistCliente perfil={perfil} />
 
       <section className="card">
         <h2 className="mb-2 font-bold">Esta semana</h2>

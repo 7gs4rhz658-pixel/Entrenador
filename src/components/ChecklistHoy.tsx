@@ -204,6 +204,11 @@ export default function ChecklistHoy({
           ))}
         </div>
       )}
+      {datos.conProtocolo && !soloLectura ? (
+        <Link href="/protocolo" className="mt-3 block text-center text-xs font-semibold text-accent">
+          Ver tu protocolo completo →
+        </Link>
+      ) : null}
       {error ? <p className="mt-2 text-sm font-medium text-danger">✗ {error}</p> : null}
     </section>
   );

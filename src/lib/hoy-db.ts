@@ -40,6 +40,21 @@ export interface ChecklistHoy {
   tira: DiaConstancia[]; // últimos 14 días, del más viejo a hoy
   racha: number;
   promedio14: number | null; // los 14 días anteriores a hoy
+  porArea: { area: string; pct: number }[]; // comidas, entreno, agua y cada segmento, en esos 14 días
+  conProtocolo: boolean;
+}
+
+// Cumplimiento por área en un conjunto de días: "Comidas 80 %, Cara 40 %"
+export function cumplimientoPorArea(dias: ItemHoy[][]): { area: string; pct: number }[] {
+  const nombre = (i: ItemHoy) =>
+    i.tipo === "comida" ? "Comidas" : i.tipo === "entreno" ? "Entreno" : i.tipo === "agua" ? "Agua" : i.segmento || "Protocolo";
+  const cuenta = new Map<string, { hechos: number; total: number }>();
+  for (const i of dias.flat()) {
+    const c = cuenta.get(nombre(i)) ?? cuenta.set(nombre(i), { hechos: 0, total: 0 }).get(nombre(i))!;
+    c.total++;
+    if (i.hecho) c.hechos++;
+  }
+  return [...cuenta.entries()].map(([area, c]) => ({ area, pct: Math.round((c.hechos / c.total) * 100) }));
 }
 
 function menuDelDia(comidas: ComidaDelPlan[]): EntradaDia["menu"] {
@@ -62,9 +77,14 @@ const vacio = (): HechosDia => ({
   ticks: new Set()
 });
 
-export async function checklistHoy(perfil: Profile, fecha = hoyFecha()): Promise<ChecklistHoy> {
+// Carga de una vez lo registrado entre dos fechas y devuelve cómo armar
+// el checklist de cualquier día de ese rango.
+async function preparar(
+  perfil: Profile,
+  desde: string,
+  fecha: string
+): Promise<{ inicio: string | null; conProtocolo: boolean; itemsDe: (f: string) => { items: ItemHoy[]; tipo: TipoDia } }> {
   const userId = perfil.id;
-  const desde = sumarDias(fecha, -(DIAS_HISTORIAL - 1));
   const [meso, inicio, dias, ejercicios, plan, sesiones, protocolo, comidas, logs, ticks] = await Promise.all([
     getBloque(userId),
     inicioDelPlan(userId),
@@ -142,12 +162,20 @@ export async function checklistHoy(perfil: Profile, fecha = hoyFecha()): Promise
     });
     return { items, tipo };
   };
+  return { inicio, conProtocolo: !!protocolo, itemsDe };
+}
 
+export async function checklistHoy(perfil: Profile, fecha = hoyFecha()): Promise<ChecklistHoy> {
+  const { inicio, conProtocolo, itemsDe } = await preparar(perfil, sumarDias(fecha, -(DIAS_HISTORIAL - 1)), fecha);
   const hoy = itemsDe(fecha);
-  const historial: DiaConstancia[] = fechasHaciaAtras(fecha, DIAS_HISTORIAL).map((f, i) => ({
-    fecha: f,
-    pct: i === 0 ? porcentaje(hoy.items) : !inicio || f < inicio ? null : porcentaje(itemsDe(f).items)
-  }));
+  const ultimos14: ItemHoy[][] = [];
+  const historial: DiaConstancia[] = fechasHaciaAtras(fecha, DIAS_HISTORIAL).map((f, i) => {
+    if (i === 0) return { fecha: f, pct: porcentaje(hoy.items) };
+    if (!inicio || f < inicio) return { fecha: f, pct: null };
+    const items = itemsDe(f).items;
+    if (i <= 14) ultimos14.push(items);
+    return { fecha: f, pct: porcentaje(items) };
+  });
 
   return {
     fecha,
@@ -156,6 +184,26 @@ export async function checklistHoy(perfil: Profile, fecha = hoyFecha()): Promise
     pct: porcentaje(hoy.items),
     tira: historial.slice(0, 14).reverse(),
     racha: racha(historial),
-    promedio14: promedio(historial.slice(1, 15))
+    promedio14: promedio(historial.slice(1, 15)),
+    porArea: cumplimientoPorArea(ultimos14),
+    conProtocolo
+  };
+}
+
+// Cumplimiento del checklist entre dos fechas (informe semanal, panel)
+export async function cumplimientoRango(
+  perfil: Profile,
+  desde: string,
+  hasta: string
+): Promise<{ promedio: number | null; porArea: { area: string; pct: number }[] }> {
+  const { inicio, itemsDe } = await preparar(perfil, desde, hasta);
+  const dias: ItemHoy[][] = [];
+  for (let f = desde; f <= hasta; f = sumarDias(f, 1)) {
+    if (inicio && f >= inicio) dias.push(itemsDe(f).items);
+  }
+  const pcts = dias.map((d) => porcentaje(d)).filter((p): p is number => p != null);
+  return {
+    promedio: pcts.length ? Math.round(pcts.reduce((a, p) => a + p, 0) / pcts.length) : null,
+    porArea: cumplimientoPorArea(dias)
   };
 }

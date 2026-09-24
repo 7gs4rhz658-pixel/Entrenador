@@ -4,11 +4,11 @@ import LogoutButton from "@/components/LogoutButton";
 import ProfileForm from "@/components/ProfileForm";
 import { requireCliente } from "@/lib/auth";
 import CodigoReferido from "@/components/CodigoReferido";
-import { getBloque } from "@/lib/data";
+import { getBloque, getProtocolo } from "@/lib/data";
 
 export default async function PerfilPage() {
   const { userId, perfil } = await requireCliente();
-  const meso = await getBloque(userId);
+  const [meso, protocolo] = await Promise.all([getBloque(userId), getProtocolo(userId)]);
 
   return (
     <main>
@@ -52,6 +52,18 @@ export default async function PerfilPage() {
           </Link>
         </p>
       </section>
+
+      {protocolo ? (
+        <section className="card mt-4 text-sm">
+          <p className="font-semibold">Tu protocolo</p>
+          <p className="mt-1 text-muted">
+            {protocolo.protocolo.nombre}: todo lo que te indicó tu entrenador, por segmento.{" "}
+            <Link href="/protocolo" className="font-semibold text-accent">
+              Ver →
+            </Link>
+          </p>
+        </section>
+      ) : null}
 
       <ActivarAvisos vapidKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null} />
 

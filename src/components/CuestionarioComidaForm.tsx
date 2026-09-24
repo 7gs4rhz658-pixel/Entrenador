@@ -101,6 +101,21 @@ export default function CuestionarioComidaForm({ perfil }: { perfil: Profile }) 
             className="input w-40"
           />
         </div>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="hora_despertar" className="label">
+              Me despierto (opcional)
+            </label>
+            <input id="hora_despertar" name="hora_despertar" type="time" defaultValue={cn?.hora_despertar ?? ""} className="input" />
+          </div>
+          <div>
+            <label htmlFor="hora_dormir" className="label">
+              Me duermo (opcional)
+            </label>
+            <input id="hora_dormir" name="hora_dormir" type="time" defaultValue={cn?.hora_dormir ?? ""} className="input" />
+          </div>
+        </div>
+        <p className="mt-1 text-xs text-muted">Ubican en tu checklist lo que va al despertar y antes de dormir.</p>
       </section>
 
       <section className="card">

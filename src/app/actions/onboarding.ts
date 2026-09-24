@@ -109,6 +109,8 @@ export async function guardarCuestionarioNutricion(
   const cn: CuestionarioNutricion = {
     comidas: comidas.sort((a, b) => (a.hora || "99").localeCompare(b.hora || "99")),
     hora_entreno: String(formData.get("hora_entreno") ?? "").trim().slice(0, 5),
+    hora_despertar: String(formData.get("hora_despertar") ?? "").trim().slice(0, 5),
+    hora_dormir: String(formData.get("hora_dormir") ?? "").trim().slice(0, 5),
     alergias: String(formData.get("alergias") ?? "").trim().slice(0, 300),
     no_come: String(formData.get("no_come") ?? "").trim().slice(0, 300),
     cocina,
