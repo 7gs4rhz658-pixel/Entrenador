@@ -23,7 +23,7 @@ export default async function ProtocoloPage() {
     );
   }
 
-  const horario = horarioDelDia(perfil.cuestionario_nutricion, null);
+  const horario = horarioDelDia(perfil.cuestionario_nutricion);
   const segmentos = [...new Set([...SEGMENTOS, ...protocolo.items.map((i) => i.segmento)])];
   const grupos = segmentos
     .map((s) => ({ segmento: s, lista: protocolo.items.filter((i) => i.segmento === s).sort((a, b) => a.orden - b.orden) }))

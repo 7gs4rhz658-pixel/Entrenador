@@ -1,8 +1,9 @@
 // Protocolo del entrenador: catálogos, validación y textos. Puro (lo usan
 // el editor del entrenador, la pantalla del cliente y la importación).
 
-import { fmtHora } from "./hoy";
-import type { AnclaProtocolo, AplicaDia, ProtocoloItem } from "./types";
+import { aMinutos, fmtHora } from "./hoy";
+import { normalizarTexto } from "./meal-plan";
+import type { AnclaProtocolo, AplicaDia, Momento, ProtocoloItem } from "./types";
 
 export const SEGMENTOS = ["Suplementos", "Hábitos", "Cara", "Cabello", "Sueño", "Hidratación", "Movilidad"];
 
@@ -20,6 +21,8 @@ export const ANCLAS: { valor: AnclaProtocolo; texto: string }[] = [
   { valor: "hora_fija", texto: "A una hora fija" },
   { valor: "en_el_dia", texto: "En cualquier momento del día" }
 ];
+
+export const ANCLAS_ENTRENO: AnclaProtocolo[] = ["antes_entreno", "durante_entreno", "despues_entreno"];
 
 // Lo que el entrenador escribe para un ítem (nuevo o editado)
 export interface ItemEntrada {
@@ -62,7 +65,8 @@ export function sanearItem(x: Partial<ItemEntrada>): ItemEntrada {
     offset_min: Math.max(-240, Math.min(240, Math.round(Number(x.offset_min) || 0))),
     hora: ancla === "hora_fija" ? hora : null,
     dias: dias.length ? dias : [1, 2, 3, 4, 5, 6, 7],
-    aplica: x.aplica === "entreno" || x.aplica === "descanso" ? x.aplica : "todos",
+    // Lo atado al entreno solo existe los días que se entrena
+    aplica: ANCLAS_ENTRENO.includes(ancla) ? "entreno" : x.aplica === "entreno" || x.aplica === "descanso" ? x.aplica : "todos",
     semana_desde: desde,
     semana_hasta: hasta != null && desde != null && hasta < desde ? desde : hasta
   };
@@ -95,4 +99,78 @@ export function textoCuandoAplica(item: Pick<ProtocoloItem, "dias" | "aplica" | 
     );
   }
   return partes.length ? partes.join(" · ") : "Todos los días";
+}
+
+// ── Control de lo que propone la IA al leer un texto ────────────
+
+// Palabras que no identifican un producto (cantidades, formas, momentos)
+const GENERICAS = new Set([
+  "dosis", "capsula", "capsulas", "scoop", "scoops", "gramo", "gramos", "cucharada", "cucharadita",
+  "gota", "gotas", "tableta", "tabletas", "sobre", "sobres", "toma", "tomar", "con", "del", "los",
+  "las", "una", "uno", "para", "por", "antes", "despues", "dia", "dias", "noche", "manana", "tarde",
+  "agua", "vaso", "taza", "mas", "sin", "polvo", "suplemento", "suplementos", "mediano", "grande"
+]);
+
+const raiz = (w: string) => w.replace(/(es|s)$/, "");
+
+// ¿El nombre del ítem aparece en el texto? (sin acentos, por palabras,
+// tolerando plurales). Sin palabras que comparar, se da por bueno.
+export function apareceEnTexto(titulo: string, texto: string): boolean {
+  const delTexto = new Set(normalizarTexto(texto).split(" ").map(raiz));
+  const clave = normalizarTexto(titulo)
+    .split(" ")
+    .filter((w) => w.length >= 3 && !GENERICAS.has(w) && !/^\d+$/.test(w));
+  if (!clave.length) return true;
+  return clave.some((w) => delTexto.has(raiz(w)));
+}
+
+// La IA solo ordena lo que escribió el entrenador: un suplemento que no
+// aparece en su texto se descarta y se avisa.
+export function filtrarInventados<T extends { segmento: string; titulo: string }>(
+  items: T[],
+  texto: string
+): { validos: T[]; descartados: string[] } {
+  const validos: T[] = [];
+  const descartados: string[] = [];
+  for (const it of items) {
+    if (normalizarTexto(it.segmento) === "suplementos" && !apareceEnTexto(it.titulo, texto)) descartados.push(it.titulo);
+    else validos.push(it);
+  }
+  return { validos, descartados };
+}
+
+// Lo que tiene calorías va al menú, no al protocolo (la IA a veces lo mete)
+export function esComida(titulo: string): boolean {
+  return /\b(whey|isolate|caseina|gainer|ganador|proteina|batido|licuado|avena|fruta|platano|yogur)\b/.test(
+    normalizarTexto(titulo)
+  );
+}
+
+// Cada comida del texto va al momento libre cuya hora típica le queda más
+// cerca (12:00 → almuerzo, 16:00 → merienda, 19:30 → cena). No se usa lo
+// que diga la IA: suele confundir "Comida 2" con la cena.
+const HORA_TIPICA: [Momento, number][] = [
+  ["desayuno", 8 * 60],
+  ["almuerzo", 13 * 60],
+  ["merienda", 17 * 60],
+  ["cena", 21 * 60],
+  ["snack", 11 * 60]
+];
+
+export function momentosPorHora(
+  comidas: { etiqueta: string; hora: string }[]
+): { etiqueta: string; momento: Momento; hora: string }[] {
+  const libres = new Map(HORA_TIPICA);
+  return [...comidas]
+    .sort((a, b) => a.hora.localeCompare(b.hora))
+    .slice(0, 5)
+    .map((c) => {
+      const min = aMinutos(c.hora) ?? 12 * 60;
+      let mejor: Momento | null = null;
+      for (const [m, tipica] of libres) {
+        if (mejor == null || Math.abs(tipica - min) < Math.abs(libres.get(mejor)! - min)) mejor = m;
+      }
+      libres.delete(mejor!);
+      return { etiqueta: c.etiqueta, momento: mejor!, hora: c.hora };
+    });
 }

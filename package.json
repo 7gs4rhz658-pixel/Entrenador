@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "npx --yes tsx scripts/test-progresion.ts && npx --yes tsx scripts/test-planes.ts && npx --yes tsx scripts/test-hoy.ts",
+    "test": "npx --yes tsx scripts/test-progresion.ts && npx --yes tsx scripts/test-planes.ts && npx --yes tsx scripts/test-hoy.ts && npx --yes tsx scripts/test-protocolo.ts",
     "test:hoy": "npx --yes tsx scripts/test-hoy.ts",
+    "test:protocolo": "npx --yes tsx scripts/test-protocolo.ts",
     "test:progresion": "npx --yes tsx scripts/test-progresion.ts",
     "test:planes": "npx --yes tsx scripts/test-planes.ts",
     "test:rls": "npx --yes tsx scripts/test-rls.ts"

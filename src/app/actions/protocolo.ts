@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { ErrorIA, iaDisponible } from "@/lib/ai";
+import { interpretarProtocoloTxt, type HorariosTexto, type ProtocoloInterpretado } from "@/lib/ai-protocolo";
 import { requireEntrenador } from "@/lib/auth";
-import { exec } from "@/lib/data";
+import { exec, getPerfil } from "@/lib/data";
 import { sanearItem, type ItemEntrada } from "@/lib/protocolo";
 import {
   actualizarDatosBorrador,
@@ -11,7 +13,8 @@ import {
   guardarItemBorrador,
   moverItemBorrador,
   publicarProtocolo,
-  quitarProtocolo
+  quitarProtocolo,
+  reemplazarBorrador
 } from "@/lib/protocolo-db";
 import { enviarPush } from "@/lib/push";
 import { db } from "@/lib/supabase/server";
@@ -19,7 +22,7 @@ import { db } from "@/lib/supabase/server";
 type Resultado = { ok?: boolean; error?: string };
 
 function mensaje(e: unknown): string {
-  return e instanceof Error ? e.message : "Ocurrió un error inesperado.";
+  return e instanceof ErrorIA || e instanceof Error ? e.message : "Ocurrió un error inesperado.";
 }
 
 // Todas editan el borrador: el cliente no ve nada hasta "Enviar". El
@@ -99,4 +102,73 @@ export async function enviarProtocolo(input: { userId: string }): Promise<Result
       tag: "protocolo"
     });
   });
+}
+
+// ── Importar el plan escrito por el entrenador ──────────────────
+
+export async function interpretarProtocoloTxtAction(input: {
+  userId: string;
+  texto: string;
+}): Promise<{ resultado?: ProtocoloInterpretado; error?: string }> {
+  await requireEntrenador();
+  const texto = input.texto.trim();
+  if (texto.length < 20) return { error: "El texto es demasiado corto para ser un plan." };
+  if (!iaDisponible()) return { error: "Interpretar el texto necesita la IA configurada (GROQ_API_KEY o GEMINI_API_KEY)." };
+  try {
+    const perfil = await getPerfil(input.userId);
+    const resultado = await interpretarProtocoloTxt(texto, perfil);
+    if (!resultado.items.length && !resultado.horarios.comidas.length) {
+      return { error: "No encontré suplementos, hábitos ni cuidados en el texto." };
+    }
+    return { resultado };
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+}
+
+// Guarda la vista previa (ya revisada) como borrador del protocolo y, si
+// el entrenador lo pide, pasa los horarios del texto al cliente.
+export async function aplicarProtocoloTxtAction(input: {
+  userId: string;
+  nombre: string;
+  items: Partial<ItemEntrada>[];
+  fuera: string[];
+  horarios: HorariosTexto | null;
+}): Promise<Resultado> {
+  return correr(async () => {
+    await reemplazarBorrador(input.userId, {
+      nombre: input.nombre.trim().slice(0, 80) || "Protocolo",
+      origen: "txt",
+      fuera_protocolo: input.fuera.map((f) => f.trim().slice(0, 200)).filter(Boolean).slice(0, 20),
+      items: input.items.map((i) => sanearItem(i))
+    });
+    if (input.horarios) await aplicarHorarios(input.userId, input.horarios);
+  });
+}
+
+async function aplicarHorarios(userId: string, h: HorariosTexto): Promise<void> {
+  const perfil = await getPerfil(userId);
+  const cn = perfil.cuestionario_nutricion;
+  if (!cn) return;
+  const valida = (x: string | null) => (x && /^\d{2}:\d{2}$/.test(x) ? x : null);
+  // El plan del entrenador define las comidas del día (3 a 6); con menos o
+  // más, solo se ajustan las horas de las que el cliente ya tiene.
+  const comidas =
+    h.comidas.length >= 3 && h.comidas.length <= 6
+      ? h.comidas.map((c) => ({ momento: c.momento, hora: c.hora }))
+      : cn.comidas.map((c) => ({ ...c, hora: h.comidas.find((x) => x.momento === c.momento)?.hora ?? c.hora }));
+  await exec(
+    db()
+      .from("profiles")
+      .update({
+        cuestionario_nutricion: {
+          ...cn,
+          comidas,
+          hora_entreno: valida(h.entreno) ?? cn.hora_entreno,
+          hora_despertar: valida(h.despertar) ?? cn.hora_despertar ?? "",
+          hora_dormir: valida(h.dormir) ?? cn.hora_dormir ?? ""
+        }
+      })
+      .eq("id", userId)
+  );
 }

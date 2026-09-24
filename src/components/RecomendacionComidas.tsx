@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   aplicarComidas,
   generarComidasIA,
@@ -29,7 +29,8 @@ export default function RecomendacionComidas({
   objetivos,
   macrosManual,
   tienePlan,
-  nombrePlan
+  nombrePlan,
+  desdeProtocolo = false
 }: {
   userId: string;
   conIA: boolean;
@@ -37,6 +38,7 @@ export default function RecomendacionComidas({
   macrosManual: MacrosManual | null;
   tienePlan: boolean;
   nombrePlan: string | null;
+  desdeProtocolo?: boolean; // viene de importar el plan en Protocolo: trae el mismo texto
 }) {
   const [pendiente, iniciar] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +47,19 @@ export default function RecomendacionComidas({
   const [texto, setTexto] = useState("");
   const [preview, setPreview] = useState<{ r: RecomendacionPreparada; origen: "ia" | "txt" } | null>(null);
   const [editandoMacros, setEditandoMacros] = useState(false);
+
+  // El texto del plan que se importó en Protocolo, para sacar las comidas
+  useEffect(() => {
+    if (!desdeProtocolo) return;
+    try {
+      const t = sessionStorage.getItem(`plan-txt:${userId}`);
+      if (t) {
+        setModoTxt(true);
+        setTexto(t);
+        setOk("Traje el texto de tu plan: toca \"Interpretar con IA\" para pasar las comidas al menú.");
+      }
+    } catch {}
+  }, [desdeProtocolo, userId]);
 
   function correr(fn: () => Promise<{ error?: string }>, mensajeOk?: string) {
     setError(null);

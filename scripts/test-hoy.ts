@@ -69,13 +69,11 @@ check("aMinutos rechaza basura", aMinutos("") === null && aMinutos("25:00") === 
 check("fmtHora en 12 h", fmtHora("05:30") === "5:30 am" && fmtHora("19:30") === "7:30 pm" && fmtHora("12:00") === "12:00 pm" && fmtHora("00:15") === "12:15 am");
 
 // 2. Horario del día y anclas
-const h = horarioDelDia(cn, null);
+const h = horarioDelDia(cn);
 check("comida con hora cargada", h.comida("cena").min === 20 * 60 && h.comida("cena").real);
 check("comida sin hora: estimada, no real", !h.comida("desayuno").real);
 check("despertar cargado", h.despertar.min === 330 && h.despertar.real);
 check("dormir estimado tras la última comida", !h.dormir.real && h.dormir.min === 20 * 60 + 150);
-const hTxt = horarioDelDia(cn, { cena: "19:30" });
-check("las horas del entrenador pisan las del cuestionario", hTxt.comida("cena").min === 19 * 60 + 30);
 
 check("después de entrenar = inicio + duración típica",
   horaDelItem(item({ ancla: "despues_entreno" }), h, 60)?.min === 7 * 60);
@@ -83,7 +81,7 @@ check("antes de entrenar = 30 min antes", horaDelItem(item({ ancla: "antes_entre
 check("con la cena + desfase", horaDelItem(item({ ancla: "con_cena", offset_min: 15 }), h, 60)?.min === 20 * 60 + 15);
 check("hora fija", horaDelItem(item({ ancla: "hora_fija", hora: "09:00:00" }), h, 60)?.min === 540);
 check("en el día: sin hora", horaDelItem(item({ ancla: "en_el_dia" }), h, 60) === null);
-const sinEntreno = horarioDelDia({ ...cn, hora_entreno: "" }, null);
+const sinEntreno = horarioDelDia({ ...cn, hora_entreno: "" });
 check("sin hora de entreno: lo relativo al entreno no es 'real'",
   horaDelItem(item({ ancla: "despues_entreno" }), sinEntreno, 60)?.real === false);
 
@@ -92,6 +90,7 @@ check("fuera de los días elegidos no aplica", !aplicaHoy(item({ dias: [1, 4] })
 check("solo días de entreno", !aplicaHoy(item({ aplica: "entreno" }), 1, false, 1) && aplicaHoy(item({ aplica: "entreno" }), 1, true, 1));
 check("solo días de descanso", !aplicaHoy(item({ aplica: "descanso" }), 1, true, 1));
 check("progresión por semanas", !aplicaHoy(item({ semana_desde: 3 }), 1, true, 2) && aplicaHoy(item({ semana_desde: 3, semana_hasta: 4 }), 1, true, 4) && !aplicaHoy(item({ semana_hasta: 2 }), 1, true, 3));
+check("lo atado al entreno no aplica en descanso aunque diga 'todos'", !aplicaHoy(item({ ancla: "antes_entreno", aplica: "todos" }), 3, false, 1) && aplicaHoy(item({ ancla: "antes_entreno" }), 1, true, 1));
 check("semana del protocolo", semanaDelProtocolo("2026-09-01", "2026-09-01") === 1 && semanaDelProtocolo("2026-09-01", "2026-09-08") === 2 && semanaDelProtocolo("2026-09-01", "2026-08-20") === 1);
 
 // 4. Armar el día (lunes de entreno)
@@ -99,7 +98,6 @@ const base: EntradaDia = {
   fecha: "2026-09-21",
   diaSemana: 1,
   cn,
-  horarios: null,
   entreno: { diaId: "d1", nombre: "Pull", ejercicios: 6 },
   minutosEntreno: 60,
   menu: [
@@ -133,6 +131,32 @@ check("día de descanso: sin entreno ni whey", !descanso.some((i) => i.tipo === 
 const sinMenu = armarDia({ ...base, menu: null, protocolo: null });
 check("sin menú: comidas del cuestionario con enlace a Nutrición",
   sinMenu.filter((i) => i.tipo === "comida").length === 3 && sinMenu.every((i) => i.tipo !== "comida" || (i.href === "/nutricion" && !i.conMenu)));
+
+// Agrupación: lo del mismo segmento a la misma hora es una sola casilla
+const rutina = armarDia({
+  ...base,
+  protocolo: {
+    inicio: "2026-09-21",
+    items: [
+      item({ id: "00000000-0000-0000-0000-0000000000c1", segmento: "Cara", titulo: "Limpiador suave (mañana)", detalle: "20 s", ancla: "al_despertar", orden: 1 }),
+      item({ id: "00000000-0000-0000-0000-0000000000c2", segmento: "Cara", titulo: "Protector solar", detalle: "rostro y cuello", porque: "fotoprotección", ancla: "al_despertar", orden: 2 }),
+      item({ id: "00000000-0000-0000-0000-0000000000c3", segmento: "Suplementos", titulo: "Creatina 5 g", ancla: "al_despertar", orden: 3 }),
+      item({ id: "00000000-0000-0000-0000-0000000000c4", segmento: "Cara", titulo: "Retinol", ancla: "antes_dormir", orden: 4 })
+    ]
+  }
+});
+const cara = rutina.filter((i) => i.segmento === "Cara");
+check("misma hora y segmento: una casilla; otra hora: otra casilla", cara.length === 2, cara.map((c) => c.titulo));
+check("la casilla agrupada lleva los nombres, sin '(mañana)'", cara[0].titulo === "Limpiador suave, Protector solar", cara[0].titulo);
+check("la clave es la del primer ítem", cara[0].key === "p:00000000-0000-0000-0000-0000000000c1");
+check("detalle y por qué juntos", cara[0].detalle === "20 s · rostro y cuello" && cara[0].porque === "Protector solar: fotoprotección", cara[0]);
+check("otro segmento a la misma hora va aparte", rutina.some((i) => i.titulo === "Creatina 5 g"));
+
+const conAgua = armarDia({
+  ...base,
+  protocolo: { inicio: "2026-09-21", items: [item({ id: "00000000-0000-0000-0000-0000000000a1", segmento: "Hidratación", titulo: "Agua 3-4 L" })] }
+});
+check("si el protocolo trae el agua, no se repite la de la app", conAgua.filter((i) => /agua/i.test(i.titulo)).length === 1 && !conAgua.some((i) => i.key === "agua"));
 
 // 5. Hechos, porcentaje y "ahora"
 const hechos = vacio();

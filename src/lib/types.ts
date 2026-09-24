@@ -184,7 +184,6 @@ export interface MealPlan {
   batch_cooking: BatchCooking | null;
   publicado: boolean;
   publicado_at: string | null;
-  horarios?: Partial<Record<Momento, string>> | null; // horas que fijó el entrenador en su texto
   created_at: string;
 }
 

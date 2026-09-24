@@ -99,7 +99,7 @@ export default function ProtocoloEditor({
     .filter((g) => g.lista.length);
 
   // Vista previa: cómo queda ordenado en un día de entreno y uno de descanso
-  const horario = horarioDelDia(cn, null);
+  const horario = horarioDelDia(cn);
   const previa = (entreno: boolean) =>
     items
       .filter((i) => i.aplica === "todos" || (i.aplica === "entreno") === entreno)

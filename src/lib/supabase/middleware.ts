@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { usuarioDeSesion } from "./usuario";
 
 // Refresca el token de Supabase en cada request y devuelve el usuario.
 // Patrón oficial de @supabase/ssr para Next.js App Router.
@@ -24,8 +25,6 @@ export async function actualizarSesion(req: NextRequest) {
     }
   });
 
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await usuarioDeSesion(supabase);
   return { res, user };
 }

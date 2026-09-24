@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { db } from "./supabase/server";
+import { usuarioDeSesion } from "./supabase/usuario";
 import type { Profile } from "./types";
 
 export interface Sesion {
@@ -12,9 +13,7 @@ export interface Sesion {
 // Usuario logueado + su perfil, o null. Cacheado por request.
 export const getSesion = cache(async (): Promise<Sesion | null> => {
   const supabase = db();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const user = await usuarioDeSesion(supabase);
   if (!user) return null;
 
   const { data: perfil, error } = await supabase

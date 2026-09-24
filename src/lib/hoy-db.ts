@@ -151,7 +151,6 @@ async function preparar(
       fecha: f,
       diaSemana,
       cn,
-      horarios: plan?.plan.horarios ?? null,
       entreno: entrena && dia ? { diaId: dia.id, nombre: dia.nombre ?? "", ejercicios: (porDia[dia.id] ?? []).length } : null,
       minutosEntreno,
       menu: menus ? menus[tipo] : null,

@@ -11,6 +11,7 @@ import MedidasHistorial from "@/components/MedidasHistorial";
 import PendienteEnviar from "@/components/PendienteEnviar";
 import ChecklistHoy from "@/components/ChecklistHoy";
 import ProtocoloEditor from "@/components/ProtocoloEditor";
+import ProtocoloTxt from "@/components/ProtocoloTxt";
 import CloseWeekButton from "@/components/CloseWeekButton";
 import NewBlockButton from "@/components/NewBlockButton";
 import NutricionDia from "@/components/NutricionDia";
@@ -77,7 +78,7 @@ export default async function ClientePage({
   searchParams
 }: {
   params: { id: string };
-  searchParams?: { tab?: string; e?: string; fecha?: string };
+  searchParams?: { tab?: string; e?: string; fecha?: string; desde?: string };
 }) {
   let perfil: Profile;
   try {
@@ -176,15 +177,18 @@ export default async function ClientePage({
         </div>
       ) : null}
       {tab === "nutricion" ? (
-        <Comida perfil={perfil} fecha={fechaValida(searchParams?.fecha)} base={base} />
+        <Comida perfil={perfil} fecha={fechaValida(searchParams?.fecha)} base={base} desdeProtocolo={searchParams?.desde === "protocolo"} />
       ) : null}
       {tab === "protocolo" ? (
-        <ProtocoloEditor
+        <div className="flex flex-col gap-3">
+          <ProtocoloTxt userId={perfil.id} conIA={iaDisponible()} tieneMenuCliente={!!planComidas} />
+          <ProtocoloEditor
           userId={perfil.id}
           borrador={protocoloBorrador}
           publicado={await getProtocolo(perfil.id)}
           cn={perfil.cuestionario_nutricion}
-        />
+          />
+        </div>
       ) : null}
       {tab === "mensajes" ? (
         <HiloMensajes
@@ -390,7 +394,17 @@ async function Resumen({ perfil }: { perfil: Profile }) {
 
 // Recomendación de comidas (referencia, generar/IA, .txt, menú activo) y
 // el registro del día del cliente.
-async function Comida({ perfil, fecha, base }: { perfil: Profile; fecha: string; base: string }) {
+async function Comida({
+  perfil,
+  fecha,
+  base,
+  desdeProtocolo
+}: {
+  perfil: Profile;
+  fecha: string;
+  base: string;
+  desdeProtocolo: boolean;
+}) {
   const [plan, ajuste] = await Promise.all([getPlanComidas(perfil.id, { conBorrador: true }), propuestaAjuste(perfil)]);
   return (
     <div className="flex flex-col gap-3">
@@ -408,6 +422,7 @@ async function Comida({ perfil, fecha, base }: { perfil: Profile; fecha: string;
         macrosManual={perfil.macros_manual}
         tienePlan={!!plan}
         nombrePlan={plan?.plan.nombre ?? null}
+        desdeProtocolo={desdeProtocolo}
       />
       {plan ? <PlanComidasResumen plan={plan} cn={perfil.cuestionario_nutricion} /> : null}
       <ConsultasCliente userId={perfil.id} />

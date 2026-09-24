@@ -4,6 +4,7 @@
 // hoy-db.ts.
 
 import { fmtLitros, sumarDias } from "./format";
+import { normalizarTexto } from "./meal-plan";
 import { nombreMomento } from "./nutrition";
 import type { AnclaProtocolo, CuestionarioNutricion, Momento, ProtocoloItem } from "./types";
 
@@ -36,7 +37,6 @@ export interface EntradaDia {
   fecha: string;
   diaSemana: number; // 1 = lunes ... 7 = domingo
   cn: CuestionarioNutricion | null;
-  horarios: Partial<Record<Momento, string>> | null; // horas de comida fijadas por el entrenador
   entreno: { diaId: string; nombre: string; ejercicios: number } | null; // null = descanso
   minutosEntreno: number; // duración típica de la sesión
   menu: { momento: Momento; titulo: string; detalle: string }[] | null; // null = sin menú
@@ -87,19 +87,16 @@ export interface HorarioDia {
   dormir: { min: number; real: boolean };
 }
 
-export function horarioDelDia(
-  cn: CuestionarioNutricion | null,
-  horarios: Partial<Record<Momento, string>> | null
-): HorarioDia {
+export function horarioDelDia(cn: CuestionarioNutricion | null): HorarioDia {
   const comida = (m: Momento) => {
-    const real = aMinutos(horarios?.[m]) ?? aMinutos(cn?.comidas.find((c) => c.momento === m)?.hora);
+    const real = aMinutos(cn?.comidas.find((c) => c.momento === m)?.hora);
     return real != null ? { min: real, real: true } : { min: aMinutos(HORA_TIPICA[m])!, real: false };
   };
   const entrenoReal = aMinutos(cn?.hora_entreno);
   const entreno = entrenoReal != null ? { min: entrenoReal, real: true } : { min: 18 * 60, real: false };
 
   const conocidas = [
-    ...(cn?.comidas ?? []).map((c) => aMinutos(horarios?.[c.momento]) ?? aMinutos(c.hora)),
+    ...(cn?.comidas ?? []).map((c) => aMinutos(c.hora)),
     entrenoReal
   ].filter((x): x is number => x != null);
   const despReal = aMinutos(cn?.hora_despertar);
@@ -126,13 +123,15 @@ export function semanaDelProtocolo(inicio: string, fecha: string): number {
 }
 
 export function aplicaHoy(
-  item: Pick<ProtocoloItem, "dias" | "aplica" | "semana_desde" | "semana_hasta">,
+  item: Pick<ProtocoloItem, "dias" | "aplica" | "semana_desde" | "semana_hasta"> & { ancla?: AnclaProtocolo },
   diaSemana: number,
   esEntreno: boolean,
   semana: number
 ): boolean {
   if (item.dias.length && !item.dias.includes(diaSemana)) return false;
   if (item.aplica === "entreno" && !esEntreno) return false;
+  // Antes, durante o después de entrenar no existe en un día de descanso
+  if (!esEntreno && (item.ancla === "antes_entreno" || item.ancla === "durante_entreno" || item.ancla === "despues_entreno")) return false;
   if (item.aplica === "descanso" && esEntreno) return false;
   if (item.semana_desde != null && semana < item.semana_desde) return false;
   if (item.semana_hasta != null && semana > item.semana_hasta) return false;
@@ -181,9 +180,10 @@ export function horaDelItem(
 
 const PRIORIDAD: Record<TipoItemHoy, number> = { comida: 0, entreno: 1, protocolo: 2, agua: 3 };
 const SIN_HORA = 24 * 60; // lo que va "en el día" queda al final
+const AGUA = /\bagua\b/;
 
 export function armarDia(e: EntradaDia): ItemHoy[] {
-  const h = horarioDelDia(e.cn, e.horarios);
+  const h = horarioDelDia(e.cn);
   const items: ItemHoy[] = [];
 
   // Comidas: las del menú o, sin menú, las que el cliente dijo que hace
@@ -226,27 +226,41 @@ export function armarDia(e: EntradaDia): ItemHoy[] {
     });
   }
 
+  // Protocolo: lo del mismo segmento a la misma hora es una sola casilla
+  // ("Cara: limpiador, sérum, protector"), como una rutina, no tres pasos
   if (e.protocolo) {
     const semana = semanaDelProtocolo(e.protocolo.inicio, e.fecha);
+    const grupos = new Map<string, { it: ProtocoloItem; hora: { min: number; real: boolean } | null }[]>();
     for (const it of [...e.protocolo.items].sort((a, b) => a.orden - b.orden)) {
       if (!aplicaHoy(it, e.diaSemana, e.entreno != null, semana)) continue;
       const hora = horaDelItem(it, h, e.minutosEntreno);
-      const key = `p:${it.id}`;
+      const clave = `${it.segmento}|${hora ? hora.min : SIN_HORA}`;
+      (grupos.get(clave) ?? grupos.set(clave, []).get(clave)!).push({ it, hora });
+    }
+    for (const lista of grupos.values()) {
+      const { it: primero, hora } = lista[0];
+      const key = `p:${primero.id}`;
+      const varios = lista.length > 1;
+      const nombre = (t: string) => t.replace(/\s*\((mañana|noche|am|pm)\)/i, "");
+      const detalles = lista.map((x) => x.it.detalle).filter(Boolean).join(" · ");
+      const razones = lista.filter((x) => x.it.porque).map((x) => (varios ? `${nombre(x.it.titulo)}: ${x.it.porque}` : x.it.porque));
       items.push({
         key,
         tipo: "protocolo",
         hora: hora?.real ? aHora(hora.min) : "",
-        titulo: it.titulo,
-        detalle: it.detalle,
-        porque: it.porque,
-        segmento: it.segmento,
+        titulo: varios ? lista.map((x) => nombre(x.it.titulo)).join(", ") : primero.titulo,
+        detalle: detalles.length > 160 ? `${detalles.slice(0, 157)}…` : detalles,
+        porque: razones.length ? razones.join(" · ") : null,
+        segmento: primero.segmento,
         hecho: e.hechos.ticks.has(key),
         orden: hora ? hora.min : SIN_HORA
       });
     }
   }
 
-  if (e.aguaMl) {
+  // Si el entrenador ya puso el agua en el protocolo, no se repite
+  const aguaEnProtocolo = items.some((i) => i.tipo === "protocolo" && AGUA.test(normalizarTexto(i.titulo)));
+  if (e.aguaMl && !aguaEnProtocolo) {
     items.push({
       key: "agua",
       tipo: "agua",
