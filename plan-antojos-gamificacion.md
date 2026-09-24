@@ -1,6 +1,6 @@
 # Plan: "Tus antojos" — la adherencia como juego
 
-Fecha: 2026-09-22 · Estado: **propuesta, pendiente de autorización**
+Fecha: 2026-09-22 · Estado: **propuesta, pendiente de autorización** · Actualización 2026-09-23: ya existe el checklist diario de Hoy (con protocolo); el motor de puntos debería basarse en su % diario ("día ≥ 70 % = X puntos") en vez de reglas sueltas.
 
 La idea de EVER: al empezar, el cliente escribe las comidas que lo hacen
 fallar (pizza, cerveza, pastel, tacos, hamburguesa…) **ordenadas por cuánto
@@ -140,7 +140,7 @@ Premios que no son comida: precio fijo puesto por EVER (ej. día libre 40 pts).
 
 ## 4. Integración técnica
 
-### 4.1 Base de datos — migración `0015_antojos.sql`
+### 4.1 Base de datos — migración `0016_antojos.sql` (la 0015 la usó el checklist de Hoy)
 
 ```sql
 antojos          -- catálogo del cliente
@@ -208,7 +208,7 @@ Sin llamadas nuevas por día ni por registro. La cuota de Groq no se mueve.
 ## 5. Orden de ejecución
 
 **Fase A — El motor (base + puntos visibles)**
-Migración 0015, `juego.ts` + tests, catálogo en onboarding y perfil, pantalla
+Migración 0016, `juego.ts` + tests, catálogo en onboarding y perfil, pantalla
 `/antojos`, tarjeta en Inicio, puntos otorgados desde todos los eventos que
 ya existen, backfill de la semana en curso al activar.
 *Al terminar: el cliente ve su saldo crecer con lo que ya hace.*

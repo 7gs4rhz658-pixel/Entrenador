@@ -27,6 +27,16 @@ Fecha: 2026-09-19 · Estado: **fases 1 a 6 implementadas y verificadas end-to-en
 | 7 | **Plantillas de rutina** del entrenador (guardar la de un cliente, cargarla en otro) | ✓ | migración 0014, `actions/plantillas.ts`, `planDesdeRutina` |
 | 8 | Panel **"Hoy"** del entrenador: nuevos sin plan, informes listos, mensajes, check-ins, caídos, pagos por vencer, quién entrena hoy | ✓ | `(entrenador)/entrenador/page.tsx` |
 
+### Ronda 3 — ideas de NutriGoo: "Hoy" como checklist y protocolos (2026-09-23)
+
+| # | Qué | Estado | Dónde |
+|---|---|---|---|
+| 1 | **Hoy como checklist ordenado por hora**: comidas (se registran con un toque), entreno, agua y protocolo; % del día, racha (días ≥ 70 %), tira de 14 días, "Ahora" | ✓ | migración 0015 (`checklist_dia`), `lib/hoy.ts`, `lib/hoy-db.ts`, `ChecklistHoy.tsx` |
+| 2 | **Protocolos del entrenador por segmentos** (suplementos, hábitos, cara, cabello, sueño…): momento del día relativo al horario del cliente, días, semanas de progresión, "por qué", "fuera del protocolo"; borrador → enviar; `/protocolo` del cliente; cumplimiento por área en la ficha, el informe y el panel Hoy | ✓ | migración 0015 (`protocolos`, `protocolo_items`), `lib/protocolo*.ts`, `ProtocoloEditor.tsx` |
+| 3 | **Importar el plan en texto**: la IA ubica cada cosa en su momento sin recomendar nada (suplemento que no está en el texto → descartado; lo con calorías → menú), horarios del texto al cuestionario del cliente, "pasar las comidas al menú" | ✓ | `lib/ai-protocolo.ts`, `ProtocoloTxt.tsx` |
+
+Notas: los horarios del texto quedan en el cuestionario del cliente (editable en "Cómo comes"), no en `meal_plans.horarios`; esa columna de la migración 0015 quedó sin uso. Avisos push a la hora de cada ítem: pendiente (el plan gratis de Vercel permite un solo cron diario). Siguiente: el juego de antojos (`plan-antojos-gamificacion.md`) usando el % diario del checklist como motor de puntos; su migración pasa a ser la 0016.
+
 No verificado en local: la entrega real de notificaciones push (requiere teléfono + claves en Vercel + `SUPABASE_SERVICE_ROLE_KEY`); sí se verificó el service worker, la suscripción, la ruta del cron con su protección y el contenido del aviso (`/api/avisos/preview`).
 
 Nota de despliegue: Vercel bloquea los deploys automáticos si el email del commit no pertenece a la cuenta de GitHub conectada (`BLOCKED`, "Git author must have access"). El repo usa el email *noreply* de GitHub de la cuenta (`git config user.email`) para que cada `git push` despliegue solo.
