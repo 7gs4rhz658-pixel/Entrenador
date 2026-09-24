@@ -73,6 +73,21 @@ export function hoyFecha(): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
+// Fecha (YYYY-MM-DD) de un instante en la zona horaria de la app. Los
+// timestamps de la base están en UTC: en México un entreno a las 19:00
+// ya es "mañana" en UTC.
+export function fechaLocal(iso: string): string {
+  const tz = process.env.TZ_APP || "America/Mexico_City";
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(new Date(iso));
+  const get = (t: string) => partes.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
 // Suma días a una fecha YYYY-MM-DD (sin tocar zonas horarias).
 export function sumarDias(fecha: string, dias: number): string {
   const d = new Date(`${fecha}T12:00:00Z`);

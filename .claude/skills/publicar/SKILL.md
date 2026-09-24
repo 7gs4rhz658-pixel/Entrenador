@@ -117,7 +117,8 @@ desde el teléfono y que el link sea compartible.
    `supabase/migrations/0011_sesiones_entreno.sql` (duración de sesiones) y con
    `supabase/migrations/0012_fotos_progreso.sql` (fotos de progreso) y con
    `supabase/migrations/0013_records.sql` (récords personales) y con
-   `supabase/migrations/0014_plantillas_rutina.sql` (plantillas de rutina).
+   `supabase/migrations/0014_plantillas_rutina.sql` (plantillas de rutina) y con
+   `supabase/migrations/0015_protocolos_checklist.sql` (checklist de Hoy y protocolos).
 
 4. **Configurar el login por correo.** Guiá: menú izquierdo → **Authentication**
    → **Providers** → **Email**. Recomendá **desactivar "Confirm email"** (el

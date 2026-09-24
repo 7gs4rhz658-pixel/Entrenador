@@ -20,7 +20,7 @@ import {
   logsPorEjercicio,
   planesPorEjercicio
 } from "./data";
-import { diaSemanaDe, hoyDiaSemana, hoyFecha, sumarDias } from "./format";
+import { diaSemanaDe, fechaLocal, hoyDiaSemana, hoyFecha, sumarDias } from "./format";
 import { ETIQUETAS_MEDIDA } from "./medidas";
 import { macrosDe, objetivosCliente, sumarMacros } from "./nutrition";
 import { CAMPOS_MEDIDA, type Medida, type Mesocycle, type Profile, type ResumenSemana } from "./types";
@@ -67,13 +67,16 @@ export async function adherenciaSemanaActual(perfil: Profile): Promise<Adherenci
   const [dias, comidas, logs, plan] = await Promise.all([
     getDias(perfil.id),
     getComidasRango(perfil.id, lunes, hoy),
-    getLogsRango(perfil.id, `${lunes}T00:00:00`, `${hoy}T23:59:59`),
+    // Rango ampliado un día por lado: logged_at está en UTC
+    getLogsRango(perfil.id, `${sumarDias(lunes, -1)}T00:00:00Z`, `${sumarDias(hoy, 1)}T23:59:59Z`),
     getPlanComidas(perfil.id)
   ]);
   const entreno = new Set(dias.filter((d) => !d.es_descanso).map((d) => d.dia_semana));
   const planificados = [...entreno].filter((d) => d <= diaHoy).length;
   // Un entreno "hecho" = un día con al menos una serie registrada
-  const diasConLog = new Set(logs.map((l) => l.logged_at.slice(0, 10)));
+  const diasConLog = new Set(
+    logs.map((l) => fechaLocal(l.logged_at)).filter((f) => f >= lunes && f <= hoy)
+  );
   const hechos = [...diasConLog].filter((f) => entreno.has(diaSemanaDe(f))).length;
   const porDia = comidasPorDia(perfil);
   // Una comida del menú cuenta como hecha si ese día tiene al menos un
@@ -94,7 +97,7 @@ export async function adherenciaSemanaActual(perfil: Profile): Promise<Adherenci
 export async function resumenDeSemana(perfil: Profile, meso: Mesocycle, semana: number): Promise<ResumenSemana> {
   const cierres = await getSemanasCerradas(meso.id);
   const cierre = cierres.find((c) => c.semana === semana)?.cerrada_at ?? new Date().toISOString();
-  const hasta = cierre.slice(0, 10);
+  const hasta = fechaLocal(cierre);
   const desde = sumarDias(hasta, -6);
 
   const [dias, ejercicios, planes, planesPrev, logs, comidas, plan, checkins, consultas, medidas, sesiones, records] = await Promise.all([

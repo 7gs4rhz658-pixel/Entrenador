@@ -2,7 +2,7 @@ import Link from "next/link";
 import ActivarAvisos from "@/components/ActivarAvisos";
 import { propuestaAjuste } from "@/lib/ajuste-macros";
 import { contarNoLeidos, getBloque, getClientes, getDias, getInformesPendientes, getUltimaActividad, getUltimoRegistro } from "@/lib/data";
-import { fmtTiempoRelativo, hoyDiaSemana, hoyFecha } from "@/lib/format";
+import { fechaLocal, fmtTiempoRelativo, hoyDiaSemana, hoyFecha } from "@/lib/format";
 import { checkinPendiente } from "@/lib/stats";
 import { estadoPago } from "@/lib/pagos";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
@@ -23,7 +23,7 @@ export default async function ClientesPage() {
       ]);
       const diaHoy = dias.find((d) => d.dia_semana === hoyDiaSemana());
       const entrenaHoy = !!diaHoy && !diaHoy.es_descanso && !!meso?.publicado;
-      const entrenoHoy = !!ultimo && ultimo.slice(0, 10) === hoyFecha();
+      const entrenoHoy = !!ultimo && fechaLocal(ultimo) === hoyFecha();
       const diasSin = ultimaActividad ? Math.floor((Date.now() - new Date(ultimaActividad).getTime()) / 86_400_000) : null;
       // Sin registros hace 4+ días: candidato a abandono, va arriba
       const abandono = c.activo && c.estado_pago === "pagado" && meso != null && meso.publicado && (diasSin == null || diasSin >= 4);

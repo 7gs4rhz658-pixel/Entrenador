@@ -1,6 +1,6 @@
 import Link from "next/link";
-import AdherenciaSemana from "@/components/AdherenciaSemana";
 import AnticipoDia from "@/components/AnticipoDia";
+import ChecklistHoy from "@/components/ChecklistHoy";
 import InformeCard from "@/components/InformeCard";
 import CloseWeekButton from "@/components/CloseWeekButton";
 import NewBlockButton from "@/components/NewBlockButton";
@@ -16,10 +16,11 @@ import {
   getLogs,
   logsPorEjercicio
 } from "@/lib/data";
-import { fmtKcal, fmtLitros, horaLocal, hoyDiaSemana, hoyFecha, nombreDia } from "@/lib/format";
+import { fmtKcal, horaLocal, hoyDiaSemana, hoyFecha, nombreDia } from "@/lib/format";
+import { checklistHoy } from "@/lib/hoy-db";
 import { recomendacionPara } from "@/lib/meal-plan-db";
 import { estadoPago } from "@/lib/pagos";
-import { adherenciaSemanaActual, checkinPendiente } from "@/lib/stats";
+import { checkinPendiente } from "@/lib/stats";
 import { macrosDe, objetivosCliente, sumarMacros } from "@/lib/nutrition";
 import { faseDe, nombreFase } from "@/lib/progression";
 
@@ -73,8 +74,8 @@ export default async function Home({
   const reco = await recomendacionPara(userId, entrenaAnticipo ? "entreno" : "descanso", perfil.cuestionario_nutricion);
   const diaBatch = perfil.cuestionario_nutricion?.batch_cooking ? perfil.cuestionario_nutricion.dia_batch ?? 7 : null;
 
-  const [adherencia, pendiente, checkins, noLeidos] = await Promise.all([
-    adherenciaSemanaActual(perfil),
+  const [checklist, pendiente, checkins, noLeidos] = await Promise.all([
+    checklistHoy(perfil, fecha),
     checkinPendiente(userId),
     getCheckins(userId, 3),
     contarNoLeidos(userId, "entrenador")
@@ -180,38 +181,25 @@ export default async function Home({
         </div>
       </header>
 
-      {objetivos ? (
-        <Link href="/nutricion" className="card mb-4 block">
-          <div className="flex items-baseline justify-between">
-            <p className="text-sm text-muted">Comida de hoy</p>
-            <span className="text-xs font-semibold text-accent">Ver detalle →</span>
-          </div>
-          <p className="mt-1 text-2xl font-bold">
-            {fmtKcal(consumido.kcal)}{" "}
-            <span className="text-base font-medium text-muted">/ {fmtKcal(objetivos.kcal)}</span>
-          </p>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-line">
-            <div
-              className="h-full rounded-full bg-accent"
-              style={{ width: `${Math.min(100, (consumido.kcal / objetivos.kcal) * 100)}%` }}
-            />
-          </div>
-          <p className="mt-2 text-xs text-muted">
-            Proteína {Math.round(consumido.prot_g)} / {objetivos.prot_g} g ·{" "}
-            {esEntrenoHoy ? "día de entreno" : "día de descanso"} · agua{" "}
-            {fmtLitros(objetivos.agua_ml)}
-          </p>
-        </Link>
-      ) : (
+      {!objetivos ? (
         <Link href="/perfil" className="card mb-4 block">
           <p className="font-semibold">Completá tu perfil</p>
           <p className="text-sm text-muted">
             Con tus datos calculamos calorías y macros diarios →
           </p>
         </Link>
-      )}
+      ) : null}
 
-      <AdherenciaSemana datos={adherencia} />
+      <ChecklistHoy
+        datos={checklist}
+        ahoraMin={horaLocal() * 60}
+        diaNombre={`Hoy, ${nombreDia(hoy).toLowerCase()}`}
+        resumenComida={
+          objetivos
+            ? `Comida: ${fmtKcal(consumido.kcal)} de ${fmtKcal(objetivos.kcal)} · proteína ${Math.round(consumido.prot_g)} de ${objetivos.prot_g} g`
+            : null
+        }
+      />
 
       <AnticipoDia
         perfil={perfil}
@@ -223,62 +211,52 @@ export default async function Home({
         esDiaBatch={diaBatch === diaObjetivo}
       />
 
-      {diaHoy && esEntrenoHoy ? (
+      {diaHoy && esEntrenoHoy && !checklist.items.some((i) => i.key === "entreno" && i.hecho) ? (
         <Link href={`/dia/${diaHoy.id}/entrenar`} className="btn-primary mb-4 w-full">
           ▶ Comenzar rutina de hoy
           {diaHoy.nombre ? ` · ${diaHoy.nombre}` : ""}
         </Link>
       ) : null}
 
-      <section className="flex flex-col gap-3">
-        {dias.map((dia) => {
-          const exs = porDia[dia.id] ?? [];
-          const conRegistro = exs.filter((e) => (logsEj[e.id] ?? []).length > 0);
-          const esHoy = dia.dia_semana === hoy;
-
-          let chip: { texto: string; clase: string };
-          if (dia.es_descanso) {
-            chip = { texto: "Descanso", clase: "border-line text-muted" };
-          } else if (exs.length > 0 && conRegistro.length === exs.length) {
-            chip = { texto: "✓ Completado", clase: "border-ok/40 text-ok" };
-          } else if (conRegistro.length > 0) {
-            chip = { texto: "En curso", clase: "border-warn/40 text-warn" };
-          } else {
-            chip = { texto: "Pendiente", clase: "border-line text-muted" };
-          }
-
-          const contenido = (
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className={`font-semibold ${dia.es_descanso ? "text-muted" : ""}`}>
-                  {nombreDia(dia.dia_semana)}
-                  {dia.nombre && !dia.es_descanso ? ` — ${dia.nombre}` : ""}
-                </p>
-                <p className="text-sm text-muted">
-                  {dia.es_descanso
-                    ? "Día libre"
-                    : `${exs.length} ejercicio${exs.length === 1 ? "" : "s"}${
-                        conRegistro.length > 0 && conRegistro.length < exs.length
-                          ? ` · ${conRegistro.length} registrado${conRegistro.length === 1 ? "" : "s"}`
-                          : ""
-                      }`}
-                </p>
+      <section className="card">
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-bold">Tu semana de entreno</h2>
+          <Link href="/rutina" className="text-xs font-semibold text-accent">
+            Rutina →
+          </Link>
+        </div>
+        <div className="mt-2 grid grid-cols-7 gap-1.5">
+          {dias.map((dia) => {
+            const exs = porDia[dia.id] ?? [];
+            const conRegistro = exs.filter((e) => (logsEj[e.id] ?? []).length > 0);
+            const completo = exs.length > 0 && conRegistro.length === exs.length;
+            const estado = dia.es_descanso
+              ? "border-dashed border-line text-muted"
+              : completo
+                ? "border-ok/50 bg-ok/15 text-ok"
+                : conRegistro.length
+                  ? "border-warn/50 bg-warn/10 text-warn"
+                  : "border-line";
+            const contenido = (
+              <>
+                <span className="text-[11px] font-semibold uppercase">{nombreDia(dia.dia_semana).slice(0, 2)}</span>
+                <span className="text-sm font-bold">{dia.es_descanso ? "—" : completo ? "✓" : conRegistro.length ? "…" : exs.length}</span>
+              </>
+            );
+            const clase = `flex flex-col items-center rounded-xl border py-1.5 ${estado} ${
+              dia.dia_semana === hoy ? "ring-2 ring-accent" : ""
+            }`;
+            return dia.es_descanso ? (
+              <div key={dia.id} className={clase} title="Descanso">
+                {contenido}
               </div>
-              <span className={`chip ${chip.clase}`}>{chip.texto}</span>
-            </div>
-          );
-
-          const clase = `card block ${esHoy ? "border-accent/60 ring-1 ring-accent/30" : ""}`;
-          return dia.es_descanso ? (
-            <div key={dia.id} className={clase}>
-              {contenido}
-            </div>
-          ) : (
-            <Link key={dia.id} href={`/dia/${dia.id}`} className={clase}>
-              {contenido}
-            </Link>
-          );
-        })}
+            ) : (
+              <Link key={dia.id} href={`/dia/${dia.id}`} className={clase} title={dia.nombre ?? ""}>
+                {contenido}
+              </Link>
+            );
+          })}
+        </div>
       </section>
 
       <section className="mt-5">

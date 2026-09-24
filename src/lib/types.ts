@@ -24,6 +24,8 @@ export interface Cuestionario {
 export interface CuestionarioNutricion {
   comidas: { momento: Momento; hora: string }[]; // 3 a 6, en orden del día
   hora_entreno: string; // "18:30" o "" si varía
+  hora_despertar?: string; // "06:30"; ubica lo que va "al despertar"
+  hora_dormir?: string; // "23:00"; ubica lo que va "antes de dormir"
   alergias: string; // restricción dura: nunca aparecen en el menú
   no_come: string; // preferencias: se evitan
   cocina: "cocino" | "mixto" | "como_fuera";
@@ -182,6 +184,7 @@ export interface MealPlan {
   batch_cooking: BatchCooking | null;
   publicado: boolean;
   publicado_at: string | null;
+  horarios?: Partial<Record<Momento, string>> | null; // horas que fijó el entrenador en su texto
   created_at: string;
 }
 
@@ -464,4 +467,55 @@ export interface PlantillaRutina {
   creado_por: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ── Checklist de "Hoy" y protocolos del entrenador ──────────────
+
+// Cuándo va un ítem del protocolo: hora fija o relativo al día del cliente
+export type AnclaProtocolo =
+  | "hora_fija"
+  | "al_despertar"
+  | "antes_entreno"
+  | "durante_entreno"
+  | "despues_entreno"
+  | "con_desayuno"
+  | "con_almuerzo"
+  | "con_merienda"
+  | "con_cena"
+  | "con_snack"
+  | "antes_dormir"
+  | "en_el_dia";
+
+export type AplicaDia = "todos" | "entreno" | "descanso";
+
+export interface Protocolo {
+  id: string;
+  user_id: string;
+  nombre: string;
+  origen: "manual" | "txt";
+  activo: boolean;
+  publicado: boolean;
+  publicado_at: string | null;
+  fecha_inicio: string | null;
+  fuera_protocolo: string[];
+  notas: string | null;
+  created_at: string;
+}
+
+export interface ProtocoloItem {
+  id: string;
+  user_id: string;
+  protocolo_id: string;
+  segmento: string;
+  titulo: string;
+  detalle: string;
+  porque: string | null;
+  ancla: AnclaProtocolo;
+  offset_min: number;
+  hora: string | null; // "HH:MM" o "HH:MM:SS"
+  dias: number[]; // 1 = lunes ... 7 = domingo
+  aplica: AplicaDia;
+  semana_desde: number | null;
+  semana_hasta: number | null;
+  orden: number;
 }

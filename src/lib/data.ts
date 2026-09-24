@@ -1,3 +1,4 @@
+import { fechaLocal } from "./format";
 import { db } from "./supabase/server";
 import type {
   AsistenteLog,
@@ -16,6 +17,8 @@ import type {
   MealPlanItem,
   Mesocycle,
   PlantillaRutina,
+  Protocolo,
+  ProtocoloItem,
   PlannedSet,
   Profile,
   TrainingDay
@@ -536,4 +539,51 @@ export async function getPlantillas(): Promise<PlantillaRutina[]> {
 
 export async function getPlantilla(id: string): Promise<PlantillaRutina | null> {
   return q<PlantillaRutina | null>(db().from("plantillas_rutina").select("*").eq("id", id).maybeSingle());
+}
+
+// ── Protocolo del entrenador ────────────────────────────────────
+
+export interface ProtocoloActivo {
+  protocolo: Protocolo;
+  items: ProtocoloItem[];
+  inicio: string; // desde cuándo corre (semana 1)
+}
+
+// El publicado (lo que ve el cliente) o, con `borrador`, el que el
+// entrenador está editando.
+export async function getProtocolo(
+  userId: string,
+  opciones: { borrador?: boolean } = {}
+): Promise<ProtocoloActivo | null> {
+  const protocolo = await q<Protocolo | null>(
+    db()
+      .from("protocolos")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("activo", true)
+      .eq("publicado", !opciones.borrador)
+      .maybeSingle()
+  );
+  if (!protocolo) return null;
+  const items = await q<ProtocoloItem[]>(
+    db().from("protocolo_items").select("*").eq("protocolo_id", protocolo.id).order("orden")
+  );
+  const inicio = protocolo.fecha_inicio ?? fechaLocal(protocolo.publicado_at ?? protocolo.created_at);
+  return { protocolo, items, inicio };
+}
+
+// Desde cuándo el cliente tiene plan: el primer bloque que le enviaron
+export async function inicioDelPlan(userId: string): Promise<string | null> {
+  const fila = await q<{ fecha_inicio: string; publicado_at: string | null } | null>(
+    db()
+      .from("mesocycles")
+      .select("fecha_inicio, publicado_at")
+      .eq("user_id", userId)
+      .eq("publicado", true)
+      .order("fecha_inicio", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+  );
+  if (!fila) return null;
+  return fila.publicado_at ? fechaLocal(fila.publicado_at) : fila.fecha_inicio;
 }
