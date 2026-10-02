@@ -1,4 +1,4 @@
-import { horaDe, comidasPorMomento, ordenarPorHorario, TIPOS_DIA } from "@/lib/meal-plan";
+import { chocaCon, horaDe, comidasPorMomento, ordenarPorHorario, TIPOS_DIA } from "@/lib/meal-plan";
 import { fmtHora } from "@/lib/hoy";
 import { ETIQUETAS_TIPO_DIA, nombreMomento } from "@/lib/nutrition";
 import type { PlanComidasActivo } from "@/lib/data";
@@ -8,10 +8,12 @@ import type { CuestionarioNutricion } from "@/lib/types";
 // con sus comidas (y su hora) y macros reales.
 export default function PlanComidasResumen({
   plan,
-  cn
+  cn,
+  evitar = []
 }: {
   plan: PlanComidasActivo;
   cn: CuestionarioNutricion | null;
+  evitar?: string[]; // lo que el cliente no come: se marca con ⚠
 }) {
   return (
     <section className="card">
@@ -53,7 +55,18 @@ export default function PlanComidasResumen({
                         {c.plato ? ` · ${c.plato}` : ""}
                       </p>
                       <p className="text-muted">
-                        {c.items.map((i) => `${i.ingredient.nombre} ${Math.round(i.cantidad_g)} g`).join(" · ")}
+                        {c.items.map((i, k) => {
+                          const choque = chocaCon(i.ingredient.nombre, evitar);
+                          return (
+                            <span key={i.id}>
+                              {k ? " · " : ""}
+                              <span className={choque ? "text-warn" : undefined}>
+                                {choque ? "⚠ " : ""}
+                                {i.ingredient.nombre} {Math.round(i.cantidad_g)} g
+                              </span>
+                            </span>
+                          );
+                        })}
                         <span className="text-xs"> · {c.macros.kcal} kcal</span>
                       </p>
                     </li>

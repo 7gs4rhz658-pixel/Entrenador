@@ -46,9 +46,9 @@ export async function crearIngredienteManual(input: {
   grasa_100: number;
 }): Promise<{ ingrediente?: Ingredient; error?: string }> {
   const nombre = input.nombre.trim();
-  if (nombre.length < 2) return { error: "Poné el nombre del alimento." };
+  if (nombre.length < 2) return { error: "Pon el nombre del alimento." };
   const nums = [input.kcal_100, input.prot_100, input.carb_100, input.grasa_100];
-  if (nums.some((n) => !Number.isFinite(n) || n < 0)) return { error: "Revisá los macros." };
+  if (nums.some((n) => !Number.isFinite(n) || n < 0)) return { error: "Revisa los macros." };
   try {
     const { userId } = await resolverUsuario(null);
     const { data, error } = await db()
@@ -85,7 +85,7 @@ export async function agregarComida(input: {
 }): Promise<Resultado> {
   if (!MOMENTOS.includes(input.momento)) return { error: "Momento inválido." };
   if (!Number.isFinite(input.cantidad_g) || input.cantidad_g <= 0 || input.cantidad_g > 5000)
-    return { error: "Revisá la cantidad en gramos." };
+    return { error: "Revisa la cantidad en gramos." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.fecha)) return { error: "Fecha inválida." };
   try {
     const { userId } = await resolverUsuario(input.userId);
@@ -110,7 +110,7 @@ export async function actualizarComida(input: {
   cantidad_g: number;
 }): Promise<Resultado> {
   if (!Number.isFinite(input.cantidad_g) || input.cantidad_g <= 0 || input.cantidad_g > 5000)
-    return { error: "Revisá la cantidad en gramos." };
+    return { error: "Revisa la cantidad en gramos." };
   try {
     await resolverUsuario(null);
     await exec(
@@ -208,7 +208,7 @@ export async function sustituirIngrediente(input: {
       interpretacion = `Cambiar "${p.quitar}" por "${p.poner}"`;
     } else {
       const p = parsearSimple(input.texto);
-      if (!p) return { error: 'No entendí el pedido. Probá con "cambiar frutos rojos por manzana".' };
+      if (!p) return { error: 'No entendí el pedido. Prueba con "cambiar frutos rojos por manzana".' };
       quitar = p.quitar;
       poner = p.poner;
       interpretacion = `Cambiar "${p.quitar}" por "${p.poner}"`;
@@ -244,7 +244,7 @@ export async function sustituirIngrediente(input: {
       if (candidatos.length >= 6) break;
     }
     if (!candidatos.length) {
-      return { error: `No encontré "${poner}" en la base de alimentos. Probá con otro nombre o cargalo a mano.` };
+      return { error: `No encontré "${poner}" en la base de alimentos. Prueba con otro nombre o agrégalo a mano.` };
     }
 
     const opciones: OpcionSustitucion[] = [];
@@ -254,7 +254,7 @@ export async function sustituirIngrediente(input: {
       opciones.push({ ingrediente: ing, gramos, macros: macrosDe(ing, gramos) });
     }
     if (!opciones.length) {
-      return { error: "Ninguna opción aporta el nutriente elegido; probá igualar por calorías." };
+      return { error: "Ninguna opción aporta el nutriente elegido; prueba igualar por calorías." };
     }
 
     return {

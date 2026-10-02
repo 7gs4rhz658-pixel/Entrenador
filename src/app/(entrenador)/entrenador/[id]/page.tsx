@@ -50,7 +50,8 @@ import {
 } from "@/lib/data";
 import { informeATexto } from "@/lib/ai-informe";
 import { propuestaAjuste } from "@/lib/ajuste-macros";
-import { objetivosDeReferencia } from "@/lib/comidas-service";
+import { evitarDe, objetivosDeReferencia } from "@/lib/comidas-service";
+import { totalesDe } from "@/lib/meal-plan";
 import { fmtTiempoRelativo, horaLocal, hoyDiaSemana, hoyFecha, nombreDia } from "@/lib/format";
 import { checklistHoy } from "@/lib/hoy-db";
 import { estadoPago } from "@/lib/pagos";
@@ -406,14 +407,26 @@ async function Comida({
   base: string;
   desdeProtocolo: boolean;
 }) {
-  const [plan, ajuste] = await Promise.all([getPlanComidas(perfil.id, { conBorrador: true }), propuestaAjuste(perfil)]);
+  // El borrador (si hay) es lo que se edita; el enviado es lo que ve el cliente
+  const [plan, enviado, ajuste] = await Promise.all([
+    getPlanComidas(perfil.id, { conBorrador: true }),
+    getPlanComidas(perfil.id),
+    propuestaAjuste(perfil)
+  ]);
+  const evitar = evitarDe(perfil);
+  const totalesMenu = plan
+    ? {
+        entreno: totalesDe(plan.items, "entreno"),
+        descanso: totalesDe(plan.items, "descanso")
+      }
+    : null;
   return (
     <div className="flex flex-col gap-3">
       {ajuste ? <AjusteMacros userId={perfil.id} propuesta={ajuste} /> : null}
       {!perfil.cuestionario_nutricion ? (
         <p className="card text-sm text-warn">
-          El cliente todavía no completó el cuestionario de comidas (momentos, horarios, alergias). La
-          recomendación se puede generar igual con desayuno, almuerzo, merienda y cena.
+          El cliente todavía no completa el cuestionario de comidas (momentos, horarios, alergias). La
+          recomendación se puede generar igual con desayuno, comida, colación y cena.
         </p>
       ) : null}
       <RecomendacionComidas
@@ -423,9 +436,19 @@ async function Comida({
         macrosManual={perfil.macros_manual}
         tienePlan={!!plan}
         nombrePlan={plan?.plan.nombre ?? null}
+        origenPlan={plan?.plan.origen ?? null}
+        borrador={!!plan && !plan.plan.publicado}
+        hayEnviado={!!enviado}
+        totalesMenu={totalesMenu}
+        evitar={evitar}
         desdeProtocolo={desdeProtocolo}
       />
-      {plan ? <PlanComidasResumen plan={plan} cn={perfil.cuestionario_nutricion} /> : null}
+      {plan ? <PlanComidasResumen plan={plan} cn={perfil.cuestionario_nutricion} evitar={evitar} /> : null}
+      {plan && enviado && plan.plan.id !== enviado.plan.id ? (
+        <p className="text-xs text-muted">
+          El cliente sigue viendo “{enviado.plan.nombre}” hasta que envíes el borrador.
+        </p>
+      ) : null}
       <ConsultasCliente userId={perfil.id} />
       <h2 className="mt-2 text-lg font-bold">Registro del día</h2>
       <NutricionDia perfil={perfil} fecha={fecha} base={base} paraEntrenador />

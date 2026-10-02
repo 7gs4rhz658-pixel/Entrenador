@@ -45,7 +45,7 @@ export default async function ComprasPage() {
         {batch ? (
           <section className="card">
             <div className="flex items-baseline justify-between gap-2">
-              <h2 className="font-bold">Cociná una vez para la semana</h2>
+              <h2 className="font-bold">Cocina una vez para la semana</h2>
               <span className="text-xs text-muted">
                 {nombreDia(cn?.dia_batch ?? batch.dia_semana)} · ~{batch.tiempo_min} min
               </span>

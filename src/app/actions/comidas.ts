@@ -6,12 +6,14 @@ import { aplicarAjuste, descartarAjuste } from "@/lib/ajuste-macros";
 import { requireEntrenador, resolverUsuario } from "@/lib/auth";
 import {
   aplicarRecomendacion,
+  menuActual,
+  prepararAjusteMenu,
   prepararRecomendacionIA,
   prepararRecomendacionTxt,
   type RecomendacionPreparada
 } from "@/lib/comidas-service";
 import { exec, getComidas, getPerfil, getPlanComidas } from "@/lib/data";
-import { quitarPlanComidas, sanearHorarios } from "@/lib/meal-plan-db";
+import { descartarBorradorMenu, quitarPlanComidas, sanearHorarios } from "@/lib/meal-plan-db";
 import { db } from "@/lib/supabase/server";
 import type { MacrosManual, Momento, PlanComidasResuelto, TipoDia } from "@/lib/types";
 
@@ -93,6 +95,50 @@ export async function aplicarComidas(input: {
   return { ok: true };
 }
 
+// El menú actual del cliente, para editarlo en la vista previa
+export async function menuActualAction(input: {
+  userId: string;
+}): Promise<{ resultado?: RecomendacionPreparada; error?: string }> {
+  await requireEntrenador();
+  try {
+    return { resultado: await menuActual(await getPerfil(input.userId)) };
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+}
+
+// Ajusta el menú actual a la referencia diaria (IA + cuadre de macros)
+export async function ajustarMenuAction(input: {
+  userId: string;
+  indicacion: string;
+  cambiarEvitados: boolean;
+}): Promise<{ resultado?: RecomendacionPreparada; error?: string }> {
+  await requireEntrenador();
+  try {
+    const perfil = await getPerfil(input.userId);
+    return {
+      resultado: await prepararAjusteMenu(perfil, {
+        indicacion: String(input.indicacion ?? ""),
+        cambiarEvitados: !!input.cambiarEvitados
+      })
+    };
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+}
+
+// Descarta el borrador del menú: el cliente sigue con el que tenía
+export async function descartarBorradorMenuAction(input: { userId: string }): Promise<Resultado> {
+  await requireEntrenador();
+  try {
+    await descartarBorradorMenu(input.userId);
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function quitarComidas(input: { userId: string }): Promise<Resultado> {
   try {
     await requireEntrenador();
@@ -120,7 +166,7 @@ export async function guardarMacrosManual(input: {
     macros = { entreno: limpiar(input.macros.entreno), descanso: limpiar(input.macros.descanso) };
     for (const m of [macros.entreno, macros.descanso]) {
       if (![m.kcal, m.prot_g, m.carb_g, m.grasa_g].every((n) => Number.isFinite(n) && n >= 0)) {
-        return { error: "Revisá los números de la referencia." };
+        return { error: "Revisa los números de la referencia." };
       }
       if (m.kcal < 1000 || m.kcal > 6000) return { error: "Las calorías tienen que estar entre 1000 y 6000." };
     }
@@ -151,7 +197,7 @@ export async function marcarComida(input: {
   try {
     const { userId } = await resolverUsuario(input.userId);
     const plan = await getPlanComidas(userId);
-    if (!plan) return { error: "No tenés una recomendación de comidas activa." };
+    if (!plan) return { error: "No tienes una recomendación de comidas activa." };
     const items = plan.items.filter((i) => i.tipo_dia === input.tipo_dia && i.momento === input.momento);
     if (!items.length) return { error: "Esa comida no está en tu menú." };
     const ids = items.map((i) => i.id);

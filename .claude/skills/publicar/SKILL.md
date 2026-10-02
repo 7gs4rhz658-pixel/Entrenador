@@ -119,7 +119,8 @@ desde el teléfono y que el link sea compartible.
    `supabase/migrations/0013_records.sql` (récords personales) y con
    `supabase/migrations/0014_plantillas_rutina.sql` (plantillas de rutina) y con
    `supabase/migrations/0015_protocolos_checklist.sql` (checklist de Hoy y protocolos) y con
-   `supabase/migrations/0016_alimentos_mx_y_fases.sql` (alimentos de México, pre/post-entreno y fases).
+   `supabase/migrations/0016_alimentos_mx_y_fases.sql` (alimentos de México, pre/post-entreno y fases) y con
+   `supabase/migrations/0017_menu_borrador.sql` (menú enviado y borrador a la vez).
 
 4. **Configurar el login por correo.** Guiá: menú izquierdo → **Authentication**
    → **Providers** → **Email**. Recomendá **desactivar "Confirm email"** (el

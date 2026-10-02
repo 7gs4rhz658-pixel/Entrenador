@@ -35,7 +35,7 @@ Fecha: 2026-09-19 · Estado: **fases 1 a 6 implementadas y verificadas end-to-en
 | 2 | **Protocolos del entrenador por segmentos** (suplementos, hábitos, cara, cabello, sueño…): momento del día relativo al horario del cliente, días, semanas de progresión, "por qué", "fuera del protocolo"; borrador → enviar; `/protocolo` del cliente; cumplimiento por área en la ficha, el informe y el panel Hoy | ✓ | migración 0015 (`protocolos`, `protocolo_items`), `lib/protocolo*.ts`, `ProtocoloEditor.tsx` |
 | 3 | **Importar el plan en texto**: la IA ubica cada cosa en su momento sin recomendar nada (suplemento que no está en el texto → descartado; lo con calorías → menú), horarios del texto al cuestionario del cliente, "pasar las comidas al menú" | ✓ | `lib/ai-protocolo.ts`, `ProtocoloTxt.tsx` |
 
-Notas: los horarios del texto quedan en el cuestionario del cliente (editable en "Cómo comes"). Avisos push a la hora de cada ítem: pendiente (el plan gratis de Vercel permite un solo cron diario). Siguiente: el juego de antojos (`plan-antojos-gamificacion.md`) usando el % diario del checklist como motor de puntos; su migración pasa a ser la 0017.
+Notas: los horarios del texto quedan en el cuestionario del cliente (editable en "Cómo comes"). Avisos push a la hora de cada ítem: pendiente (el plan gratis de Vercel permite un solo cron diario). Siguiente: el juego de antojos (`plan-antojos-gamificacion.md`) usando el % diario del checklist como motor de puntos; su migración pasa a ser la 0018.
 
 ### Ronda 4 — planes reales del entrenador: alimentos, 6 comidas y fases (2026-10-02)
 
@@ -49,6 +49,20 @@ Al cargar un plan de México (6 comidas, horarios distintos en entreno y descans
 | 4 | **Lectura del texto estable**: la IA copia cantidad y unidad y el código pone los gramos; reglas fijas (proteínas crudas/cocidas, "por qué" solo del texto, suplementos atados a su bloque, creatina de descanso); la lectura de cada texto queda guardada (`ia_lecturas`): el mismo texto da el mismo resultado | `aGramos`, `anclarPorBloque`, `completarDescanso`, `ia-lecturas.ts` |
 | 5 | **Objetivos del texto** (kcal y macros por tipo de día) como referencia del cliente, con casilla en la vista previa | `aplicarComidas` |
 | 6 | **Límite gratis de Groq** (8000 tokens por minuto, contando el máximo de respuesta): espera y reintenta, achica el máximo si hace falta, avisa claro y nunca devuelve un JSON cortado | `lib/ai.ts` |
+
+### Ronda 5 — ajustar y editar el menú del cliente (2026-10-02)
+
+Antes, cambiar la referencia diaria no tocaba el menú; "Generar con IA" hacía uno nuevo desde cero y el menú guardado no se podía editar. Además, guardar un borrador le quitaba el menú al cliente hasta enviarlo.
+
+| # | Qué | Dónde |
+|---|---|---|
+| 1 | **Ajustar el menú actual a la referencia**: la IA propone qué cambiar (mismas comidas, sobre todo gramos; respeta la indicación del entrenador y lo que el cliente no come) y el código cuadra proteína, carbohidratos y grasa. Sin IA, solo gramos | `prepararAjusteMenu`, `pedirAjusteMenu`, `ajustarAMacros` |
+| 2 | **Editar el menú guardado**: gramos, cambiar, quitar y agregar alimentos, crear uno con su etiqueta, "Cuadrar gramos con la referencia" | `EditorMenu.tsx`, `menuActual` |
+| 3 | **Menú enviado y borrador a la vez**: el cliente sigue con su menú hasta que se envía el nuevo; "Descartar el borrador" | migración 0017, `publicarPlanComidas`, `descartarBorradorMenu` |
+| 4 | **Cuadre por macros** (no solo calorías con carbohidratos) también al generar con IA; diferencia por macro y kcal por comida en el editor | `ajustarAMacros`, `grupoDe` |
+| 5 | **Lo que el cliente no come** (alergias, "no como…", también si lo escribió en preferencias de entreno): aviso ⚠ en el editor y en el resumen del menú | `palabrasAEvitar`, `chocaCon` |
+| 6 | **Referencia a mano**: avisa si las kcal no coinciden con los macros (4/4/9) y ofrece usarlas | `MacrosManualForm` |
+| 7 | **Español de México** en alimentación: pantallas, avisos de preparación, guía de cocina y lo que escribe la IA (menús, recetas, asistente) | `ai-comidas.ts`, `ai-asistente.ts`, `meal-plan.ts` |
 
 No verificado en local: la entrega real de notificaciones push (requiere teléfono + claves en Vercel + `SUPABASE_SERVICE_ROLE_KEY`); sí se verificó el service worker, la suscripción, la ruta del cron con su protección y el contenido del aviso (`/api/avisos/preview`).
 

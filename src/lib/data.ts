@@ -306,9 +306,11 @@ export async function getPlanComidas(
   userId: string,
   opciones: { conBorrador?: boolean } = {}
 ): Promise<PlanComidasActivo | null> {
+  // Puede haber uno enviado y un borrador: con `conBorrador`, el borrador
+  // (lo que el entrenador está editando) va primero
   let consulta = db().from("meal_plans").select("*").eq("user_id", userId).eq("activo", true);
   if (!opciones.conBorrador) consulta = consulta.eq("publicado", true);
-  const plan = await q<MealPlan | null>(consulta.maybeSingle());
+  const plan = await q<MealPlan | null>(consulta.order("publicado", { ascending: true }).limit(1).maybeSingle());
   if (!plan) return null;
   const items = await q<MealPlanItem[]>(
     db()

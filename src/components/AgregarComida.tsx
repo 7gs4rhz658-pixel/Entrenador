@@ -151,7 +151,7 @@ export default function AgregarComida({
               ))}
             </ul>
           ) : texto.trim().length >= 2 && !buscando ? (
-            <p className="mt-2 text-sm text-muted">Sin resultados. Probá otro nombre o cargalo a mano.</p>
+            <p className="mt-2 text-sm text-muted">Sin resultados. Prueba otro nombre o agrégalo a mano.</p>
           ) : null}
           {!manual ? (
             <button type="button" onClick={() => setManual(true)} className="mt-3 text-sm font-medium text-accent">

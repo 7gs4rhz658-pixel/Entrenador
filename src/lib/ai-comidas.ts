@@ -8,17 +8,17 @@
 import { ErrorIA, describirPerfil, generarJSON } from "./ai";
 import type { Macros } from "./nutrition";
 import { normalizarPlanComidas, normalizarTexto } from "./meal-plan";
-import type { BatchCooking, CuestionarioNutricion, PlanComidasGenerado, Profile } from "./types";
+import type { BatchCooking, CuestionarioNutricion, Momento, PlanComidasGenerado, Profile, TipoDia } from "./types";
 
-const TONO = `Sos el asistente de un entrenador personal. Lo que escribís son RECOMENDACIONES de alimentación como orientación general del entrenador: usá "te recomiendo", "podés", "una opción es". Nunca hables como profesional de la salud, no menciones enfermedades, medicación ni suplementos, y no prometas resultados. Español rioplatense, voseo, frases cortas.`;
+const TONO = `Eres el asistente de un entrenador personal. Lo que escribes son RECOMENDACIONES de alimentación como orientación general del entrenador: usa "te recomiendo", "puedes", "una opción es". Nunca hables como profesional de la salud, no menciones enfermedades, medicación ni suplementos, y no prometas resultados. Español de México, de tú (nunca voseo), frases cortas.`;
 
-const ESQUEMA_COMIDAS = `Devolvé SOLO un JSON con esta forma exacta:
+const ESQUEMA_COMIDAS = `Devuelve SOLO un JSON con esta forma exacta:
 {
   "nombre": string (ej. "Recomendación de comidas · volumen"),
   "notas": string (1-2 frases al cliente, tono de recomendación),
   "entreno": [
     {
-      "momento": "desayuno" | "almuerzo" | "merienda" | "cena" | "snack",
+      "momento": "desayuno" | "almuerzo" | "merienda" | "cena" | "snack" | "pre_entreno" | "post_entreno",
       "plato": string (nombre corto del plato),
       "ingredientes": [
         { "nombre": string, "gramos": number, "nota": string opcional }
@@ -27,10 +27,10 @@ const ESQUEMA_COMIDAS = `Devolvé SOLO un JSON con esta forma exacta:
   ],
   "descanso": [ ...misma forma... ]
 }
-Reglas de ingredientes: nombres genéricos en español, sin marcas (ej. "Pechuga de pollo", "Arroz blanco cocido", "Huevo", "Avena"). Un ingrediente por fila, con gramos de la porción comestible; si es un alimento que se cocina, aclaralo en el nombre o en la nota ("cocido", "crudo"). Máximo 5 ingredientes por plato. No pongas agua ni sal.`;
+Momentos: "almuerzo" es la comida del mediodía (en México, "la comida"), "merienda" la colación de la tarde y "snack" la colación de media mañana. Reglas de ingredientes: nombres genéricos en español de México, sin marcas (ej. "Pechuga de pollo", "Arroz blanco cocido", "Huevo", "Avena", "Tortilla de maíz"). Un ingrediente por fila, con gramos de la porción comestible; si es un alimento que se cocina, acláralo en el nombre o en la nota ("cocido", "crudo"). Máximo 6 ingredientes por plato. No pongas agua ni sal.`;
 
 function describirCuestionarioNutricion(cn: CuestionarioNutricion | null): string {
-  if (!cn) return "Sin cuestionario nutricional: usá desayuno, almuerzo, merienda y cena.";
+  if (!cn) return "Sin cuestionario nutricional: usa desayuno, almuerzo, merienda y cena.";
   return [
     `Comidas del día, en orden y con horario: ${cn.comidas.map((c) => `${c.momento} (${c.hora || "sin hora"})`).join(", ")}`,
     `Hora de entreno: ${cn.hora_entreno || "variable"}`,
@@ -39,7 +39,7 @@ function describirCuestionarioNutricion(cn: CuestionarioNutricion | null): strin
     `Cocina: ${cn.cocina === "cocino" ? "cocina en casa" : cn.cocina === "mixto" ? "a veces cocina, a veces come fuera" : "casi siempre come fuera o compra hecho"}`,
     `Batch cooking: ${cn.batch_cooking ? "sí, puede cocinar en tandas una vez por semana" : "no"}`,
     `Presupuesto: ${cn.presupuesto}`,
-    `País: ${cn.pais || "Argentina"}`
+    `País: ${cn.pais || "México"}`
   ].join("\n");
 }
 
@@ -57,8 +57,8 @@ export async function generarRecomendacionComidas(
   const cn = perfil.cuestionario_nutricion;
   const momentos = cn?.comidas.map((c) => c.momento) ?? ["desayuno", "almuerzo", "merienda", "cena"];
   const raw = await generarJSON<unknown>(
-    `${TONO} Armás un menú tipo para DÍA DE ENTRENO y otro para DÍA DE DESCANSO que cuadren con la referencia diaria de calorías y macros (±5 % en calorías; proteína entre la referencia y un 15 % por encima, no más; no agregues proteína en polvo salvo que el cliente lo pida). Usá exactamente estos momentos del día y ningún otro: ${momentos.join(", ")}. Un plato por momento; merienda y snack son livianos y rápidos (fruta, yogur, frutos secos, pan con algo), no un plato principal. Comidas simples, de supermercado, repetibles toda la semana y acordes al presupuesto; si el cliente come fuera, el almuerzo tiene que ser fácil de llevar o de pedir. Alrededor del entreno concentrá los carbohidratos. Preferí ingredientes de esta lista base, con el mismo nombre exacto: ${base.join("; ")}. ${ESQUEMA_COMIDAS}`,
-    `Perfil del cliente:\n${describirPerfil(perfil)}\n\nCuestionario nutricional:\n${describirCuestionarioNutricion(cn)}\n\nReferencia diaria día de entreno: ${describirMacros(objetivos.entreno)}\nReferencia diaria día de descanso: ${describirMacros(objetivos.descanso)}\n\nGenerá la recomendación.`,
+    `${TONO} Armas un menú tipo para DÍA DE ENTRENO y otro para DÍA DE DESCANSO que cuadren con la referencia diaria de calorías y macros (±5 % en calorías; proteína entre la referencia y un 15 % por encima, no más; no agregues proteína en polvo salvo que el cliente lo pida). Usa exactamente estos momentos del día y ningún otro: ${momentos.join(", ")}. Un plato por momento; las colaciones (merienda y snack) son ligeras y rápidas (fruta, yogur, frutos secos, pan o tortilla con algo), no un plato principal; pre y post-entreno, fáciles de digerir. Comidas simples, de supermercado, repetibles toda la semana y acordes al presupuesto; si el cliente come fuera, la comida del mediodía tiene que ser fácil de llevar o de pedir. Alrededor del entreno concentra los carbohidratos. Prefiere ingredientes de esta lista base, con el mismo nombre exacto: ${base.join("; ")}. ${ESQUEMA_COMIDAS}`,
+    `Perfil del cliente:\n${describirPerfil(perfil)}\n\nCuestionario nutricional:\n${describirCuestionarioNutricion(cn)}\n\nReferencia diaria día de entreno: ${describirMacros(objetivos.entreno)}\nReferencia diaria día de descanso: ${describirMacros(objetivos.descanso)}\n\nGenera la recomendación.`,
     { temperatura: 0.5 }
   );
   return normalizarPlanComidas(raw, momentos);
@@ -131,13 +131,66 @@ export async function interpretarComidasTxt(
   return normalizarPlanComidas(await pedirComidasTxt(texto, perfil, base));
 }
 
+// ── 2b. Ajustar el menú actual a una referencia ─────────────────
+
+export interface MenuParaAjustar {
+  tipo: TipoDia;
+  comidas: {
+    momento: Momento;
+    plato: string;
+    ingredientes: { nombre: string; gramos: number; kcal_100: number; prot_100: number; carb_100: number; grasa_100: number; nota: string | null }[];
+  }[];
+  totales: Macros;
+  objetivo: Macros;
+}
+
+// La IA decide QUÉ cambiar (más camote en la cena, sumar un plátano al
+// post-entreno, cambiar lo que el cliente no come); los gramos exactos los
+// cierra después el código (ajustarAMacros), porque la IA no suma bien.
+export async function pedirAjusteMenu(
+  menus: MenuParaAjustar[],
+  perfil: Profile,
+  base: string[],
+  opciones: { indicacion: string; evitar: string[] }
+): Promise<unknown> {
+  const fmt = (m: Macros) => `${Math.round(m.kcal)} kcal · P ${Math.round(m.prot_g)} · C ${Math.round(m.carb_g)} · G ${Math.round(m.grasa_g)}`;
+  const describir = menus
+    .map(
+      (d) =>
+        `${d.tipo === "entreno" ? "DÍA DE ENTRENO" : "DÍA DE DESCANSO"} — ahora: ${fmt(d.totales)} → objetivo: ${fmt(d.objetivo)}\n` +
+        d.comidas
+          .map(
+            (c) =>
+              `  [${c.momento}] ${c.plato}\n` +
+              c.ingredientes
+                .map((i) => `    - ${i.nombre}: ${Math.round(i.gramos)} g${i.nota ? ` (${i.nota})` : ""} · por 100 g: ${i.kcal_100} kcal, P ${i.prot_100}, C ${i.carb_100}, G ${i.grasa_100}`)
+                .join("\n")
+          )
+          .join("\n")
+    )
+    .join("\n\n");
+  return generarJSON<unknown>(
+    `Eres el asistente de un entrenador personal. Ajustas el menú que el entrenador ya le dio a su cliente para que cada tipo de día se acerque a su objetivo de calorías y macros.
+Reglas:
+- Mantén las mismas comidas (mismo "momento") y, en lo posible, los mismos alimentos: cambia sobre todo los GRAMOS, con porciones realistas (carne o pescado 80-250 g, carbohidrato cocido 50-300 g, aceite 3-15 g).
+- Si con gramos razonables no se llega, puedes agregar o cambiar como máximo 2 alimentos por tipo de día, usando nombres de la lista base, en la comida donde tenga más sentido (los carbohidratos alrededor del entreno). Nunca pongas algo sólido en un batido o licuado (ahí solo fruta, avena, miel o leche); los carbohidratos sólidos van en comidas de plato.
+- Lo que va por piezas ("3 piezas") y las verduras quedan igual salvo que la indicación del entrenador diga otra cosa.
+- ${opciones.evitar.length ? `El cliente no come o no debe comer: ${opciones.evitar.join(", ")}. Todo alimento cuyo nombre contenga una de esas palabras (ej. "Galletas de arroz" contiene "arroz", "Tortilla de maíz" contiene "maíz") se REEMPLAZA por un equivalente de la lista base que no las contenga, con su misma función (carbohidrato por carbohidrato).` : "No hay alimentos a evitar."}
+- Indicación del entrenador (tiene prioridad): ${opciones.indicacion.trim() || "ninguna"}.
+- No agregues suplementos. Nombres en español de México, sin marcas. Las notas del entrenador se conservan.
+Devuelve SOLO JSON: { "entreno": [ { "momento": string, "plato": string, "ingredientes": [ { "nombre": string, "gramos": number, "nota": string | null } ] } ], "descanso": [ ...igual... ], "cambios": [string (máx. 5, qué cambiaste y por qué, una frase cada uno)] }`,
+    `Cliente:\n${describirPerfil(perfil)}\n\nLista base: ${base.join("; ")}\n\nMenú actual:\n${describir}`,
+    { temperatura: 0.2, maxTokens: 4500 }
+  );
+}
+
 // ── 3. Orden de cocción del batch cooking ───────────────────────
 
 export async function planificarBatchCooking(
   tandas: BatchCooking["tandas"]
 ): Promise<Pick<BatchCooking, "tiempo_min" | "pasos" | "conservacion">> {
   const data = await generarJSON<{ tiempo_min: number; pasos: string[]; conservacion: string[] }>(
-    `${TONO} El cliente va a cocinar en una sola tanda semanal lo que se lista. Ordená la cocción para aprovechar el tiempo (lo que va al horno primero, lo que hierve en paralelo, la plancha al final) y decí cómo guardar cada cosa (heladera cuántos días, qué congelar en porciones). Imperativo con voseo ("precalentá", "herví", "guardá"). Devolvé SOLO JSON: {"tiempo_min": number, "pasos": [string (máx. 8, con tiempos)], "conservacion": [string (2 a 5)]}.`,
+    `${TONO} El cliente va a cocinar en una sola tanda semanal lo que se lista. Ordena la cocción para aprovechar el tiempo (lo que va al horno primero, lo que hierve en paralelo, la plancha al final) y di cómo guardar cada cosa (en el refri cuántos días, qué congelar en porciones). Imperativo de tú ("precalienta", "hierve", "guarda"; nunca voseo). Devuelve SOLO JSON: {"tiempo_min": number, "pasos": [string (máx. 8, con tiempos)], "conservacion": [string (2 a 5)]}.`,
     tandas
       .map((t) => `${t.tecnica}: ${t.items.map((i) => `${i.nombre} ${Math.round(i.gramos_semana)} g`).join(", ")}`)
       .join("\n"),

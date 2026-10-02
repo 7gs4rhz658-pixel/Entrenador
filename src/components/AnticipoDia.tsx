@@ -68,7 +68,7 @@ export default function AnticipoDia({
 
       {reco?.avisos.length ? (
         <div className="mt-3 rounded-xl border border-warn/30 bg-warn/10 px-3 py-2 text-sm">
-          <p className="font-semibold text-warn">{manana ? "Dejá listo esta noche" : "Para hoy"}</p>
+          <p className="font-semibold text-warn">{manana ? "Deja listo esta noche" : "Para hoy"}</p>
           <ul className="mt-1 flex flex-col gap-0.5">
             {reco.avisos.map((a) => (
               <li key={a}>• {a}</li>

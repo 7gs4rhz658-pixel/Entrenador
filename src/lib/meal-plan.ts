@@ -425,6 +425,138 @@ export function cuadrarMacros(
   return out;
 }
 
+// ── 3b. Cuadrar proteína, carbohidratos y grasa ─────────────────
+
+type Grupo = "p" | "c" | "g";
+const GRUPOS: Grupo[] = ["p", "c", "g"];
+
+// A qué macro "pertenece" un alimento para escalarlo: si al menos 35 % de
+// sus calorías son proteína (carnes, pescados aunque sean grasos como el
+// salmón), a la proteína; si no, al macro que más calorías le da (las
+// semillas son grasa). Lo de pocas calorías (verduras, fruta liviana,
+// aderezos) y lo que va por piezas (3 huevos) no se toca.
+export function grupoDe(i: Pick<ItemComidaResuelto, "ingredient" | "nota">): Grupo | null {
+  const ing = i.ingredient;
+  if (!ing || ing.kcal_100 < 60 || /\bpieza/.test(normalizarTexto(i.nota ?? ""))) return null;
+  // El huevo entero se cuenta por piezas aunque no lo diga la nota
+  if (/^huevo/.test(normalizarTexto(ing.nombre))) return null;
+  if (ing.prot_100 * 4 >= ing.kcal_100 * 0.35) return "p";
+  const p = ing.prot_100 * 4;
+  const c = ing.carb_100 * 4;
+  const g = ing.grasa_100 * 9;
+  return p >= c && p >= g ? "p" : c >= g ? "c" : "g";
+}
+
+// Gramos "de cocina": de 5 en 5 desde 20 g, de 1 en 1 abajo
+export function redondearGramos(g: number): number {
+  return g >= 20 ? Math.round(g / 5) * 5 : Math.max(1, Math.round(g));
+}
+
+// Sistema chico (hasta 3×3) por eliminación gaussiana
+function resolverSistema(m: number[][], b: number[]): number[] | null {
+  const n = b.length;
+  const a = m.map((fila, i) => [...fila, b[i]]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let f = c + 1; f < n; f++) if (Math.abs(a[f][c]) > Math.abs(a[piv][c])) piv = f;
+    if (Math.abs(a[piv][c]) < 1e-12) return null;
+    [a[c], a[piv]] = [a[piv], a[c]];
+    for (let f = 0; f < n; f++) {
+      if (f === c) continue;
+      const k = a[f][c] / a[c][c];
+      for (let j = c; j <= n; j++) a[f][j] -= k * a[c][j];
+    }
+  }
+  return a.map((fila, i) => fila[n] / fila[i]);
+}
+
+// Lleva cada tipo de día lo más cerca posible de su proteína,
+// carbohidratos y grasa escalando en bloque los alimentos de cada macro
+// (mínimos cuadrados sobre el error relativo, con un leve tirón hacia no
+// cambiar). Ningún alimento baja de ×0.4 ni sube de ×2.5. Determinista:
+// la IA propone qué comer; los números los cierra esto.
+export function ajustarAMacros(
+  items: ItemComidaResuelto[],
+  objetivo: Record<TipoDia, Macros>
+): ItemComidaResuelto[] {
+  const out = items.map((i) => ({ ...i }));
+  for (const tipo of TIPOS_DIA) {
+    const meta = objetivo[tipo];
+    if (!meta?.kcal) continue;
+    const del = out.filter((i) => i.tipo_dia === tipo && i.ingredient && i.cantidad_g > 0);
+    const vacio = () => ({ p: 0, c: 0, g: 0 });
+    const fijo = vacio();
+    const suma: Record<Grupo, { p: number; c: number; g: number }> = { p: vacio(), c: vacio(), g: vacio() };
+    for (const i of del) {
+      const m = macrosDe(i.ingredient!, i.cantidad_g);
+      const k = grupoDe(i);
+      const destino = k ? suma[k] : fijo;
+      destino.p += m.prot_g;
+      destino.c += m.carb_g;
+      destino.g += m.grasa_g;
+    }
+    const activos = GRUPOS.filter((k) => suma[k].p + suma[k].c + suma[k].g > 0);
+    if (!activos.length) continue;
+    const metas = { p: meta.prot_g, c: meta.carb_g, g: meta.grasa_g };
+    const n = activos.length;
+    const m = Array.from({ length: n }, () => Array(n).fill(0));
+    const b = Array(n).fill(0);
+    for (const macro of GRUPOS) {
+      if (!(metas[macro] > 0)) continue;
+      const w = 1 / metas[macro] ** 2;
+      const resto = metas[macro] - fijo[macro];
+      activos.forEach((ka, a) => {
+        b[a] += w * suma[ka][macro] * resto;
+        activos.forEach((kb, j) => (m[a][j] += w * suma[ka][macro] * suma[kb][macro]));
+      });
+    }
+    const TIRON = 0.005;
+    activos.forEach((_, a) => {
+      m[a][a] += TIRON;
+      b[a] += TIRON;
+    });
+    const f = resolverSistema(m, b);
+    if (!f) continue;
+    for (const i of del) {
+      const k = grupoDe(i);
+      if (!k) continue;
+      const factor = Math.min(2.5, Math.max(0.4, f[activos.indexOf(k)]));
+      i.cantidad_g = redondearGramos(i.cantidad_g * factor);
+    }
+  }
+  return out;
+}
+
+// Totales de un tipo de día (solo lo que tiene alimento)
+export function totalesDe(items: Pick<ItemComidaResuelto, "tipo_dia" | "ingredient" | "cantidad_g">[], tipo: TipoDia): Macros {
+  return sumarMacros(items.filter((i) => i.tipo_dia === tipo && i.ingredient).map((i) => macrosDe(i.ingredient!, i.cantidad_g)));
+}
+
+// ── 3c. Lo que el cliente no come ───────────────────────────────
+
+// Palabras que no son alimentos en "no como trigo, arroz y maíz"
+const NO_ALIMENTO = new Set([
+  "como", "comer", "come", "nada", "gusta", "gustan", "evito", "evitar", "solo", "tengo", "alergia", "alergias",
+  "alergico", "alergica", "intolerancia", "intolerante", "nunca", "mucho", "poco", "prefiero", "ninguna",
+  "ninguno", "porque", "cosas", "comida", "comidas", "algo", "todo", "nada"
+]);
+
+// Alimentos que el cliente dijo que no come o le dan alergia (de su
+// cuestionario de comidas y, por si lo escribió ahí, de sus preferencias)
+export function palabrasAEvitar(...textos: (string | null | undefined)[]): string[] {
+  const ws = sinPlural(normalizarTexto(textos.filter(Boolean).join(" ")))
+    .split(" ")
+    .filter((w) => w.length >= 4 && !NO_ALIMENTO.has(w));
+  return [...new Set(ws)];
+}
+
+// ¿El alimento choca con algo de eso? Devuelve la palabra
+export function chocaCon(nombre: string, evitar: string[]): string | null {
+  if (!evitar.length) return null;
+  const ws = sinPlural(normalizarTexto(nombre)).split(" ");
+  return evitar.find((e) => ws.includes(e)) ?? null;
+}
+
 // ── 5. Agrupar por momento (para las pantallas) ─────────────────
 
 export interface ComidaDelPlan {
@@ -581,20 +713,20 @@ export function avisosPreparacion(comidas: ComidaDelPlan[], cn: CuestionarioNutr
       const n = normalizarTexto(i.ingredient.nombre);
       if (CONGELADO.test(n) && !vistos.has("frz:" + n)) {
         vistos.add("frz:" + n);
-        avisos.push(`Sacá ${limpiarNombre(i.ingredient.nombre)} del freezer esta noche.`);
+        avisos.push(`Saca ${limpiarNombre(i.ingredient.nombre)} del congelador esta noche.`);
       }
       if (REMOJO.test(n) && !vistos.has("rem:" + n)) {
         vistos.add("rem:" + n);
-        avisos.push(`Dejá ${limpiarNombre(i.ingredient.nombre)} en remojo desde hoy.`);
+        avisos.push(`Deja ${limpiarNombre(i.ingredient.nombre)} en remojo desde hoy.`);
       }
       if (/\bavena/.test(n) && c.momento === "desayuno" && !vistos.has("avena")) {
         vistos.add("avena");
-        avisos.push("Podés dejar la avena remojando en la heladera y mañana está lista.");
+        avisos.push("Puedes dejar la avena remojando en el refri y mañana está lista.");
       }
     }
   }
   if (cn?.cocina === "como_fuera" && comidas.some((c) => c.momento === "almuerzo")) {
-    avisos.push("Si mañana comés fuera, dejá listo el tupper del almuerzo.");
+    avisos.push("Si mañana comes fuera, deja listo el táper de la comida.");
   }
   return avisos.slice(0, 4);
 }
@@ -604,7 +736,7 @@ export function avisosPreparacion(comidas: ComidaDelPlan[], cn: CuestionarioNutr
 // Primero manda cómo dice el nombre que se cocina ("hervida", "al horno");
 // si no lo dice, el tipo de alimento.
 const TECNICAS: { tecnica: string; patron: RegExp }[] = [
-  { tecnica: "Hervido", patron: /hervid|\barroz|\bquinoa|\bfideo|\bpasta|\blenteja|\bgarbanzo|\bporoto/ },
+  { tecnica: "Hervido", patron: /hervid|\barroz|\bquinoa|\bfideo|\bpasta|\blenteja|\bgarbanzo|\bporoto|\bfrijol/ },
   { tecnica: "Horno", patron: /horno|asad|\bbatata|\bboniato|\bcamote|\bpapa\b|\bpapas|\bcalabaza|\bzapallo|\bzanahoria|\bbr[oó]coli|\bcoliflor|\bberenjena|\bmorr[oó]n|\bcebolla/ },
   { tecnica: "Plancha o sartén", patron: CONGELADO }
 ];
@@ -628,18 +760,18 @@ export function batchBasico(dia: number, tandas: BatchCooking["tandas"]): BatchC
   const horno = tandas.find((t) => t.tecnica === "Horno");
   const hervido = tandas.find((t) => t.tecnica === "Hervido");
   const plancha = tandas.find((t) => t.tecnica === "Plancha o sartén");
-  if (horno) pasos.push(`Prendé el horno a 200 °C y poné a asar: ${horno.items.map((i) => i.nombre.toLowerCase()).join(", ")} (35-45 min).`);
-  if (hervido) pasos.push(`Mientras tanto herví en ollas separadas: ${hervido.items.map((i) => i.nombre.toLowerCase()).join(", ")}.`);
-  if (plancha) pasos.push(`Al final cociná a la plancha o sartén: ${plancha.items.map((i) => i.nombre.toLowerCase()).join(", ")}, en tandas, sin amontonar.`);
-  pasos.push("Dejá enfriar todo destapado 20 minutos antes de guardar.");
+  if (horno) pasos.push(`Prende el horno a 200 °C y pon a asar: ${horno.items.map((i) => i.nombre.toLowerCase()).join(", ")} (35-45 min).`);
+  if (hervido) pasos.push(`Mientras tanto hierve en ollas separadas: ${hervido.items.map((i) => i.nombre.toLowerCase()).join(", ")}.`);
+  if (plancha) pasos.push(`Al final cocina a la plancha o en sartén: ${plancha.items.map((i) => i.nombre.toLowerCase()).join(", ")}, en tandas, sin amontonar.`);
+  pasos.push("Deja enfriar todo destapado 20 minutos antes de guardar.");
   return {
     dia_semana: dia,
     tiempo_min: 60 + tandas.length * 20,
     tandas,
     pasos,
     conservacion: [
-      "En heladera, en recipientes cerrados, dura 3 a 4 días.",
-      "Lo que vayas a comer después del cuarto día va al freezer en porciones."
+      "En el refri, en recipientes cerrados, dura 3 a 4 días.",
+      "Lo que vayas a comer después del cuarto día va al congelador en porciones."
     ]
   };
 }

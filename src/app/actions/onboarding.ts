@@ -101,9 +101,9 @@ export async function guardarCuestionarioNutricion(
   const batch = formData.get("batch_cooking") === "on";
   const acepto = formData.get("acepto") === "on";
 
-  if (comidas.length < 3 || comidas.length > 7) return { error: "Elegí entre 3 y 7 comidas por día." };
-  if (!["cocino", "mixto", "como_fuera"].includes(cocina)) return { error: "Contanos si cocinás o comés fuera." };
-  if (!["bajo", "medio", "alto"].includes(presupuesto)) return { error: "Elegí tu presupuesto." };
+  if (comidas.length < 3 || comidas.length > 7) return { error: "Elige entre 3 y 7 comidas por día." };
+  if (!["cocino", "mixto", "como_fuera"].includes(cocina)) return { error: "Cuéntanos si cocinas o comes fuera." };
+  if (!["bajo", "medio", "alto"].includes(presupuesto)) return { error: "Elige tu presupuesto." };
   if (!acepto) return { error: "Para ver las recomendaciones de comida tenés que aceptar el aviso." };
 
   const cn: CuestionarioNutricion = {

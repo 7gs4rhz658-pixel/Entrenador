@@ -113,8 +113,8 @@ export default async function NutricionDia({
         />
       ) : paraEntrenador ? null : (
         <p className="card text-sm text-muted">
-          Tu entrenador todavía no cargó tu recomendación de comidas. Mientras tanto podés registrar
-          lo que comés y ver cómo vas contra tu referencia diaria.
+          Tu entrenador todavía no cargó tu recomendación de comidas. Mientras tanto puedes registrar
+          lo que comes y ver cómo vas contra tu referencia diaria.
         </p>
       )}
 

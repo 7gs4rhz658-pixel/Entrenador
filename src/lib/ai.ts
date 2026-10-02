@@ -297,7 +297,7 @@ export async function interpretarSustitucion(
     `Comidas registradas hoy:\n${comidasHoy.map((c) => `- ${c.nombre} · ${c.cantidad_g} g (${c.momento})`).join("\n") || "(ninguna)"}\n\nPedido: "${texto.slice(0, 500)}"`,
     { temperatura: 0.1 }
   );
-  if (!data?.quitar || !data?.poner) throw new ErrorIA("No entendí qué querés cambiar.");
+  if (!data?.quitar || !data?.poner) throw new ErrorIA("No entendí qué quieres cambiar.");
   if (!["kcal", "prot", "carb"].includes(data.criterio)) data.criterio = "kcal";
   data.candidatos_alternativos = Array.isArray(data.candidatos_alternativos)
     ? data.candidatos_alternativos.slice(0, 3)
@@ -325,7 +325,7 @@ export async function sugerirRecetas(
 ): Promise<Receta[]> {
   const lista: Momento[] = momentos.length ? momentos : ["cena"];
   const data = await generarJSON<{ recetas: Receta[] }>(
-    `Sos un cocinero fitness. Al cliente le faltan hoy estas comidas, en este orden: ${lista.join(", ")}. Proponé EXACTAMENTE una receta por cada una (mismo "momento", mismo orden), simples (máx. 6 ingredientes, 20 minutos), repartiendo entre todas los macros que le quedan de modo que la suma cierre en las calorías restantes y priorizando llegar a la proteína. Cada receta tiene que ser acorde a su momento (desayuno o merienda livianos, almuerzo y cena completos, snack chico). Preferí ingredientes de la lista base disponible (para que se puedan registrar) y cantidades en gramos. Los macros son aproximados: calculalos vos con valores estándar por 100 g. Español rioplatense. Devolvé SOLO JSON: {"recetas": [{"nombre": string, "momento": "desayuno"|"almuerzo"|"merienda"|"cena"|"snack", "ingredientes": [{"nombre": string, "gramos": number}], "pasos": [string], "macros_aprox": {"kcal": number, "prot_g": number, "carb_g": number, "grasa_g": number}}]}`,
+    `Eres un cocinero fitness. Al cliente le faltan hoy estas comidas, en este orden: ${lista.join(", ")}. Propón EXACTAMENTE una receta por cada una (mismo "momento", mismo orden), simples (máx. 6 ingredientes, 20 minutos), repartiendo entre todas los macros que le quedan de modo que la suma cierre en las calorías restantes y priorizando llegar a la proteína. Cada receta tiene que ser acorde a su momento (desayuno o colaciones ligeros, la comida y la cena completas; "almuerzo" es la comida del mediodía, "merienda" y "snack" son colaciones). Prefiere ingredientes de la lista base disponible (para que se puedan registrar) y cantidades en gramos. Los macros son aproximados: calcúlalos tú con valores estándar por 100 g. Español de México, de tú (nunca voseo). Devuelve SOLO JSON: {"recetas": [{"nombre": string, "momento": "desayuno"|"almuerzo"|"merienda"|"cena"|"snack"|"pre_entreno"|"post_entreno", "ingredientes": [{"nombre": string, "gramos": number}], "pasos": [string], "macros_aprox": {"kcal": number, "prot_g": number, "carb_g": number, "grasa_g": number}}]}`,
     `Macros restantes hoy: ${restantes.kcal} kcal · ${restantes.prot_g} g proteína · ${restantes.carb_g} g carbos · ${restantes.grasa_g} g grasa.\nPreferencias / restricciones: ${preferencias || "ninguna"}.\nIngredientes base disponibles: ${base.join(", ")}.`,
     { temperatura: 0.7 }
   );

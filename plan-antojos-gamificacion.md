@@ -140,7 +140,7 @@ Premios que no son comida: precio fijo puesto por EVER (ej. día libre 40 pts).
 
 ## 4. Integración técnica
 
-### 4.1 Base de datos — migración `0017_antojos.sql` (la 0015 la usó el checklist de Hoy y la 0016, los alimentos de México y las fases)
+### 4.1 Base de datos — migración `0018_antojos.sql` (la 0015 la usó el checklist de Hoy, la 0016 los alimentos de México y las fases, y la 0017 el menú en borrador)
 
 ```sql
 antojos          -- catálogo del cliente

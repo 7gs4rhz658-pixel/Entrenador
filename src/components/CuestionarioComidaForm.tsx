@@ -52,7 +52,7 @@ export default function CuestionarioComidaForm({ perfil }: { perfil: Profile }) 
       <section className="card">
         <h2 className="font-bold">Tus comidas del día</h2>
         <p className="mb-3 mt-0.5 text-sm text-muted">
-          Marcá entre 3 y 7 y poné a qué hora solés comer. El menú se arma con esos momentos.
+          Marca entre 3 y 7 y pon a qué hora sueles comer. El menú se arma con esos momentos.
         </p>
         <div className="flex flex-col gap-2">
           {MOMENTOS.map((m) => {
@@ -93,7 +93,7 @@ export default function CuestionarioComidaForm({ perfil }: { perfil: Profile }) 
         </p>
         <div className="mt-3">
           <label htmlFor="hora_entreno" className="label">
-            ¿A qué hora entrenás? (si varía, dejalo vacío)
+            ¿A qué hora entrenas? (si varía, déjalo vacío)
           </label>
           <input
             id="hora_entreno"
@@ -133,12 +133,12 @@ export default function CuestionarioComidaForm({ perfil }: { perfil: Profile }) 
               rows={2}
               defaultValue={cn?.alergias ?? ""}
               className="input"
-              placeholder="Ej: lactosa, maní, gluten"
+              placeholder="Ej: lactosa, cacahuate, gluten"
             />
           </div>
           <div>
             <label htmlFor="no_come" className="label">
-              Alimentos que no te gustan o preferís evitar
+              Alimentos que no te gustan o prefieres evitar
             </label>
             <textarea
               id="no_come"
@@ -153,7 +153,7 @@ export default function CuestionarioComidaForm({ perfil }: { perfil: Profile }) 
       </section>
 
       <section className="card">
-        <h2 className="mb-3 font-bold">Cómo comés</h2>
+        <h2 className="mb-3 font-bold">Cómo comes</h2>
         <div className="flex flex-col gap-3">
           <div>
             <span className="label">Cocina</span>
@@ -202,7 +202,7 @@ export default function CuestionarioComidaForm({ perfil }: { perfil: Profile }) 
           {batch ? (
             <div>
               <label htmlFor="dia_batch" className="label">
-                Qué día cocinás
+                Qué día cocinas
               </label>
               <select id="dia_batch" name="dia_batch" defaultValue={cn?.dia_batch ?? 7} className="input">
                 {DIAS_SEMANA.map((n, i) => (
@@ -232,9 +232,9 @@ export default function CuestionarioComidaForm({ perfil }: { perfil: Profile }) 
                 id="pais"
                 name="pais"
                 type="text"
-                defaultValue={cn?.pais ?? "Argentina"}
+                defaultValue={cn?.pais ?? "México"}
                 className="input"
-                placeholder="Argentina"
+                placeholder="México"
               />
             </div>
           </div>

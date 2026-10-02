@@ -115,8 +115,8 @@ export default function ComidasDelDia({
         <>
           {reco.notas ? <p className="mt-3 text-sm text-muted">{reco.notas}</p> : null}
           <p className="mt-2 text-xs text-muted">
-            Marcá cada comida cuando la hagas y se suma a tus barras. Para cambiar un ingrediente,
-            marcala y usá &quot;Sustituir un ingrediente&quot; más abajo. {DESCARGO_CORTO}
+            Marca cada comida cuando la hagas y se suma a tus barras. Para cambiar un ingrediente,
+            márcala y usa &quot;Sustituir un ingrediente&quot; más abajo. {DESCARGO_CORTO}
           </p>
         </>
       ) : null}

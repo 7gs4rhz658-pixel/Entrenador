@@ -113,10 +113,15 @@ export async function aplicarPlanComidas(
   const validos = plan.items.filter((i) => i.ingredient && i.cantidad_g > 0);
   if (!validos.length) throw new Error("La recomendación no tiene ingredientes válidos.");
   if (validos.length !== plan.items.length) {
-    throw new Error("Hay ingredientes sin resolver: elegilos de la base o quitalos antes de aplicar.");
+    throw new Error("Hay alimentos sin resolver: elígelos de la base, créalos o quítalos antes de guardar.");
   }
   const supabase = db();
-  await exec(supabase.from("meal_plans").update({ activo: false }).eq("user_id", userId).eq("activo", true));
+  // Un borrador reemplaza al borrador anterior; el menú enviado sigue
+  // visible para el cliente hasta que se envíe este. Si se guarda ya
+  // publicado (alta del cliente), reemplaza a todo.
+  let anteriores = supabase.from("meal_plans").update({ activo: false }).eq("user_id", userId).eq("activo", true);
+  if (!publicado) anteriores = anteriores.eq("publicado", false);
+  await exec(anteriores);
   const { data: nuevo, error } = await supabase
     .from("meal_plans")
     .insert({
@@ -155,17 +160,26 @@ export async function quitarPlanComidas(userId: string): Promise<void> {
   await exec(db().from("meal_plans").update({ activo: false }).eq("user_id", userId).eq("activo", true));
 }
 
-// "Enviar al cliente": el borrador activo pasa a publicado
+// "Enviar al cliente": el borrador pasa a ser el menú que ve el cliente
 export async function publicarPlanComidas(userId: string): Promise<boolean> {
-  const { data, error } = await db()
+  const { data: borrador } = await db()
     .from("meal_plans")
-    .update({ publicado: true, publicado_at: new Date().toISOString() })
+    .select("id")
     .eq("user_id", userId)
     .eq("activo", true)
     .eq("publicado", false)
-    .select("id");
-  if (error) throw new Error(`Base de datos: ${error.message}`);
-  return (data ?? []).length > 0;
+    .maybeSingle();
+  if (!borrador) return false;
+  await exec(db().from("meal_plans").update({ activo: false }).eq("user_id", userId).eq("activo", true).eq("publicado", true));
+  await exec(
+    db().from("meal_plans").update({ publicado: true, publicado_at: new Date().toISOString() }).eq("id", borrador.id)
+  );
+  return true;
+}
+
+// Descarta el borrador: el cliente sigue con el menú que ya tenía
+export async function descartarBorradorMenu(userId: string): Promise<void> {
+  await exec(db().from("meal_plans").update({ activo: false }).eq("user_id", userId).eq("activo", true).eq("publicado", false));
 }
 
 // ── 9. Lectura para las pantallas del cliente ───────────────────
