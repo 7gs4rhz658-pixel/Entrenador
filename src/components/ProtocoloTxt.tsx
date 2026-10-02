@@ -6,7 +6,13 @@ import { aplicarProtocoloTxtAction, interpretarProtocoloTxtAction } from "@/app/
 import type { ProtocoloInterpretado } from "@/lib/ai-protocolo";
 import { fmtHora } from "@/lib/hoy";
 import { nombreMomento } from "@/lib/nutrition";
-import { textoCuando, textoCuandoAplica } from "@/lib/protocolo";
+import { textoCuando, textoCuandoAplica, textoDiasFase } from "@/lib/protocolo";
+
+// Hoy en la zona del navegador ("2026-10-05")
+function hoyLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 // Importar el plan escrito por el entrenador (el mismo texto que le daría
 // al cliente): la IA saca suplementos, hábitos y cuidados con su momento
@@ -25,6 +31,8 @@ export default function ProtocoloTxt({
   const [texto, setTexto] = useState("");
   const [preview, setPreview] = useState<ProtocoloInterpretado | null>(null);
   const [usarHorarios, setUsarHorarios] = useState(true);
+  const [inicio, setInicio] = useState(hoyLocal);
+  const [guardada, setGuardada] = useState(false);
   const [guardado, setGuardado] = useState<{ conComidas: boolean } | null>(null);
   const [pendiente, iniciar] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -35,13 +43,14 @@ export default function ProtocoloTxt({
     setTexto(await f.text());
   }
 
-  function interpretar() {
+  function interpretar(releer = false) {
     setError(null);
     setGuardado(null);
     iniciar(async () => {
-      const r = await interpretarProtocoloTxtAction({ userId, texto });
+      const r = await interpretarProtocoloTxtAction({ userId, texto, releer });
       if (r.error || !r.resultado) return setError(r.error ?? "No se pudo interpretar.");
       setPreview(r.resultado);
+      setGuardada(!!r.lecturaGuardada);
       const h = r.resultado.horarios;
       setUsarHorarios(!!(h.despertar || h.entreno || h.dormir || h.comidas.length));
     });
@@ -56,6 +65,8 @@ export default function ProtocoloTxt({
         nombre: preview.nombre,
         items: preview.items,
         fuera: preview.fuera_protocolo,
+        fases: preview.fases,
+        fecha_inicio: inicio || null,
         horarios: usarHorarios ? preview.horarios : null
       });
       if (r.error) return setError(r.error);
@@ -142,7 +153,7 @@ export default function ProtocoloTxt({
           />
           <button
             type="button"
-            onClick={interpretar}
+            onClick={() => interpretar()}
             disabled={pendiente || !conIA || texto.trim().length < 20}
             className="btn-primary"
           >
@@ -152,6 +163,12 @@ export default function ProtocoloTxt({
         </div>
       ) : (
         <div className="mt-2 flex flex-col gap-3">
+          <p className="text-xs text-muted">
+            {guardada ? "Es la lectura guardada de este texto: el mismo texto da siempre el mismo resultado. " : ""}
+            <button type="button" onClick={() => interpretar(true)} disabled={pendiente} className="font-semibold text-accent">
+              {pendiente ? "Leyendo…" : "Leer el texto de nuevo con IA"}
+            </button>
+          </p>
           {preview.descartados.length ? (
             <p className="rounded-xl border border-warn/50 px-3 py-2 text-sm text-warn">
               La IA propuso {preview.descartados.join(", ")}, que no {preview.descartados.length === 1 ? "está" : "están"} en
@@ -184,6 +201,33 @@ export default function ProtocoloTxt({
               </label>
             </div>
           ) : null}
+
+          {preview.fases.length ? (
+            <div className="rounded-xl border border-line p-3 text-sm">
+              <p className="font-semibold">Fases del plan</p>
+              <ul className="mt-1 flex flex-col gap-1">
+                {preview.fases.map((f, i) => (
+                  <li key={i}>
+                    <span className="font-medium">{f.nombre}</span>{" "}
+                    <span className="text-muted">· {textoDiasFase(preview.fases, i).toLowerCase()}</span>
+                    {f.nota ? <span className="block text-xs text-muted">{f.nota}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div>
+            <label className="label" htmlFor="ptxt-ini">
+              {preview.fases.length ? "Fecha de inicio (día 1 de la fase 1)" : "Fecha de inicio"}
+            </label>
+            <input id="ptxt-ini" type="date" className="input" value={inicio} onChange={(e) => setInicio(e.target.value)} />
+            <p className="mt-1 text-xs text-muted">
+              {preview.fases.length
+                ? "Desde ese día la app le va mostrando al cliente su fase y le avisa la víspera de cada cambio."
+                : "El cliente lo ve en su checklist desde ese día."}
+            </p>
+          </div>
 
           {segmentos.map((s) => (
             <div key={s}>

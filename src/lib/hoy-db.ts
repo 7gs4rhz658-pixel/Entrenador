@@ -11,12 +11,15 @@ import {
   getProtocolo,
   getSesiones,
   inicioDelPlan,
-  q
+  q,
+  type ProtocoloActivo
 } from "./data";
 import { diaSemanaDe, fechaLocal, hoyFecha, sumarDias } from "./format";
 import {
   armarDia,
   fechasHaciaAtras,
+  infoFase,
+  type InfoFase,
   porcentaje,
   promedio,
   racha,
@@ -42,6 +45,8 @@ export interface ChecklistHoy {
   promedio14: number | null; // los 14 días anteriores a hoy
   porArea: { area: string; pct: number }[]; // comidas, entreno, agua y cada segmento, en esos 14 días
   conProtocolo: boolean;
+  fase: InfoFase | null; // en qué fase del protocolo va y qué cambia
+  protocoloEmpieza: string | null; // fecha de inicio, si todavía no empezó
 }
 
 // Cumplimiento por área en un conjunto de días: "Comidas 80 %, Cara 40 %"
@@ -65,7 +70,8 @@ function menuDelDia(comidas: ComidaDelPlan[]): EntradaDia["menu"] {
     return {
       momento: c.momento,
       titulo: `${nombreMomento(c.momento)}${c.plato ? ` · ${c.plato}` : ""}`,
-      detalle: `${ingredientes.length > 110 ? `${ingredientes.slice(0, 107)}…` : ingredientes} · ${c.macros.kcal} kcal`
+      detalle: `${ingredientes.length > 110 ? `${ingredientes.slice(0, 107)}…` : ingredientes} · ${c.macros.kcal} kcal`,
+      hora: c.hora || undefined
     };
   });
 }
@@ -83,7 +89,11 @@ async function preparar(
   perfil: Profile,
   desde: string,
   fecha: string
-): Promise<{ inicio: string | null; conProtocolo: boolean; itemsDe: (f: string) => { items: ItemHoy[]; tipo: TipoDia } }> {
+): Promise<{
+  inicio: string | null;
+  protocolo: ProtocoloActivo | null;
+  itemsDe: (f: string) => { items: ItemHoy[]; tipo: TipoDia };
+}> {
   const userId = perfil.id;
   const [meso, inicio, dias, ejercicios, plan, sesiones, protocolo, comidas, logs, ticks] = await Promise.all([
     getBloque(userId),
@@ -133,8 +143,8 @@ async function preparar(
   const porDia = ejerciciosPorDia(ejercicios);
   const menus = plan
     ? {
-        entreno: menuDelDia(comidasPorMomento(plan.items, "entreno")),
-        descanso: menuDelDia(comidasPorMomento(plan.items, "descanso"))
+        entreno: menuDelDia(comidasPorMomento(plan.items, "entreno", plan.plan.horarios)),
+        descanso: menuDelDia(comidasPorMomento(plan.items, "descanso", plan.plan.horarios))
       }
     : null;
   const ultimas = sesiones.filter((s) => s.duracion_seg > 0);
@@ -156,16 +166,19 @@ async function preparar(
       menu: menus ? menus[tipo] : null,
       aguaMl: objetivosCliente(perfil, entrena)?.agua_ml ?? null,
       // El protocolo cuenta desde que arrancó, no para atrás
-      protocolo: protocolo && f >= protocolo.inicio ? { items: protocolo.items, inicio: protocolo.inicio } : null,
+      protocolo:
+        protocolo && f >= protocolo.inicio
+          ? { items: protocolo.items, inicio: protocolo.inicio, fases: protocolo.protocolo.fases }
+          : null,
       hechos: hechos.get(f) ?? vacio()
     });
     return { items, tipo };
   };
-  return { inicio, conProtocolo: !!protocolo, itemsDe };
+  return { inicio, protocolo, itemsDe };
 }
 
 export async function checklistHoy(perfil: Profile, fecha = hoyFecha()): Promise<ChecklistHoy> {
-  const { inicio, conProtocolo, itemsDe } = await preparar(perfil, sumarDias(fecha, -(DIAS_HISTORIAL - 1)), fecha);
+  const { inicio, protocolo, itemsDe } = await preparar(perfil, sumarDias(fecha, -(DIAS_HISTORIAL - 1)), fecha);
   const hoy = itemsDe(fecha);
   const ultimos14: ItemHoy[][] = [];
   const historial: DiaConstancia[] = fechasHaciaAtras(fecha, DIAS_HISTORIAL).map((f, i) => {
@@ -185,7 +198,9 @@ export async function checklistHoy(perfil: Profile, fecha = hoyFecha()): Promise
     racha: racha(historial),
     promedio14: promedio(historial.slice(1, 15)),
     porArea: cumplimientoPorArea(ultimos14),
-    conProtocolo
+    conProtocolo: !!protocolo,
+    fase: protocolo ? infoFase(protocolo.protocolo.fases, protocolo.inicio, fecha, protocolo.items) : null,
+    protocoloEmpieza: protocolo && protocolo.inicio > fecha ? protocolo.inicio : null
   };
 }
 

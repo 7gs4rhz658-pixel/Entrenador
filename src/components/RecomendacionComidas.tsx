@@ -8,14 +8,15 @@ import {
   interpretarComidasTxtAction,
   quitarComidas
 } from "@/app/actions/comidas";
-import { buscarAlimentos } from "@/app/actions/nutricion";
+import { buscarAlimentos, crearIngredienteManual } from "@/app/actions/nutricion";
+import { fmtHora } from "@/lib/hoy";
 import type { RecomendacionPreparada } from "@/lib/comidas-service";
 import { notaUtil } from "@/lib/meal-plan";
 import { ETIQUETAS_TIPO_DIA, macrosDe, nombreMomento, sumarMacros, type Macros } from "@/lib/nutrition";
 import type { Ingredient, ItemComidaResuelto, MacrosManual, Momento, TipoDia } from "@/lib/types";
 
 const TIPOS: TipoDia[] = ["entreno", "descanso"];
-const MOMENTOS: Momento[] = ["desayuno", "almuerzo", "merienda", "cena", "snack"];
+const MOMENTOS: Momento[] = ["desayuno", "almuerzo", "merienda", "cena", "snack", "pre_entreno", "post_entreno"];
 
 function fmtMacros(m: Macros) {
   return `${m.kcal} kcal · P ${Math.round(m.prot_g)} · C ${Math.round(m.carb_g)} · G ${Math.round(m.grasa_g)}`;
@@ -45,7 +46,8 @@ export default function RecomendacionComidas({
   const [ok, setOk] = useState<string | null>(null);
   const [modoTxt, setModoTxt] = useState(false);
   const [texto, setTexto] = useState("");
-  const [preview, setPreview] = useState<{ r: RecomendacionPreparada; origen: "ia" | "txt" } | null>(null);
+  const [preview, setPreview] = useState<{ r: RecomendacionPreparada; origen: "ia" | "txt"; guardada?: boolean } | null>(null);
+  const [lectura, setLectura] = useState(0); // cada lectura nueva rearma la vista previa
   const [editandoMacros, setEditandoMacros] = useState(false);
 
   // El texto del plan que se importó en Protocolo, para sacar las comidas
@@ -81,13 +83,16 @@ export default function RecomendacionComidas({
     });
   }
 
-  function interpretar() {
+  function interpretar(releer = false) {
     setError(null);
     setOk(null);
     iniciar(async () => {
-      const r = await interpretarComidasTxtAction({ userId, texto });
+      const r = await interpretarComidasTxtAction({ userId, texto, releer });
       if (r.error || !r.resultado) setError(r.error ?? "No se pudo interpretar.");
-      else setPreview({ r: r.resultado, origen: "txt" });
+      else {
+        setLectura((n) => n + 1);
+        setPreview({ r: r.resultado, origen: "txt", guardada: !!r.lecturaGuardada });
+      }
     });
   }
 
@@ -189,7 +194,7 @@ export default function RecomendacionComidas({
                 </button>
                 <button
                   type="button"
-                  onClick={interpretar}
+                  onClick={() => interpretar()}
                   disabled={pendiente || !conIA || texto.trim().length < 20}
                   className="btn-primary flex-1"
                 >
@@ -214,13 +219,16 @@ export default function RecomendacionComidas({
         </section>
       ) : (
         <VistaPrevia
+          key={lectura}
           preview={preview.r}
           origen={preview.origen}
           pendiente={pendiente}
+          guardada={!!preview.guardada}
+          onReleer={preview.origen === "txt" ? () => interpretar(true) : undefined}
           onDescartar={() => setPreview(null)}
-          onAplicar={(plan) =>
+          onAplicar={(plan, usarObjetivos) =>
             correr(async () => {
-              const r = await aplicarComidas({ userId, plan, origen: preview.origen });
+              const r = await aplicarComidas({ userId, plan, origen: preview.origen, usarObjetivos });
               if (!r.error) {
                 setPreview(null);
                 setTexto("");
@@ -308,20 +316,28 @@ function VistaPrevia({
   preview,
   origen,
   pendiente,
+  guardada,
+  onReleer,
   onDescartar,
   onAplicar
 }: {
   preview: RecomendacionPreparada;
   origen: "ia" | "txt";
   pendiente: boolean;
+  guardada: boolean; // la lectura de este texto ya estaba guardada
+  onReleer?: () => void;
   onDescartar: () => void;
-  onAplicar: (plan: RecomendacionPreparada["plan"]) => void;
+  onAplicar: (plan: RecomendacionPreparada["plan"], usarObjetivos: boolean) => void;
 }) {
   const [items, setItems] = useState<ItemComidaResuelto[]>(preview.plan.items);
   const [tipo, setTipo] = useState<TipoDia>("entreno");
   const [buscando, setBuscando] = useState<number | null>(null);
   const [resultados, setResultados] = useState<Ingredient[]>([]);
   const [q, setQ] = useState("");
+  const objetivosTexto = preview.plan.objetivos;
+  const [usarObjetivos, setUsarObjetivos] = useState(!!objetivosTexto);
+  const [nuevo, setNuevo] = useState<{ nombre: string; kcal: string; prot: string; carb: string; grasa: string } | null>(null);
+  const [errorNuevo, setErrorNuevo] = useState<string | null>(null);
 
   const sinResolver = items.filter((i) => !i.ingredient).length;
   const totales = useMemo(() => {
@@ -341,10 +357,31 @@ function VistaPrevia({
     setResultados(r.resultados.slice(0, 6));
   }
 
-  const meta = preview.objetivos[tipo];
+  // Un alimento que no está en la base: se crea con los macros de su etiqueta
+  async function crear(idx: number) {
+    if (!nuevo) return;
+    setErrorNuevo(null);
+    const r = await crearIngredienteManual({
+      nombre: nuevo.nombre,
+      kcal_100: Number(nuevo.kcal),
+      prot_100: Number(nuevo.prot),
+      carb_100: Number(nuevo.carb),
+      grasa_100: Number(nuevo.grasa)
+    });
+    if (r.error || !r.ingrediente) return setErrorNuevo(r.error ?? "No se pudo crear.");
+    actualizar(idx, { ingredient: r.ingrediente });
+    setNuevo(null);
+    setBuscando(null);
+  }
+
+  const meta = usarObjetivos && objetivosTexto ? objetivosTexto[tipo] : preview.objetivos[tipo];
   const desvio = meta.kcal ? Math.round(((totales[tipo].kcal - meta.kcal) / meta.kcal) * 100) : 0;
   const delTipo = items.map((i, idx) => ({ i, idx })).filter(({ i }) => i.tipo_dia === tipo);
-  const momentos = MOMENTOS.filter((m) => delTipo.some(({ i }) => i.momento === m));
+  // En el orden del día: por la hora que fija el texto, si la tiene
+  const horas = preview.plan.horarios?.[tipo] ?? {};
+  const momentos = MOMENTOS.filter((m) => delTipo.some(({ i }) => i.momento === m)).sort(
+    (a, b) => (horas[a] ?? "99").localeCompare(horas[b] ?? "99")
+  );
 
   return (
     <section className="card border-accent/50">
@@ -353,6 +390,14 @@ function VistaPrevia({
         {origen === "ia" ? "Generada con IA y cuadrada con la referencia" : "Interpretada de tu texto, tal cual"} · tocá los gramos para
         ajustar
       </p>
+      {onReleer ? (
+        <p className="mt-1 text-xs text-muted">
+          {guardada ? "Es la lectura guardada de este texto: el mismo texto da siempre el mismo menú. " : ""}
+          <button type="button" onClick={onReleer} disabled={pendiente} className="font-semibold text-accent">
+            Leer el texto de nuevo con IA
+          </button>
+        </p>
+      ) : null}
       {preview.plan.notas ? <p className="mt-1 text-sm text-muted">{preview.plan.notas}</p> : null}
 
       <div className="mt-3 flex gap-2">
@@ -375,17 +420,34 @@ function VistaPrevia({
         </p>
         {meta.kcal ? (
           <p className={Math.abs(desvio) > 5 ? "text-warn" : "text-ok"}>
-            <span className="text-muted">Referencia: </span>
+            <span className="text-muted">{usarObjetivos && objetivosTexto ? "Objetivo de tu texto: " : "Referencia: "}</span>
             {fmtMacros(meta)} · {desvio > 0 ? "+" : ""}
             {desvio} %
           </p>
         ) : null}
+        {Math.abs(desvio) > 5 && meta.kcal ? (
+          <p className="mt-1 text-xs text-muted">
+            Con estas cantidades el menú suma {totales[tipo].kcal} kcal. Si el objetivo es otro, ajusta los gramos aquí o en tu
+            texto.
+          </p>
+        ) : null}
       </div>
+
+      {objetivosTexto ? (
+        <label className="mt-2 flex items-start gap-2 text-sm">
+          <input type="checkbox" checked={usarObjetivos} onChange={(e) => setUsarObjetivos(e.target.checked)} className="mt-1" />
+          <span>
+            Usar los objetivos de tu texto como referencia diaria del cliente (entreno {objetivosTexto.entreno.kcal} kcal ·
+            descanso {objetivosTexto.descanso.kcal} kcal)
+          </span>
+        </label>
+      ) : null}
 
       <div className="mt-3 flex flex-col gap-2">
         {momentos.map((m) => (
           <div key={m} className="rounded-xl border border-line p-2.5">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+              {horas[m] ? `${fmtHora(horas[m]!)} · ` : ""}
               {nombreMomento(m)}
               {delTipo.find(({ i }) => i.momento === m && i.plato)?.i.plato
                 ? ` · ${delTipo.find(({ i }) => i.momento === m && i.plato)!.i.plato}`
@@ -418,6 +480,7 @@ function VistaPrevia({
                         type="button"
                         onClick={() => {
                           setBuscando(buscando === idx ? null : idx);
+                          setNuevo(null);
                           setQ(i.ingredient ? "" : i.nombre_pedido);
                           setResultados([]);
                           if (!i.ingredient) buscar(i.nombre_pedido);
@@ -462,6 +525,66 @@ function VistaPrevia({
                             </li>
                           ))}
                         </ul>
+                        {nuevo ? (
+                          <div className="mt-2 flex flex-col gap-1.5 border-t border-line pt-2">
+                            <p className="text-xs text-muted">Nuevo alimento: macros por 100 g (de su etiqueta)</p>
+                            <input
+                              className="input py-1.5 text-sm"
+                              value={nuevo.nombre}
+                              maxLength={80}
+                              aria-label="Nombre del alimento"
+                              onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })}
+                            />
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {(
+                                [
+                                  ["kcal", "kcal"],
+                                  ["prot", "Prot g"],
+                                  ["carb", "Carb g"],
+                                  ["grasa", "Grasa g"]
+                                ] as const
+                              ).map(([k, t]) => (
+                                <label key={k} className="text-[11px] text-muted">
+                                  {t}
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    min={0}
+                                    step="0.1"
+                                    className="input mt-0.5 px-2 py-1 text-sm"
+                                    value={nuevo[k]}
+                                    onChange={(e) => setNuevo({ ...nuevo, [k]: e.target.value })}
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => crear(idx)}
+                                disabled={!nuevo.nombre.trim() || nuevo.kcal === ""}
+                                className="btn-primary flex-1 py-1.5 text-sm"
+                              >
+                                Crear y usar
+                              </button>
+                              <button type="button" onClick={() => setNuevo(null)} className="btn-ghost py-1.5 text-sm">
+                                Cancelar
+                              </button>
+                            </div>
+                            {errorNuevo ? <p className="text-xs text-danger">✗ {errorNuevo}</p> : null}
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setErrorNuevo(null);
+                              setNuevo({ nombre: q || i.nombre_pedido, kcal: "", prot: "", carb: "", grasa: "" });
+                            }}
+                            className="mt-1 text-xs font-semibold text-accent"
+                          >
+                            ¿No está? Créalo con su etiqueta
+                          </button>
+                        )}
                       </div>
                     ) : null}
                   </li>
@@ -473,7 +596,9 @@ function VistaPrevia({
 
       {sinResolver ? (
         <p className="mt-2 text-sm text-warn">
-          {sinResolver} ingrediente{sinResolver === 1 ? "" : "s"} sin encontrar en la base: buscalo{sinResolver === 1 ? "" : "s"} o quitalo{sinResolver === 1 ? "" : "s"} para poder aplicar.
+          {sinResolver} alimento{sinResolver === 1 ? "" : "s"} sin encontrar en la base: tocá “buscar” para elegir otro
+          parecido o crearlo con su etiqueta, o quitalo{sinResolver === 1 ? "" : "s"}. Lo que crees queda en la base para la
+          próxima vez.
         </p>
       ) : null}
 
@@ -483,7 +608,7 @@ function VistaPrevia({
         </button>
         <button
           type="button"
-          onClick={() => onAplicar({ ...preview.plan, items })}
+          onClick={() => onAplicar({ ...preview.plan, items }, usarObjetivos)}
           className="btn-primary flex-1"
           disabled={pendiente || sinResolver > 0 || items.length === 0}
         >

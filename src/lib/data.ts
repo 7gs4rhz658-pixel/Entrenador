@@ -1,4 +1,5 @@
 import { fechaLocal } from "./format";
+import { normalizarTexto, sinPlural } from "./meal-plan";
 import { db } from "./supabase/server";
 import type {
   AsistenteLog,
@@ -218,21 +219,31 @@ export async function semanaCerrada(
 
 // ── Nutrición ───────────────────────────────────────────────────
 
+// Busca por nombre y otros nombres, sin acentos (columna `busqueda`):
+// primero la base propia (USDA + manuales) y después lo guardado de Open
+// Food Facts, para que un producto de marca no tape al genérico.
 export async function buscarIngredientesLocal(
   texto: string,
   limite = 12
 ): Promise<Ingredient[]> {
-  const t = texto.trim();
+  const t = normalizarTexto(texto);
   if (!t) return [];
-  return q<Ingredient[]>(
+  // Palabra por palabra y sin plural: "verdura mixta" encuentra "Verduras mixtas"
+  const patron = `%${sinPlural(t).split(" ").join("%")}%`;
+  const propios = await q<Ingredient[]>(
+    db().from("ingredients").select("*").neq("fuente", "off").ilike("busqueda", patron).order("nombre").limit(limite)
+  );
+  if (propios.length >= limite) return propios;
+  const off = await q<Ingredient[]>(
     db()
       .from("ingredients")
       .select("*")
-      .ilike("nombre", `%${t.replace(/[%_]/g, "")}%`)
-      .order("fuente")
+      .eq("fuente", "off")
+      .ilike("busqueda", patron)
       .order("nombre")
-      .limit(limite)
+      .limit(limite - propios.length)
   );
+  return [...propios, ...off];
 }
 
 export async function getIngrediente(id: string): Promise<Ingredient | null> {
@@ -310,7 +321,7 @@ export async function getPlanComidas(
 }
 
 // Nombres de la base propia (USDA + manuales) para orientar a la IA
-export async function nombresBase(limite = 90): Promise<string[]> {
+export async function nombresBase(limite = 250): Promise<string[]> {
   const filas = await q<{ nombre: string }[]>(
     db().from("ingredients").select("nombre").neq("fuente", "off").order("nombre").limit(limite)
   );

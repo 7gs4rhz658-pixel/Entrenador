@@ -2,10 +2,11 @@
 // ingredientes → cuadrar → aplicar con su guía de batch cooking. Lo usan
 // las server actions del entrenador y el alta del cliente (pago).
 
-import { generarRecomendacionComidas, interpretarComidasTxt, planificarBatchCooking } from "./ai-comidas";
+import { VERSION_MENU_TXT, generarRecomendacionComidas, pedirComidasTxt, planificarBatchCooking } from "./ai-comidas";
 import { iaDisponible } from "./ai";
 import { contarDiasEntreno, nombresBase } from "./data";
-import { batchBasico, calcularTandas, cuadrarMacros } from "./meal-plan";
+import { conLectura } from "./ia-lecturas";
+import { batchBasico, calcularTandas, cuadrarMacros, normalizarPlanComidas } from "./meal-plan";
 import { aplicarPlanComidas, resolverPlanComidas } from "./meal-plan-db";
 import { objetivosCliente, type Macros } from "./nutrition";
 import type { BatchCooking, MealPlanItem, PlanComidasResuelto, Profile, TipoDia } from "./types";
@@ -31,15 +32,23 @@ export async function prepararRecomendacionIA(perfil: Profile): Promise<Recomend
   return { plan: { ...resuelto, items: cuadrarMacros(resuelto.items, objetivos) }, objetivos };
 }
 
-// Menú del entrenador en texto: se respeta tal cual (sin cuadrar).
-export async function prepararRecomendacionTxt(perfil: Profile, texto: string): Promise<RecomendacionPreparada> {
+// Menú del entrenador en texto: se respeta tal cual (sin cuadrar). Lo que
+// leyó la IA de ese texto queda guardado: el mismo texto da el mismo menú.
+export async function prepararRecomendacionTxt(
+  perfil: Profile,
+  texto: string,
+  releer = false
+): Promise<RecomendacionPreparada & { lecturaGuardada: boolean }> {
   const objetivos = objetivosDeReferencia(perfil) ?? {
     entreno: { kcal: 0, prot_g: 0, carb_g: 0, grasa_g: 0 },
     descanso: { kcal: 0, prot_g: 0, carb_g: 0, grasa_g: 0 }
   };
-  const generado = await interpretarComidasTxt(texto, perfil);
-  const plan = await resolverPlanComidas(generado, perfil.id);
-  return { plan, objetivos };
+  const base = await nombresBase();
+  const { resultado, guardada } = await conLectura("menu", VERSION_MENU_TXT, texto, releer, () =>
+    pedirComidasTxt(texto, perfil, base)
+  );
+  const plan = await resolverPlanComidas(normalizarPlanComidas(resultado), perfil.id);
+  return { plan, objetivos, lecturaGuardada: guardada };
 }
 
 // Guía de batch cooking para el menú: tandas deterministas + orden de

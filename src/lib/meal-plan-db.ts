@@ -10,6 +10,9 @@ import {
   TIPOS_DIA,
   avisosPreparacion,
   comidasPorMomento,
+  elegir,
+  elegirBuscando,
+  horaValida,
   normalizarTexto,
   ordenarPorHorario,
   type RecomendacionDia
@@ -17,8 +20,10 @@ import {
 import type {
   BatchCooking,
   CuestionarioNutricion,
+  HorariosMenu,
   Ingredient,
   ItemComidaResuelto,
+  Momento,
   PlanComidasGenerado,
   PlanComidasResuelto,
   TipoDia
@@ -26,48 +31,9 @@ import type {
 
 // ── 2. Resolver ingredientes contra la base ─────────────────────
 
-// Elige el ingrediente que mejor coincide con el nombre pedido: exacto >
-// empieza igual > contiene > misma primera palabra; a igualdad, USDA/manual
-// antes que Open Food Facts, "cocido" si el pedido lo dice (o por defecto),
-// y el nombre más parecido en largo.
-const STOP = new Set(["de", "del", "la", "el", "con", "a", "al", "en", "y"]);
-
-function palabras(s: string): string[] {
-  return normalizarTexto(s).split(" ").filter((p) => p && !STOP.has(p));
-}
-
-function elegir(nombre: string, candidatos: Ingredient[], nota = ""): Ingredient | null {
-  const n = normalizarTexto(nombre);
-  if (!n) return null;
-  const pedido = palabras(nombre);
-  const pide = normalizarTexto(`${nombre} ${nota}`);
-  const pideCocido = /cocid|hervid|horno|plancha|asad/.test(pide);
-  const pideCrudo = /crud/.test(pide);
-  let mejor: { ing: Ingredient; score: number } | null = null;
-  for (const ing of candidatos) {
-    const c = normalizarTexto(ing.nombre);
-    const cp = palabras(ing.nombre);
-    let score = 0;
-    if (c === n) score = 40;
-    else if (c.startsWith(n) || n.startsWith(c)) score = 30;
-    else if (c.includes(n) || n.includes(c)) score = 20;
-    else if (pedido.length && cp.length && pedido.every((p) => cp.includes(p))) score = 18;
-    else if (pedido[0] && cp[0] === pedido[0]) score = 10;
-    if (!score) continue;
-    if (ing.fuente !== "off") score += 5;
-    const esCocido = /cocid|hervid/.test(c);
-    const esCrudo = /crud/.test(c);
-    if (pideCocido && esCocido) score += 3;
-    if (pideCrudo && esCrudo) score += 3;
-    if (!pideCrudo && esCrudo) score -= 2;
-    score -= Math.min(4, Math.abs(c.length - n.length) / 8);
-    if (!mejor || score > mejor.score) mejor = { ing, score };
-  }
-  return mejor?.ing ?? null;
-}
-
-// Busca local con el nombre completo, luego con menos palabras
-// ("batata hervida" → "batata"), y recién después en Open Food Facts.
+// Busca en la base propia (por nombre y otros nombres, sin acentos) y
+// recién si no aparece, en Open Food Facts. La elección es la de
+// meal-plan.ts (elegirBuscando), igual en la app que en las pruebas.
 async function resolverNombre(
   nombre: string,
   nota: string,
@@ -76,20 +42,7 @@ async function resolverNombre(
 ): Promise<Ingredient | null> {
   const clave = normalizarTexto(`${nombre}|${nota}`);
   if (cache.has(clave)) return cache.get(clave)!;
-  let ing: Ingredient | null = null;
-  // Los intentos usan las palabras originales (con acento): el ilike de
-  // la base no ignora acentos, "salmon" no encuentra "Salmón".
-  const intentos = [nombre];
-  const ps = nombre
-    .replace(/[()]/g, " ")
-    .split(/\s+/)
-    .filter((p) => p && !STOP.has(normalizarTexto(p)));
-  if (ps.length > 2) intentos.push(ps.slice(0, 2).join(" "));
-  if (ps.length > 1 && ps[0].length >= 4) intentos.push(ps[0]);
-  for (const t of intentos) {
-    ing = elegir(nombre, await buscarIngredientesLocal(t, 15), nota);
-    if (ing) break;
-  }
+  let ing = await elegirBuscando(nombre, nota, (t) => buscarIngredientesLocal(t, 15));
   if (!ing) ing = elegir(nombre, await buscarIngredientes(nombre, userId), nota);
   cache.set(clave, ing);
   return ing;
@@ -119,8 +72,32 @@ export async function resolverPlanComidas(
       }
     }
   }
-  return { nombre: plan.nombre, notas: plan.notas ?? null, items };
+  return {
+    nombre: plan.nombre,
+    notas: plan.notas ?? null,
+    items,
+    horarios: plan.horarios ?? null,
+    objetivos: plan.objetivos ?? null
+  };
 }
+
+// Las horas del menú que llegan de la vista previa: solo "HH:MM" en
+// momentos y tipos de día válidos
+export function sanearHorarios(raw: unknown): HorariosMenu | null {
+  const r = (raw ?? {}) as Record<string, Record<string, unknown> | undefined>;
+  const out: HorariosMenu = {};
+  for (const tipo of TIPOS_DIA) {
+    const del: Partial<Record<Momento, string>> = {};
+    for (const [m, h] of Object.entries(r[tipo] ?? {})) {
+      const hora = horaValida(h);
+      if (hora && MOMENTOS_VALIDOS.includes(m as Momento)) del[m as Momento] = hora;
+    }
+    if (Object.keys(del).length) out[tipo] = del;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+const MOMENTOS_VALIDOS: Momento[] = ["desayuno", "almuerzo", "merienda", "cena", "snack", "pre_entreno", "post_entreno"];
 
 // ── 4. Escritura en la base ─────────────────────────────────────
 
@@ -148,6 +125,7 @@ export async function aplicarPlanComidas(
       origen,
       notas: plan.notas,
       batch_cooking: batch,
+      horarios: sanearHorarios(plan.horarios),
       publicado,
       publicado_at: publicado ? new Date().toISOString() : null
     })
@@ -200,7 +178,7 @@ export async function recomendacionPara(
 ): Promise<RecomendacionDia | null> {
   const plan = await getPlanComidas(userId);
   if (!plan) return null;
-  const comidas = ordenarPorHorario(comidasPorMomento(plan.items, tipo), cn);
+  const comidas = ordenarPorHorario(comidasPorMomento(plan.items, tipo, plan.plan.horarios), cn);
   if (!comidas.length) return null;
   return { tipo, comidas, avisos: avisosPreparacion(comidas, cn), notas: plan.plan.notas };
 }

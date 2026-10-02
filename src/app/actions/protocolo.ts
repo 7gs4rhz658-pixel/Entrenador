@@ -2,10 +2,19 @@
 
 import { revalidatePath } from "next/cache";
 import { ErrorIA, iaDisponible } from "@/lib/ai";
-import { interpretarProtocoloTxt, type HorariosTexto, type ProtocoloInterpretado } from "@/lib/ai-protocolo";
+import {
+  VERSION_PROTOCOLO_TXT,
+  pedirProtocoloTxt,
+  procesarProtocoloTxt,
+  type HorariosTexto,
+  type ProtocoloInterpretado
+} from "@/lib/ai-protocolo";
+import { conLectura } from "@/lib/ia-lecturas";
 import { requireEntrenador } from "@/lib/auth";
-import { exec, getPerfil } from "@/lib/data";
-import { sanearItem, type ItemEntrada } from "@/lib/protocolo";
+import { exec, getPerfil, getProtocolo } from "@/lib/data";
+import { hoyFecha } from "@/lib/format";
+import { sanearFases, sanearItem, type ItemEntrada } from "@/lib/protocolo";
+import type { FaseProtocolo } from "@/lib/types";
 import {
   actualizarDatosBorrador,
   borrarItemBorrador,
@@ -60,8 +69,10 @@ export async function guardarDatosProtocolo(input: {
   nombre: string;
   fuera: string; // una línea por cosa descartada
   fecha_inicio: string;
+  fases: FaseProtocolo[];
 }): Promise<Resultado> {
   const fecha = /^\d{4}-\d{2}-\d{2}$/.test(input.fecha_inicio) ? input.fecha_inicio : null;
+  const fases = sanearFases(input.fases);
   return correr(() =>
     actualizarDatosBorrador(input.userId, {
       nombre: input.nombre.trim().slice(0, 80) || "Protocolo",
@@ -70,7 +81,8 @@ export async function guardarDatosProtocolo(input: {
         .map((l) => l.replace(/^[-•*]\s*/, "").trim().slice(0, 200))
         .filter(Boolean)
         .slice(0, 20),
-      fecha_inicio: fecha
+      fecha_inicio: fecha,
+      fases: fases.length > 1 ? fases : []
     })
   );
 }
@@ -88,11 +100,20 @@ export async function enviarProtocolo(input: { userId: string }): Promise<Result
   return correr(async () => {
     const items = await publicarProtocolo(input.userId);
     const segmentos = [...new Set(items.map((i) => i.segmento.toLowerCase()))].join(", ");
+    const enviado = await getProtocolo(input.userId);
+    const inicio = enviado?.inicio ?? hoyFecha();
+    const fases = enviado?.protocolo.fases.length ?? 0;
+    const cuando =
+      inicio > hoyFecha()
+        ? ` Empieza el ${new Date(`${inicio}T12:00:00`).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}`
+        : " Ya aparece en tu checklist de Hoy";
     await exec(
       db().from("mensajes").insert({
         user_id: input.userId,
         de: "entrenador",
-        texto: `Te dejé tu protocolo (${segmentos}). Ya aparece en tu checklist de Hoy, cada cosa a su hora.`
+        texto: `Te dejé tu protocolo (${segmentos}).${cuando}, cada cosa a su hora.${
+          fases > 1 ? ` Va en ${fases} fases: la app te muestra en cuál vas y te avisa la víspera de cada cambio.` : ""
+        }`
       })
     );
     await enviarPush(input.userId, {
@@ -109,18 +130,23 @@ export async function enviarProtocolo(input: { userId: string }): Promise<Result
 export async function interpretarProtocoloTxtAction(input: {
   userId: string;
   texto: string;
-}): Promise<{ resultado?: ProtocoloInterpretado; error?: string }> {
+  releer?: boolean; // ignorar la lectura guardada de este texto
+}): Promise<{ resultado?: ProtocoloInterpretado; lecturaGuardada?: boolean; error?: string }> {
   await requireEntrenador();
   const texto = input.texto.trim();
   if (texto.length < 20) return { error: "El texto es demasiado corto para ser un plan." };
   if (!iaDisponible()) return { error: "Interpretar el texto necesita la IA configurada (GROQ_API_KEY o GEMINI_API_KEY)." };
   try {
     const perfil = await getPerfil(input.userId);
-    const resultado = await interpretarProtocoloTxt(texto, perfil);
+    // El mismo texto da siempre la misma lectura (queda guardada)
+    const { resultado: raw, guardada } = await conLectura("protocolo", VERSION_PROTOCOLO_TXT, texto, !!input.releer, () =>
+      pedirProtocoloTxt(texto, perfil)
+    );
+    const resultado = procesarProtocoloTxt(raw, texto);
     if (!resultado.items.length && !resultado.horarios.comidas.length) {
       return { error: "No encontré suplementos, hábitos ni cuidados en el texto." };
     }
-    return { resultado };
+    return { resultado, lecturaGuardada: guardada };
   } catch (e) {
     return { error: mensaje(e) };
   }
@@ -133,13 +159,19 @@ export async function aplicarProtocoloTxtAction(input: {
   nombre: string;
   items: Partial<ItemEntrada>[];
   fuera: string[];
+  fases: FaseProtocolo[];
+  fecha_inicio: string | null; // día 1 del protocolo (y de la fase 1)
   horarios: HorariosTexto | null;
 }): Promise<Resultado> {
+  const fases = sanearFases(input.fases);
+  const fecha = input.fecha_inicio && /^\d{4}-\d{2}-\d{2}$/.test(input.fecha_inicio) ? input.fecha_inicio : null;
   return correr(async () => {
     await reemplazarBorrador(input.userId, {
       nombre: input.nombre.trim().slice(0, 80) || "Protocolo",
       origen: "txt",
       fuera_protocolo: input.fuera.map((f) => f.trim().slice(0, 200)).filter(Boolean).slice(0, 20),
+      fases: fases.length > 1 ? fases : [],
+      fecha_inicio: fecha,
       items: input.items.map((i) => sanearItem(i))
     });
     if (input.horarios) await aplicarHorarios(input.userId, input.horarios);
@@ -151,10 +183,10 @@ async function aplicarHorarios(userId: string, h: HorariosTexto): Promise<void> 
   const cn = perfil.cuestionario_nutricion;
   if (!cn) return;
   const valida = (x: string | null) => (x && /^\d{2}:\d{2}$/.test(x) ? x : null);
-  // El plan del entrenador define las comidas del día (3 a 6); con menos o
+  // El plan del entrenador define las comidas del día (3 a 7); con menos o
   // más, solo se ajustan las horas de las que el cliente ya tiene.
   const comidas =
-    h.comidas.length >= 3 && h.comidas.length <= 6
+    h.comidas.length >= 3 && h.comidas.length <= 7
       ? h.comidas.map((c) => ({ momento: c.momento, hora: c.hora }))
       : cn.comidas.map((c) => ({ ...c, hora: h.comidas.find((x) => x.momento === c.momento)?.hora ?? c.hora }));
   await exec(

@@ -82,19 +82,41 @@ async function llamarGroq(
   });
   if (!res.ok) {
     const cuerpo = await res.text().catch(() => "");
-    if (res.status === 429 && intento < 2) {
+    if (res.status === 429) {
+      // Límite por minuto del plan gratis (8000 tokens): leer un plan largo
+      // y su menú seguidos lo pasa. Se espera lo que pida (hasta 45 s; la
+      // página del entrenador permite 60) y se reintenta.
       const seg = Number(cuerpo.match(/try again in ([\d.]+)s/i)?.[1] ?? res.headers.get("retry-after") ?? 0);
-      if (seg > 0 && seg <= 25) {
+      if (intento < 2 && seg > 0 && seg <= 45) {
         await new Promise((r) => setTimeout(r, Math.ceil(seg * 1000) + 500));
         return llamarGroq(instrucciones, prompt, opciones, intento + 1, modoJson);
       }
+      if (/per day|TPD|RPD/i.test(cuerpo)) {
+        throw new ErrorIA("La IA gratuita llegó a su límite de hoy. Vuelve a intentar mañana.");
+      }
+      throw new ErrorIA("La IA gratuita está ocupada (límite por minuto). Espera un minuto y vuelve a intentar.");
+    }
+    // "Request too large": el plan gratis cuenta el pedido más el máximo de
+    // respuesta. Se achica el máximo lo justo y se reintenta una vez.
+    const pedido = /Limit (\d+), Requested (\d+)/.exec(cuerpo);
+    if (res.status === 413 && pedido && intento < 2) {
+      const max = (opciones.maxTokens ?? 8192) - (Number(pedido[2]) - Number(pedido[1])) - 150;
+      if (max >= 1500) return llamarGroq(instrucciones, prompt, { ...opciones, maxTokens: max }, intento + 1, modoJson);
     }
     if (res.status === 400 && modoJson && cuerpo.includes("json_validate_failed")) {
       return llamarGroq(instrucciones, prompt, opciones, intento, false);
     }
     throw new ErrorIA(`Groq respondió ${res.status}: ${cuerpo.slice(0, 300)}`);
   }
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  const data = (await res.json()) as {
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  if (process.env.IA_DEBUG) console.log("[groq] tokens", data.usage);
+  // Cortada por el máximo: un JSON a medias perdería cosas sin avisar
+  if (data.choices?.[0]?.finish_reason === "length") {
+    throw new ErrorIA("La respuesta de la IA quedó cortada (el texto es largo para la IA gratis). Prueba de nuevo o divide el texto.");
+  }
   const texto = data.choices?.[0]?.message?.content ?? "";
   if (!texto) throw new ErrorIA("Groq devolvió una respuesta vacía.");
   return modoJson ? texto : extraerJSON(texto);

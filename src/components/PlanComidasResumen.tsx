@@ -1,10 +1,11 @@
-import { comidasPorMomento, ordenarPorHorario, TIPOS_DIA } from "@/lib/meal-plan";
+import { horaDe, comidasPorMomento, ordenarPorHorario, TIPOS_DIA } from "@/lib/meal-plan";
+import { fmtHora } from "@/lib/hoy";
 import { ETIQUETAS_TIPO_DIA, nombreMomento } from "@/lib/nutrition";
 import type { PlanComidasActivo } from "@/lib/data";
 import type { CuestionarioNutricion } from "@/lib/types";
 
 // Menú activo del cliente, visto por el entrenador: los dos tipos de día
-// con sus comidas y macros reales.
+// con sus comidas (y su hora) y macros reales.
 export default function PlanComidasResumen({
   plan,
   cn
@@ -24,7 +25,7 @@ export default function PlanComidasResumen({
       {plan.plan.notas ? <p className="mt-1 text-sm text-muted">{plan.plan.notas}</p> : null}
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {TIPOS_DIA.map((tipo) => {
-          const comidas = ordenarPorHorario(comidasPorMomento(plan.items, tipo), cn);
+          const comidas = ordenarPorHorario(comidasPorMomento(plan.items, tipo, plan.plan.horarios), cn);
           const total = comidas.reduce(
             (a, c) => ({
               kcal: a.kcal + c.macros.kcal,
@@ -42,17 +43,22 @@ export default function PlanComidasResumen({
                 {Math.round(total.grasa_g)}
               </p>
               <ul className="mt-2 flex flex-col gap-1.5 text-sm">
-                {comidas.map((c) => (
-                  <li key={c.momento}>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                      {nombreMomento(c.momento)}
-                      {c.plato ? ` · ${c.plato}` : ""}
-                    </p>
-                    <p className="text-muted">
-                      {c.items.map((i) => `${i.ingredient.nombre} ${Math.round(i.cantidad_g)} g`).join(" · ")}
-                    </p>
-                  </li>
-                ))}
+                {comidas.map((c) => {
+                  const hora = horaDe(c.momento, cn, c.hora);
+                  return (
+                    <li key={c.momento}>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+                        {hora ? `${fmtHora(hora)} · ` : ""}
+                        {nombreMomento(c.momento)}
+                        {c.plato ? ` · ${c.plato}` : ""}
+                      </p>
+                      <p className="text-muted">
+                        {c.items.map((i) => `${i.ingredient.nombre} ${Math.round(i.cantidad_g)} g`).join(" · ")}
+                        <span className="text-xs"> · {c.macros.kcal} kcal</span>
+                      </p>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           );

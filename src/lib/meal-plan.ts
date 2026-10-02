@@ -9,16 +9,26 @@ import type {
   BatchCooking,
   ComidaGenerada,
   CuestionarioNutricion,
+  HorariosMenu,
   Ingredient,
   ItemComidaResuelto,
+  MacrosBase,
   MealPlanItem,
   Momento,
   PlanComidasGenerado,
   TipoDia
 } from "./types";
 
-const MOMENTOS: Momento[] = ["desayuno", "almuerzo", "merienda", "cena", "snack"];
+const MOMENTOS: Momento[] = ["desayuno", "almuerzo", "merienda", "cena", "snack", "pre_entreno", "post_entreno"];
 export const TIPOS_DIA: TipoDia[] = ["entreno", "descanso"];
+const MAX_INGREDIENTES = 8;
+
+// "9:30" → "09:30"; cualquier otra cosa → null
+export function horaValida(v: unknown): string | null {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(v ?? "").trim());
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
+  return `${m[1].padStart(2, "0")}:${m[2]}`;
+}
 
 export function normalizarTexto(s: string): string {
   return s
@@ -32,50 +42,359 @@ export function normalizarTexto(s: string): string {
 
 // ── 1. Sanear el JSON de la IA ──────────────────────────────────
 
-function normalizarComidas(raw: unknown, permitidos?: Momento[]): ComidaGenerada[] {
+// ── Cantidades del texto → gramos ───────────────────────────────
+
+// La IA copia la cantidad como la escribe el entrenador ("2 piezas", "1
+// cucharada"); los gramos los pone el código, siempre iguales.
+const PESO_PIEZA: [RegExp, number][] = [
+  [/\bclara/, 33],
+  [/\bhuevo/, 50],
+  [/\bgalleta.*arroz|\brice cake/, 9],
+  [/\bpl[aá]tano|\bbanana/, 100],
+  [/\btortilla de harina/, 40],
+  [/\btortilla/, 30],
+  [/\bbolillo|\btelera/, 70],
+  [/\bpan\b/, 30],
+  [/\bmanzana/, 180],
+  [/\bnaranja/, 150],
+  [/\bpera\b/, 160],
+  [/\bmandarina/, 90],
+  [/\bkiwi/, 75],
+  [/\bdurazno/, 150],
+  [/\bdatil/, 8],
+  [/\baguacate|\bpalta/, 140],
+  [/\bpepino/, 200],
+  [/\bzanahoria/, 60],
+  [/\bjicama/, 300],
+  [/\btomate|\bjitomate/, 120],
+  [/\byogur/, 125]
+];
+const POR_UNIDAD: Record<string, number> = { scoop: 30, cucharada: 15, cucharadita: 5, taza: 240 };
+const LIBRE_G = 50; // "cantidad libre": una porción chica para que cuente en el menú
+
+export function aGramos(
+  nombre: string,
+  cantidadRaw: unknown,
+  unidadRaw: unknown,
+  gramosIA: unknown,
+  nota: string
+): { gramos: number; nota: string } {
+  const cantidad = Number(cantidadRaw);
+  const unidad = String(unidadRaw ?? "").toLowerCase();
+  const respaldo = Number(gramosIA);
+  const n = normalizarTexto(nombre);
+  const conNota = (extra: string) => ({ nota: nota || extra });
+  // Sin unidad (el menú que arma la IA): vienen gramos directos
+  if (!unidad) return { gramos: respaldo, nota };
+  if (unidad === "libre" || (cantidadRaw == null && unidad !== "g")) {
+    // Fijo (la estimación de la IA cambia de una vez a otra)
+    return { gramos: /\bensalada/.test(n) ? 2 * LIBRE_G : LIBRE_G, ...conNota("cantidad libre") };
+  }
+  if (!Number.isFinite(cantidad) || cantidad <= 0) return { gramos: respaldo, nota };
+  if (unidad === "g" || unidad === "ml") return { gramos: cantidad, nota };
+  if (unidad === "pieza") {
+    const peso = PESO_PIEZA.find(([p]) => p.test(n))?.[1];
+    const piezas = `${cantidad} ${cantidad === 1 ? "pieza" : "piezas"}`;
+    if (peso) return { gramos: cantidad * peso, ...conNota(piezas) };
+    return { gramos: respaldo > 0 ? respaldo : cantidad * 100, ...conNota(piezas) };
+  }
+  const porUnidad = POR_UNIDAD[unidad];
+  // "1 cucharadita (5 ml)" a veces llega como 5 cucharaditas: si la cantidad
+  // se parece más a los gramos que estimó la IA, son gramos
+  if (porUnidad && unidad !== "taza") {
+    const comoGramos = respaldo > 0 ? Math.abs(respaldo - cantidad) < Math.abs(respaldo - cantidad * porUnidad) : cantidad > 6;
+    if (comoGramos) return { gramos: cantidad, nota };
+  }
+  if (porUnidad) {
+    const texto = `${cantidad} ${unidad}${cantidad === 1 ? "" : "s"}`;
+    return { gramos: cantidad * porUnidad, ...conNota(texto) };
+  }
+  return { gramos: respaldo > 0 ? respaldo : cantidad, nota };
+}
+
+// Comida tal como la devuelve la IA, antes de decidir su momento
+interface ComidaCruda extends Omit<ComidaGenerada, "momento"> {
+  momento: Momento | null;
+  etiqueta: string;
+}
+
+function normalizarComidas(raw: unknown, permitidos?: Momento[]): ComidaCruda[] {
   const lista = Array.isArray(raw) ? raw : [];
-  const out: ComidaGenerada[] = [];
+  const out: ComidaCruda[] = [];
   for (const c of lista) {
-    const cc = (c ?? {}) as Partial<ComidaGenerada>;
-    const momento = String(cc.momento ?? "").toLowerCase() as Momento;
-    if (!MOMENTOS.includes(momento)) continue;
-    if (permitidos && !permitidos.includes(momento)) continue;
+    const cc = (c ?? {}) as Partial<ComidaGenerada> & { etiqueta?: unknown };
+    const dicho = String(cc.momento ?? "").toLowerCase() as Momento;
+    const momento = MOMENTOS.includes(dicho) ? dicho : null;
+    if (permitidos && (!momento || !permitidos.includes(momento))) continue;
     const ingredientes = (Array.isArray(cc.ingredientes) ? cc.ingredientes : [])
       .map((i) => {
-        const ii = (i ?? {}) as { nombre?: unknown; gramos?: unknown; nota?: unknown };
-        const gramos = Number(ii.gramos);
+        const ii = (i ?? {}) as { nombre?: unknown; gramos?: unknown; nota?: unknown; cantidad?: unknown; unidad?: unknown };
+        const nombre = String(ii.nombre ?? "").trim().slice(0, 80);
+        const { gramos, nota } = aGramos(nombre, ii.cantidad, ii.unidad, ii.gramos, ii.nota ? String(ii.nota).trim() : "");
         return {
-          nombre: String(ii.nombre ?? "").trim().slice(0, 80),
+          nombre,
           gramos: Number.isFinite(gramos) ? Math.min(2000, Math.max(1, Math.round(gramos))) : 0,
-          nota: ii.nota ? String(ii.nota).trim().slice(0, 80) : undefined
+          nota: nota ? nota.slice(0, 80) : undefined
         };
       })
       .filter((i) => i.nombre && i.gramos > 0)
-      .slice(0, 6);
+      .slice(0, MAX_INGREDIENTES);
     if (!ingredientes.length) continue;
     // "Desayuno" como nombre de plato no aporta nada
     let plato = String(cc.plato ?? "").trim().slice(0, 80);
-    if (normalizarTexto(plato) === momento) plato = "";
-    out.push({ momento, plato, ingredientes });
+    if (momento && normalizarTexto(plato) === momento) plato = "";
+    out.push({
+      momento,
+      etiqueta: String(cc.etiqueta ?? "").trim().slice(0, 80),
+      plato,
+      hora: horaValida(cc.hora) ?? undefined,
+      ingredientes
+    });
   }
-  // Orden natural del día; los momentos repetidos se conservan en orden
-  const pos = (m: Momento) => (permitidos ?? MOMENTOS).indexOf(m);
-  return out.sort((a, b) => pos(a.momento) - pos(b.momento));
+  return out;
+}
+
+// ── Momento de cada comida del texto ────────────────────────────
+
+// Hora típica de cada comida en México (minutos). Pre y post-entreno no
+// están: se reconocen por su nombre, no por la hora.
+const TIPICA: [Momento, number][] = [
+  ["desayuno", 8 * 60],
+  ["snack", 11 * 60],
+  ["almuerzo", 13 * 60 + 30],
+  ["merienda", 17 * 60],
+  ["cena", 20 * 60 + 30]
+];
+
+const PRE = /\bpre\b|pre ?entreno|pre ?entrenamiento|antes de entrenar/;
+const POST = /\bpost\b|post ?entreno|post ?entrenamiento|despues de entrenar|al terminar de entrenar/;
+
+// Cuánto "cuesta" poner una comida en un momento: distancia a su hora
+// típica (en horas), las colaciones solo si el nombre lo dice o no queda
+// otra, y el nombre que le dio el entrenador manda ("Cena", "Colación").
+function costo(c: { etiqueta: string; min: number }, m: Momento, tipica: number): number {
+  const n = normalizarTexto(c.etiqueta);
+  let x = Math.abs(c.min - tipica) / 60;
+  const colacion = /colacion|snack|merienda|refrigerio|tentempie/.test(n);
+  if (m === "snack" || m === "merienda") x += colacion ? -1.5 : 1.25;
+  else if (colacion) x += 1.5;
+  if (m === "desayuno" && /desayuno/.test(n)) x -= 1.5;
+  if (m === "cena" && /\bcena\b/.test(n)) x -= 1.5;
+  // "Comida" en México es la del mediodía ("Comida 1, 2, 3" es solo un número)
+  if (m === "almuerzo" && /\bcomida\b(?! ?\d)/.test(n)) x -= 1.5;
+  return x;
+}
+
+// Decide el momento de cada comida de un día. Con horas en el texto se
+// decide acá (la IA suele confundir "Comida 2" con la cena): pre y
+// post-entreno por su nombre, y el resto en orden del día, cada una en el
+// momento libre que mejor le queda. Sin horas, se respeta lo que dijo la IA.
+export function asignarMomentos<T extends { momento: Momento | null; etiqueta: string; plato?: string; hora?: string }>(
+  comidas: T[]
+): (Omit<T, "momento"> & { momento: Momento })[] {
+  const conHora = comidas.every((c) => aMin(c.hora) != null);
+  if (!conHora) {
+    return comidas.map((c) => ({ ...c, momento: c.momento ?? "snack" }));
+  }
+  const ordenadas = [...comidas].sort((a, b) => aMin(a.hora)! - aMin(b.hora)!);
+  const salida = new Map<T, Momento>();
+  const texto = (c: T) => normalizarTexto(`${c.etiqueta} ${c.plato ?? ""}`);
+  const pre = ordenadas.find((c) => c.momento === "pre_entreno" || PRE.test(texto(c)));
+  if (pre) salida.set(pre, "pre_entreno");
+  const post = ordenadas.find((c) => c !== pre && (c.momento === "post_entreno" || POST.test(texto(c))));
+  if (post) salida.set(post, "post_entreno");
+
+  const resto = ordenadas.filter((c) => !salida.has(c)).map((c) => ({ c, etiqueta: texto(c), min: aMin(c.hora)! }));
+  // Mejor asignación en orden (programación dinámica: comida i → momento j)
+  const n = resto.length;
+  const k = TIPICA.length;
+  if (n <= k) {
+    const mejor: number[][] = Array.from({ length: n + 1 }, () => Array(k + 1).fill(Infinity));
+    const desde: number[][] = Array.from({ length: n + 1 }, () => Array(k + 1).fill(-1));
+    for (let j = 0; j <= k; j++) mejor[0][j] = 0;
+    for (let i = 1; i <= n; i++) {
+      for (let j = i; j <= k; j++) {
+        // comida i-1 en el momento j-1, o el momento j-1 queda libre
+        const usar = mejor[i - 1][j - 1] + costo(resto[i - 1], TIPICA[j - 1][0], TIPICA[j - 1][1]);
+        const saltar = mejor[i][j - 1];
+        if (usar <= saltar) {
+          mejor[i][j] = usar;
+          desde[i][j] = 1;
+        } else {
+          mejor[i][j] = saltar;
+          desde[i][j] = 0;
+        }
+      }
+    }
+    for (let i = n, j = k; i > 0; j--) {
+      if (desde[i][j] === 1) {
+        salida.set(resto[i - 1].c, TIPICA[j - 1][0]);
+        i--;
+      }
+    }
+  } else {
+    // Más comidas que momentos: cada una al más cercano (se juntan)
+    for (const r of resto) {
+      let m = TIPICA[0];
+      for (const t of TIPICA) if (costo(r, t[0], t[1]) < costo(r, m[0], m[1])) m = t;
+      salida.set(r.c, m[0]);
+    }
+  }
+  return ordenadas.map((c) => ({ ...c, momento: salida.get(c)! }));
+}
+
+function aMin(hora: string | undefined | null): number | null {
+  const h = horaValida(hora);
+  return h ? Number(h.slice(0, 2)) * 60 + Number(h.slice(3)) : null;
+}
+
+function sanearMacros(v: unknown): MacrosBase | null {
+  const m = (v ?? {}) as Record<string, unknown>;
+  const n = (k: string) => Math.round(Number(m[k]));
+  const out = { kcal: n("kcal"), prot_g: n("prot_g"), carb_g: n("carb_g"), grasa_g: n("grasa_g") };
+  if (!(out.kcal >= 1000 && out.kcal <= 6000)) return null;
+  if (![out.prot_g, out.carb_g, out.grasa_g].every((x) => Number.isFinite(x) && x >= 0 && x <= 700)) return null;
+  return out;
+}
+
+// Carnes y pescados que no dicen si se pesan crudos o cocidos siguen el
+// criterio del resto del plan ("todos los pesos en crudo…")
+const PROTEINA = /\bpollo|\bpechuga|\bpescado|\bsalmon|\batun|\btilapia|\bmerluza|\bres\b|\bcarne|\bbistec|\bcerdo|\blomo|\bpavo|\bcamaron|\bmuslo/;
+const ESTADO = /crud|cocid|hervid|asad|horno|plancha|lata|escurrid/;
+
+function unificarEstado(dias: ComidaGenerada[][]): void {
+  const ings = dias.flat().flatMap((c) => c.ingredientes);
+  const proteinas = ings.filter((i) => PROTEINA.test(normalizarTexto(i.nombre)));
+  const conEstado = proteinas.map((i) => normalizarTexto(`${i.nombre} ${i.nota ?? ""}`)).filter((t) => ESTADO.test(t));
+  const crudas = conEstado.filter((t) => /crud/.test(t)).length;
+  const criterio = crudas * 2 > conEstado.length ? "crudo" : crudas === 0 && conEstado.length ? "cocido" : null;
+  if (!criterio) return;
+  for (const i of proteinas) {
+    if (!ESTADO.test(normalizarTexto(`${i.nombre} ${i.nota ?? ""}`))) i.nota = i.nota ? `${criterio}; ${i.nota}`.slice(0, 80) : criterio;
+  }
 }
 
 export function normalizarPlanComidas(raw: unknown, permitidos?: Momento[]): PlanComidasGenerado {
-  const r = (raw ?? {}) as Partial<PlanComidasGenerado>;
-  let entreno = normalizarComidas(r.entreno, permitidos);
-  let descanso = normalizarComidas(r.descanso, permitidos);
+  const r = (raw ?? {}) as Partial<PlanComidasGenerado> & { objetivos?: Record<string, unknown> };
+  const dia = (x: unknown): ComidaGenerada[] =>
+    asignarMomentos(normalizarComidas(x, permitidos)).map(({ momento, plato, hora, ingredientes }) => ({
+      momento,
+      plato,
+      hora,
+      ingredientes
+    }));
+  let entreno = dia(r.entreno);
+  let descanso = dia(r.descanso);
+  unificarEstado([entreno, descanso]);
   // Un solo menú (el .txt suele traerlo así): vale para los dos días
   if (!entreno.length && descanso.length) entreno = descanso;
   if (!descanso.length && entreno.length) descanso = entreno;
+  // Orden natural del día: por hora si la hay; si no, como en MOMENTOS
+  const orden = (lista: ComidaGenerada[]) => {
+    const pos = (c: ComidaGenerada) => aMin(c.hora) ?? (permitidos ?? MOMENTOS).indexOf(c.momento);
+    return [...lista].sort((a, b) => pos(a) - pos(b));
+  };
+  entreno = orden(entreno);
+  descanso = orden(descanso);
+  const horas = (lista: ComidaGenerada[]) => {
+    const h: Partial<Record<Momento, string>> = {};
+    for (const c of lista) if (c.hora && !h[c.momento]) h[c.momento] = c.hora;
+    return h;
+  };
+  const horarios: HorariosMenu = { entreno: horas(entreno), descanso: horas(descanso) };
+  const conHoras = Object.keys(horarios.entreno!).length || Object.keys(horarios.descanso!).length;
+  const obj = r.objetivos ?? null;
+  const objE = obj ? sanearMacros(obj.entreno) : null;
+  const objD = obj ? sanearMacros(obj.descanso) : null;
   return {
     nombre: String(r.nombre ?? "").trim().slice(0, 80) || "Recomendación de comidas",
     notas: r.notas ? String(r.notas).trim().slice(0, 400) : undefined,
     entreno,
-    descanso
+    descanso,
+    horarios: conHoras ? horarios : null,
+    // Un solo objetivo en el texto vale para los dos tipos de día
+    objetivos: objE || objD ? { entreno: (objE ?? objD)!, descanso: (objD ?? objE)! } : null
   };
+}
+
+// ── 2. Elegir el alimento de la base ────────────────────────────
+
+// Elige el ingrediente que mejor coincide con el nombre pedido (o con
+// alguno de sus otros nombres: "camote" = "batata"): exacto > empieza
+// igual > contiene > mismas palabras > misma primera palabra; a igualdad,
+// USDA/manual antes que Open Food Facts, crudo o cocido según lo pedido, y
+// el nombre más parecido en largo.
+const STOP = new Set(["de", "del", "la", "el", "con", "a", "al", "en", "y"]);
+
+// Singular y plural cuentan igual: "verdura mixta" = "verduras mixtas"
+export function sinPlural(s: string): string {
+  return s
+    .split(" ")
+    .map((w) => (w.length > 3 ? w.replace(/(es|s)$/, "") : w))
+    .join(" ");
+}
+
+function palabras(s: string): string[] {
+  return sinPlural(normalizarTexto(s)).split(" ").filter((p) => p && !STOP.has(p));
+}
+
+function parecido(n: string, pedido: string[], nombre: string): number {
+  const c = sinPlural(normalizarTexto(nombre));
+  const cp = palabras(nombre);
+  let score = 0;
+  if (c === n) score = 40;
+  else if (c.startsWith(n) || n.startsWith(c)) score = 30;
+  else if (c.includes(n) || n.includes(c)) score = 20;
+  else if (pedido.length && cp.length && pedido.every((p) => cp.includes(p))) score = 18;
+  else if (pedido[0] && cp[0] === pedido[0]) score = 10;
+  return score ? score - Math.min(4, Math.abs(c.length - n.length) / 8) : 0;
+}
+
+export function elegir(nombre: string, candidatos: Ingredient[], nota = ""): Ingredient | null {
+  const n = sinPlural(normalizarTexto(nombre));
+  if (!n) return null;
+  const pedido = palabras(nombre);
+  const pide = normalizarTexto(`${nombre} ${nota}`);
+  const pideCocido = /cocid|hervid|horno|plancha|asad/.test(pide);
+  const pideCrudo = /crud/.test(pide);
+  let mejor: { ing: Ingredient; score: number } | null = null;
+  for (const ing of candidatos) {
+    const nombres = [ing.nombre, ...(ing.alias ?? "").split(",").map((a) => a.trim()).filter(Boolean)];
+    let score = Math.max(...nombres.map((x) => parecido(n, pedido, x)));
+    if (score <= 0) continue;
+    if (ing.fuente !== "off") score += 5;
+    const c = normalizarTexto(ing.nombre);
+    const esCocido = /cocid|hervid/.test(c);
+    const esCrudo = /crud/.test(c);
+    if (pideCocido && esCocido) score += 3;
+    if (pideCrudo && esCrudo) score += 3;
+    if (pideCocido && esCrudo) score -= 3;
+    if (pideCrudo && esCocido) score -= 3;
+    if (!pideCrudo && esCrudo) score -= 2;
+    if (!mejor || score > mejor.score) mejor = { ing, score };
+  }
+  return mejor?.ing ?? null;
+}
+
+// Busca con el nombre completo y, si no aparece, con menos palabras
+// ("camote hervido" → "camote"). `buscar` es la búsqueda en la base.
+export async function elegirBuscando(
+  nombre: string,
+  nota: string,
+  buscar: (texto: string) => Promise<Ingredient[]>
+): Promise<Ingredient | null> {
+  const intentos = [nombre];
+  const ps = nombre
+    .replace(/[()]/g, " ")
+    .split(/\s+/)
+    .filter((p) => p && !STOP.has(normalizarTexto(p)));
+  if (ps.length > 2) intentos.push(ps.slice(0, 2).join(" "));
+  if (ps.length > 1 && ps[0].length >= 4) intentos.push(ps[0]);
+  for (const t of intentos) {
+    const ing = elegir(nombre, await buscar(t), nota);
+    if (ing) return ing;
+  }
+  return null;
 }
 
 // ── 3. Cuadrar con la referencia diaria ─────────────────────────
@@ -111,34 +430,51 @@ export function cuadrarMacros(
 export interface ComidaDelPlan {
   momento: Momento;
   plato: string;
+  hora: string; // la que fija el menú ("" = la del cuestionario del cliente)
   items: MealPlanItem[];
   macros: Macros;
 }
 
-export function comidasPorMomento(items: MealPlanItem[], tipo: TipoDia): ComidaDelPlan[] {
+export function comidasPorMomento(
+  items: MealPlanItem[],
+  tipo: TipoDia,
+  horarios?: HorariosMenu | null
+): ComidaDelPlan[] {
   const del = items.filter((i) => i.tipo_dia === tipo).sort((a, b) => a.orden - b.orden);
   const mapa = new Map<Momento, MealPlanItem[]>();
   for (const i of del) (mapa.get(i.momento) ?? mapa.set(i.momento, []).get(i.momento)!).push(i);
-  return MOMENTOS.filter((m) => mapa.has(m)).map((m) => {
+  const comidas = MOMENTOS.filter((m) => mapa.has(m)).map((m) => {
     const lista = mapa.get(m)!;
     return {
       momento: m,
       plato: lista.find((i) => i.plato)?.plato ?? "",
+      hora: horaValida(horarios?.[tipo]?.[m]) ?? "",
       items: lista,
       macros: sumarMacros(lista.map((i) => macrosDe(i.ingredient, i.cantidad_g)))
     };
   });
+  // Con las horas del menú, en orden del día; si no, en el orden del plan
+  if (comidas.every((c) => c.hora)) return comidas.sort((a, b) => a.hora.localeCompare(b.hora));
+  return comidas.sort((a, b) => a.items[0].orden - b.items[0].orden);
 }
 
-// Orden de los momentos según el horario del cliente (si lo cargó)
+// Orden del día: la hora del menú, si no la del cliente, si no la típica
 export function ordenarPorHorario(comidas: ComidaDelPlan[], cn: CuestionarioNutricion | null): ComidaDelPlan[] {
-  if (!cn?.comidas.length) return comidas;
-  const pos = new Map(cn.comidas.map((c, i) => [c.momento, i]));
-  return [...comidas].sort((a, b) => (pos.get(a.momento) ?? 99) - (pos.get(b.momento) ?? 99));
+  const tipica = new Map<Momento, number>(TIPICA);
+  const minDe = (c: ComidaDelPlan) =>
+    aMin(c.hora) ??
+    aMin(cn?.comidas.find((x) => x.momento === c.momento)?.hora) ??
+    tipica.get(c.momento) ??
+    (c.momento === "pre_entreno" ? 17 * 60 : 19 * 60);
+  return comidas
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => minDe(a.c) - minDe(b.c) || a.i - b.i)
+    .map((x) => x.c);
 }
 
-export function horaDe(momento: Momento, cn: CuestionarioNutricion | null): string {
-  return cn?.comidas.find((c) => c.momento === momento)?.hora ?? "";
+// Hora de una comida para mostrar: la del menú o la del cliente
+export function horaDe(momento: Momento, cn: CuestionarioNutricion | null, horaMenu?: string): string {
+  return horaMenu || cn?.comidas.find((c) => c.momento === momento)?.hora || "";
 }
 
 // ── 6. Lista de compras ─────────────────────────────────────────
@@ -147,13 +483,13 @@ export function horaDe(momento: Momento, cn: CuestionarioNutricion | null): stri
 const UNIDADES: { patron: RegExp; gramos: number; uno: string; varios: string }[] = [
   { patron: /\bclara/, gramos: 33, uno: "clara", varios: "claras" },
   { patron: /\bhuevo/, gramos: 55, uno: "huevo", varios: "huevos" },
-  { patron: /\bbanana|\bpl[aá]tano/, gramos: 120, uno: "banana", varios: "bananas" },
+  { patron: /\bbanana|\bpl[aá]tano/, gramos: 120, uno: "plátano", varios: "plátanos" },
   { patron: /\bmanzana/, gramos: 180, uno: "manzana", varios: "manzanas" },
   { patron: /\bnaranja/, gramos: 150, uno: "naranja", varios: "naranjas" },
   { patron: /\bpera\b/, gramos: 160, uno: "pera", varios: "peras" },
   { patron: /\bmandarina/, gramos: 90, uno: "mandarina", varios: "mandarinas" },
   { patron: /\bkiwi/, gramos: 75, uno: "kiwi", varios: "kiwis" },
-  { patron: /\bpalta|\baguacate/, gramos: 200, uno: "palta", varios: "paltas" },
+  { patron: /\bpalta|\baguacate/, gramos: 140, uno: "aguacate", varios: "aguacates" },
   { patron: /\byogur/, gramos: 125, uno: "pote", varios: "potes" },
   { patron: /\btortilla de (trigo|ma[ií]z)|\brapidita/, gramos: 40, uno: "unidad", varios: "unidades" }
 ];
@@ -183,7 +519,7 @@ const A_CRUDO: { patron: RegExp; factor: number }[] = [
   { patron: /\barroz|\bquinoa|\bfideo|\bpasta|\bavena cocid/, factor: 0.4 },
   { patron: /\blenteja|\bgarbanzo|\bporoto|\bfrijol/, factor: 0.45 },
   { patron: /\bpollo|\bpechuga|\bcarne|\bvacun|\bcerdo|\bpescado|\bmerluza|\bsalm|\bpavo|\blomo|\bbife/, factor: 1.3 },
-  { patron: /\bpapa|\bbatata|\bboniato|\bcalabaza|\bzapallo|\bzanahoria/, factor: 1.15 }
+  { patron: /\bpapa|\bbatata|\bboniato|\bcamote|\bcalabaza|\bzapallo|\bzanahoria/, factor: 1.15 }
 ];
 
 // Nombre para la lista: sin "(cocido)" y con "crudo" si se convirtió
@@ -269,7 +605,7 @@ export function avisosPreparacion(comidas: ComidaDelPlan[], cn: CuestionarioNutr
 // si no lo dice, el tipo de alimento.
 const TECNICAS: { tecnica: string; patron: RegExp }[] = [
   { tecnica: "Hervido", patron: /hervid|\barroz|\bquinoa|\bfideo|\bpasta|\blenteja|\bgarbanzo|\bporoto/ },
-  { tecnica: "Horno", patron: /horno|asad|\bbatata|\bboniato|\bpapa\b|\bpapas|\bcalabaza|\bzapallo|\bzanahoria|\bbr[oó]coli|\bcoliflor|\bberenjena|\bmorr[oó]n|\bcebolla/ },
+  { tecnica: "Horno", patron: /horno|asad|\bbatata|\bboniato|\bcamote|\bpapa\b|\bpapas|\bcalabaza|\bzapallo|\bzanahoria|\bbr[oó]coli|\bcoliflor|\bberenjena|\bmorr[oó]n|\bcebolla/ },
   { tecnica: "Plancha o sartén", patron: CONGELADO }
 ];
 

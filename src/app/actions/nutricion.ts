@@ -22,7 +22,7 @@ function mensaje(e: unknown): string {
   return e instanceof Error ? e.message : "Ocurrió un error inesperado.";
 }
 
-const MOMENTOS: Momento[] = ["desayuno", "almuerzo", "merienda", "cena", "snack"];
+const MOMENTOS: Momento[] = ["desayuno", "almuerzo", "merienda", "cena", "snack", "pre_entreno", "post_entreno"];
 
 // ── Búsqueda de alimentos (base local + Open Food Facts) ────────
 

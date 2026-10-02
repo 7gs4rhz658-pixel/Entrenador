@@ -52,7 +52,7 @@ export default function AnticipoDia({
       {reco ? (
         <ul className="mt-2 flex flex-col gap-1 text-sm">
           {reco.comidas.map((c) => {
-            const hora = horaDe(c.momento, cn);
+            const hora = horaDe(c.momento, cn, c.hora);
             return (
               <li key={c.momento} className="flex gap-2">
                 <span className="w-24 shrink-0 text-muted">

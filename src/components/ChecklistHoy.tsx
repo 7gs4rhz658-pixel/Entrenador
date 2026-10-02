@@ -100,6 +100,8 @@ export default function ChecklistHoy({
         <ConstanciaTira tira={datos.tira} promedio={datos.promedio14} />
       </div>
 
+      <FaseActual datos={datos} />
+
       {resumenComida ? (
         <Link href="/nutricion" className="mt-3 block rounded-xl bg-surface2 px-3 py-2 text-xs text-muted">
           {resumenComida} <span className="font-semibold text-accent">· Nutrición →</span>
@@ -211,5 +213,50 @@ export default function ChecklistHoy({
       ) : null}
       {error ? <p className="mt-2 text-sm font-medium text-danger">✗ {error}</p> : null}
     </section>
+  );
+}
+
+// "martes 12 de octubre"
+function fechaLarga(f: string): string {
+  return new Date(`${f}T12:00:00`).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
+}
+
+function diasEntre(desde: string, hasta: string): number {
+  return Math.round((new Date(`${hasta}T12:00:00Z`).getTime() - new Date(`${desde}T12:00:00Z`).getTime()) / 86_400_000);
+}
+
+// En qué fase del protocolo va, lo que se sumó y lo que viene
+function FaseActual({ datos }: { datos: Datos }) {
+  const f = datos.fase;
+  if (datos.protocoloEmpieza) {
+    return (
+      <p className="mt-3 rounded-xl border border-line px-3 py-2 text-xs text-muted">
+        Tu protocolo empieza el <span className="font-semibold text-ink">{fechaLarga(datos.protocoloEmpieza)}</span>
+        {f ? ` con la ${f.nombre}` : ""}. Hasta entonces, sigue con tu menú y tu rutina.
+      </p>
+    );
+  }
+  if (!f) return null;
+  const faltan = f.proxima ? diasEntre(datos.fecha, f.proxima.fecha) : null;
+  return (
+    <div className="mt-3 rounded-xl border border-line px-3 py-2">
+      <p className="text-sm font-semibold">
+        {f.nombre}{" "}
+        <span className="font-normal text-muted">
+          · {f.numero} de {f.total} · día {f.diaDeLaFase}
+          {f.hasta ? ` de ${diasEntre(datos.fecha, f.hasta) + f.diaDeLaFase}` : ""}
+        </span>
+      </p>
+      {f.nota ? <p className="text-xs text-muted">{f.nota}</p> : null}
+      {f.numero > 1 && f.diaDeLaFase <= 3 && f.nuevos.length ? (
+        <p className="mt-1 text-xs font-medium text-accent">Nuevo en esta fase: {f.nuevos.join(", ")}</p>
+      ) : null}
+      {f.proxima && faltan != null && faltan <= 3 ? (
+        <p className="mt-1 text-xs">
+          {faltan <= 1 ? "Mañana" : `El ${fechaLarga(f.proxima.fecha)}`} empieza la {f.proxima.nombre}
+          {f.proxima.nuevos.length ? `: se suma ${f.proxima.nuevos.join(", ")}` : ""}. Revisa que lo tengas.
+        </p>
+      ) : null}
+    </div>
   );
 }

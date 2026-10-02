@@ -7,7 +7,7 @@ import { exec, getProtocolo, q, type ProtocoloActivo } from "./data";
 import { hoyFecha } from "./format";
 import { db } from "./supabase/server";
 import type { ItemEntrada } from "./protocolo";
-import type { Protocolo, ProtocoloItem } from "./types";
+import type { FaseProtocolo, Protocolo, ProtocoloItem } from "./types";
 
 // El borrador del cliente; si no hay, lo crea (copiando el publicado)
 export async function obtenerBorrador(userId: string): Promise<ProtocoloActivo> {
@@ -24,6 +24,7 @@ export async function obtenerBorrador(userId: string): Promise<ProtocoloActivo> 
         publicado: false,
         fecha_inicio: publicado?.protocolo.fecha_inicio ?? null,
         fuera_protocolo: publicado?.protocolo.fuera_protocolo ?? [],
+        fases: publicado?.protocolo.fases ?? [],
         notas: publicado?.protocolo.notas ?? null
       })
       .select("*")
@@ -44,14 +45,27 @@ export async function obtenerBorrador(userId: string): Promise<ProtocoloActivo> 
 // Reemplaza todo el contenido del borrador (lo usa la importación de .txt)
 export async function reemplazarBorrador(
   userId: string,
-  datos: { nombre: string; origen: "manual" | "txt"; fuera_protocolo: string[]; items: ItemEntrada[] }
+  datos: {
+    nombre: string;
+    origen: "manual" | "txt";
+    fuera_protocolo: string[];
+    fases: FaseProtocolo[];
+    fecha_inicio: string | null;
+    items: ItemEntrada[];
+  }
 ): Promise<void> {
   const borrador = await obtenerBorrador(userId);
   await exec(db().from("protocolo_items").delete().eq("protocolo_id", borrador.protocolo.id));
   await exec(
     db()
       .from("protocolos")
-      .update({ nombre: datos.nombre, origen: datos.origen, fuera_protocolo: datos.fuera_protocolo })
+      .update({
+        nombre: datos.nombre,
+        origen: datos.origen,
+        fuera_protocolo: datos.fuera_protocolo,
+        fases: datos.fases,
+        fecha_inicio: datos.fecha_inicio
+      })
       .eq("id", borrador.protocolo.id)
   );
   if (datos.items.length) {
@@ -108,7 +122,7 @@ export async function moverItemBorrador(userId: string, itemId: string, direccio
 
 export async function actualizarDatosBorrador(
   userId: string,
-  datos: { nombre: string; fuera_protocolo: string[]; fecha_inicio: string | null }
+  datos: { nombre: string; fuera_protocolo: string[]; fecha_inicio: string | null; fases: FaseProtocolo[] }
 ): Promise<void> {
   const borrador = await obtenerBorrador(userId);
   await exec(db().from("protocolos").update(datos).eq("id", borrador.protocolo.id));

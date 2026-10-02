@@ -35,7 +35,20 @@ Fecha: 2026-09-19 · Estado: **fases 1 a 6 implementadas y verificadas end-to-en
 | 2 | **Protocolos del entrenador por segmentos** (suplementos, hábitos, cara, cabello, sueño…): momento del día relativo al horario del cliente, días, semanas de progresión, "por qué", "fuera del protocolo"; borrador → enviar; `/protocolo` del cliente; cumplimiento por área en la ficha, el informe y el panel Hoy | ✓ | migración 0015 (`protocolos`, `protocolo_items`), `lib/protocolo*.ts`, `ProtocoloEditor.tsx` |
 | 3 | **Importar el plan en texto**: la IA ubica cada cosa en su momento sin recomendar nada (suplemento que no está en el texto → descartado; lo con calorías → menú), horarios del texto al cuestionario del cliente, "pasar las comidas al menú" | ✓ | `lib/ai-protocolo.ts`, `ProtocoloTxt.tsx` |
 
-Notas: los horarios del texto quedan en el cuestionario del cliente (editable en "Cómo comes"), no en `meal_plans.horarios`; esa columna de la migración 0015 quedó sin uso. Avisos push a la hora de cada ítem: pendiente (el plan gratis de Vercel permite un solo cron diario). Siguiente: el juego de antojos (`plan-antojos-gamificacion.md`) usando el % diario del checklist como motor de puntos; su migración pasa a ser la 0016.
+Notas: los horarios del texto quedan en el cuestionario del cliente (editable en "Cómo comes"). Avisos push a la hora de cada ítem: pendiente (el plan gratis de Vercel permite un solo cron diario). Siguiente: el juego de antojos (`plan-antojos-gamificacion.md`) usando el % diario del checklist como motor de puntos; su migración pasa a ser la 0017.
+
+### Ronda 4 — planes reales del entrenador: alimentos, 6 comidas y fases (2026-10-02)
+
+Al cargar un plan de México (6 comidas, horarios distintos en entreno y descanso, suplementos por fases) fallaba: alimentos "no encontrados" (base chica con nombres de Argentina y Open Food Facts devolviendo productos de España y EE. UU.), las colaciones se pisaban en un solo momento y no había fases.
+
+| # | Qué | Dónde |
+|---|---|---|
+| 1 | **Base de alimentos**: 56 → 141 propios, nombres de México y sinónimos (`alias`), búsqueda sin acentos ni plurales (`busqueda`); la base propia antes que Open Food Facts; "crear alimento con su etiqueta" en la vista previa | migración 0016, `buscarIngredientesLocal`, `elegir` (`meal-plan.ts`) |
+| 2 | **Comidas pre y post-entreno** y **hora de cada comida por tipo de día** (`meal_plans.horarios`): el checklist, el menú y las anclas del protocolo usan esas horas | migración 0016, `asignarMomentos`, `horarioDelDia` |
+| 3 | **Fases del protocolo** con fecha de inicio: cada ítem desde/hasta una fase; el cliente ve en qué fase va y qué se suma, y el aviso de la noche le anticipa el cambio | migración 0016 (`protocolos.fases`, `fase_desde/hasta`), `infoFase`, `ChecklistHoy`, `/protocolo` |
+| 4 | **Lectura del texto estable**: la IA copia cantidad y unidad y el código pone los gramos; reglas fijas (proteínas crudas/cocidas, "por qué" solo del texto, suplementos atados a su bloque, creatina de descanso); la lectura de cada texto queda guardada (`ia_lecturas`): el mismo texto da el mismo resultado | `aGramos`, `anclarPorBloque`, `completarDescanso`, `ia-lecturas.ts` |
+| 5 | **Objetivos del texto** (kcal y macros por tipo de día) como referencia del cliente, con casilla en la vista previa | `aplicarComidas` |
+| 6 | **Límite gratis de Groq** (8000 tokens por minuto, contando el máximo de respuesta): espera y reintenta, achica el máximo si hace falta, avisa claro y nunca devuelve un JSON cortado | `lib/ai.ts` |
 
 No verificado en local: la entrega real de notificaciones push (requiere teléfono + claves en Vercel + `SUPABASE_SERVICE_ROLE_KEY`); sí se verificó el service worker, la suscripción, la ruta del cron con su protección y el contenido del aviso (`/api/avisos/preview`).
 

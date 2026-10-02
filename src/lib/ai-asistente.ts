@@ -9,7 +9,7 @@ import type { ComidaDelPlan } from "./meal-plan";
 import type { CuestionarioNutricion, Momento, RespuestaAsistente, TipoSituacion } from "./types";
 
 const TIPOS: TipoSituacion[] = ["evento", "restaurante", "falta_ingrediente", "antojo", "viaje", "me_pase", "otro"];
-const MOMENTOS: (Momento | "general")[] = ["desayuno", "almuerzo", "merienda", "cena", "snack", "general"];
+const MOMENTOS: (Momento | "general")[] = ["desayuno", "almuerzo", "merienda", "cena", "snack", "pre_entreno", "post_entreno", "general"];
 
 export interface ContextoAsistente {
   nombre: string;
@@ -59,7 +59,7 @@ export async function resolverSituacion(
   "tipo": "evento" | "restaurante" | "falta_ingrediente" | "antojo" | "viaje" | "me_pase" | "otro",
   "resumen": string (1 frase con la idea principal),
   "que_comer": [ { "opcion": string, "cantidad": string, "por_que": string (corto) } ] (1 a 4; en "falta_ingrediente" la opción es el reemplazo con sus gramos equivalentes),
-  "reacomodo_dia": [ { "momento": "desayuno"|"almuerzo"|"merienda"|"cena"|"snack"|"general", "cambio": string } ] (0 a 4; solo comidas que todavía no comió),
+  "reacomodo_dia": [ { "momento": "desayuno"|"almuerzo"|"merienda"|"cena"|"snack"|"pre_entreno"|"post_entreno"|"general", "cambio": string } ] (0 a 4; solo comidas que todavía no comió),
   "mensaje": string (cierre de 1-2 frases, tranquilizador y concreto)
 }`,
     `${describirContexto(contexto)}\n\nEl cliente dice: "${pregunta.slice(0, 600)}"`,

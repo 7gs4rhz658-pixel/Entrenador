@@ -4,7 +4,10 @@ import {
   aMinutos,
   aplicaHoy,
   armarDia,
+  diaDelProtocolo,
+  faseDelDia,
   fmtHora,
+  infoFase,
   horaDelItem,
   horarioDelDia,
   porcentaje,
@@ -57,6 +60,8 @@ const item = (p: Partial<ProtocoloItem>): ProtocoloItem => ({
   aplica: "todos",
   semana_desde: null,
   semana_hasta: null,
+  fase_desde: null,
+  fase_hasta: null,
   orden: 1,
   ...p
 });
@@ -181,6 +186,80 @@ check("hoy incompleto no corta la racha", racha(d([20, 80, 90, 70, 40])) === 3);
 check("hoy cumplido suma", racha(d([100, 80, 50])) === 2);
 check("un día flojo corta", racha(d([0, 69, 100])) === 0);
 check("antes de arrancar el plan corta", racha(d([90, 90, null, 100])) === 2);
+
+// 7. Horas del menú por tipo de día y pre/post-entreno
+const cnTemprano: CuestionarioNutricion = { ...cn, comidas: [], hora_entreno: "05:00", hora_despertar: undefined };
+const hEntreno = horarioDelDia(cnTemprano, { pre_entreno: "04:30", post_entreno: "06:30", desayuno: "09:30" }, 75);
+const hDescanso = horarioDelDia(cnTemprano, { desayuno: "08:30" }, 75);
+check("la hora del menú manda (entreno 9:30, descanso 8:30)",
+  hEntreno.comida("desayuno").min === 9 * 60 + 30 && hDescanso.comida("desayuno").min === 8 * 60 + 30);
+check("pre-entreno sin hora propia: media hora antes del entreno",
+  horarioDelDia(cnTemprano).comida("pre_entreno").min === 4 * 60 + 30);
+check("post-entreno sin hora propia: al terminar + 15 min",
+  horarioDelDia(cnTemprano, {}, 75).comida("post_entreno").min === 5 * 60 + 75 + 15);
+check("despertar estimado antes de la primera comida aunque sea de madrugada",
+  !hEntreno.despertar.real && hEntreno.despertar.min === 4 * 60);
+check("con el post-entreno usa la hora del batido",
+  horaDelItem(item({ ancla: "con_post_entreno" }), hEntreno, 75)?.min === 6 * 60 + 30);
+check("15 min antes de entrenar = entreno − 15",
+  horaDelItem(item({ ancla: "antes_entreno", offset_min: -15 }), hEntreno, 75)?.min === 4 * 60 + 45);
+check("con el pre-entreno no aplica en descanso", !aplicaHoy(item({ ancla: "con_pre_entreno" }), 7, false, 1));
+
+const diaV = armarDia({
+  fecha: "2026-10-05",
+  diaSemana: 1,
+  cn: cnTemprano,
+  entreno: { diaId: "d1", nombre: "Pecho", ejercicios: 5 },
+  minutosEntreno: 75,
+  menu: [
+    { momento: "desayuno", titulo: "Desayuno", detalle: "", hora: "09:30" },
+    { momento: "pre_entreno", titulo: "Pre-entreno", detalle: "", hora: "04:30" },
+    { momento: "post_entreno", titulo: "Post-entreno", detalle: "", hora: "06:30" }
+  ],
+  aguaMl: null,
+  protocolo: null,
+  hechos: vacio()
+});
+check("pre, entreno, post y desayuno en orden",
+  diaV.map((i) => i.key).join(",") === "comida:pre_entreno,entreno,comida:post_entreno,comida:desayuno",
+  diaV.map((i) => i.key));
+
+// 8. Fases
+const fases = [
+  { nombre: "Fase 1", desde_dia: 1, nota: "Salud intestinal" },
+  { nombre: "Fase 2", desde_dia: 8, nota: null },
+  { nombre: "Fase 3", desde_dia: 15, nota: null }
+];
+check("día del protocolo", diaDelProtocolo("2026-10-05", "2026-10-05") === 1 && diaDelProtocolo("2026-10-05", "2026-10-12") === 8);
+check("fase del día", faseDelDia(fases, 1) === 1 && faseDelDia(fases, 7) === 1 && faseDelDia(fases, 8) === 2 && faseDelDia(fases, 40) === 3);
+check("sin fases no hay fase", faseDelDia([], 10) === null);
+const creatina = item({ titulo: "Creatina", fase_desde: 2 });
+check("lo de la fase 2 no aplica en la 1", !aplicaHoy(creatina, 1, true, 1, 1) && aplicaHoy(creatina, 1, true, 2, 2) && aplicaHoy(creatina, 1, true, 3, 3));
+check("hasta una fase", !aplicaHoy(item({ fase_hasta: 1 }), 1, true, 2, 2) && aplicaHoy(item({ fase_hasta: 1 }), 1, true, 1, 1));
+check("si el protocolo no tiene fases, la fase del ítem no cuenta", aplicaHoy(creatina, 1, true, 1, null));
+
+const conFases = armarDia({
+  fecha: "2026-10-06",
+  diaSemana: 2,
+  cn,
+  entreno: null,
+  minutosEntreno: 60,
+  menu: null,
+  aguaMl: null,
+  protocolo: { inicio: "2026-10-05", fases, items: [item({ id: "00000000-0000-0000-0000-0000000000f1", titulo: "Omega 3" }), { ...creatina, id: "00000000-0000-0000-0000-0000000000f2" }] },
+  hechos: vacio()
+});
+check("en la fase 1 solo aparece lo de la fase 1", conFases.filter((i) => i.tipo === "protocolo").map((i) => i.titulo).join() === "Omega 3");
+
+const info = infoFase(fases, "2026-10-05", "2026-10-10", [item({ titulo: "Omega 3" }), creatina, item({ titulo: "DIM", fase_desde: 3 })]);
+check("info de la fase: número, día y próxima",
+  info?.numero === 1 && info.total === 3 && info.dia === 6 && info.hasta === "2026-10-11" &&
+    info.proxima?.fecha === "2026-10-12" && info.proxima.nuevos.join() === "Creatina" && info.nuevos.join() === "Omega 3",
+  info);
+const info3 = infoFase(fases, "2026-10-05", "2026-10-20", [creatina]);
+check("la última fase no tiene próxima", info3?.numero === 3 && info3.proxima === null && info3.hasta === null && info3.diaDeLaFase === 2);
+const antes = infoFase(fases, "2026-10-05", "2026-10-03", []);
+check("antes de empezar: fase 1 con día ≤ 0", antes?.numero === 1 && antes.dia === -1);
 
 console.log(fallos ? `\n${fallos} TEST(S) FALLARON` : "\nTODOS LOS TESTS PASAN");
 if (fallos) process.exit(1);

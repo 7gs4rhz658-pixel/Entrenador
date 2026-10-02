@@ -6,7 +6,7 @@
 import { fmtLitros, sumarDias } from "./format";
 import { normalizarTexto } from "./meal-plan";
 import { nombreMomento } from "./nutrition";
-import type { AnclaProtocolo, CuestionarioNutricion, Momento, ProtocoloItem } from "./types";
+import type { AnclaProtocolo, CuestionarioNutricion, FaseProtocolo, Momento, ProtocoloItem } from "./types";
 
 export type TipoItemHoy = "comida" | "entreno" | "agua" | "protocolo";
 
@@ -39,9 +39,10 @@ export interface EntradaDia {
   cn: CuestionarioNutricion | null;
   entreno: { diaId: string; nombre: string; ejercicios: number } | null; // null = descanso
   minutosEntreno: number; // duración típica de la sesión
-  menu: { momento: Momento; titulo: string; detalle: string }[] | null; // null = sin menú
+  // null = sin menú; `hora` = la que fija el menú para este tipo de día
+  menu: { momento: Momento; titulo: string; detalle: string; hora?: string }[] | null;
   aguaMl: number | null;
-  protocolo: { items: ProtocoloItem[]; inicio: string } | null;
+  protocolo: { items: ProtocoloItem[]; inicio: string; fases?: FaseProtocolo[] } | null;
   hechos: HechosDia;
 }
 
@@ -52,7 +53,9 @@ const HORA_TIPICA: Record<Momento, string> = {
   almuerzo: "13:00",
   merienda: "17:00",
   cena: "21:00",
-  snack: "11:00"
+  snack: "11:00",
+  pre_entreno: "17:30",
+  post_entreno: "19:30"
 };
 
 export function aMinutos(hora: string | null | undefined): number | null {
@@ -87,16 +90,27 @@ export interface HorarioDia {
   dormir: { min: number; real: boolean };
 }
 
-export function horarioDelDia(cn: CuestionarioNutricion | null): HorarioDia {
-  const comida = (m: Momento) => {
-    const real = aMinutos(cn?.comidas.find((c) => c.momento === m)?.hora);
-    return real != null ? { min: real, real: true } : { min: aMinutos(HORA_TIPICA[m])!, real: false };
-  };
+// `horasMenu`: las horas que fija el menú para este tipo de día (mandan
+// sobre las del cuestionario: entreno y descanso pueden ir distinto).
+export function horarioDelDia(
+  cn: CuestionarioNutricion | null,
+  horasMenu: Partial<Record<Momento, string>> = {},
+  minutosEntreno = 60
+): HorarioDia {
   const entrenoReal = aMinutos(cn?.hora_entreno);
   const entreno = entrenoReal != null ? { min: entrenoReal, real: true } : { min: 18 * 60, real: false };
+  const comida = (m: Momento) => {
+    const real = aMinutos(horasMenu[m]) ?? aMinutos(cn?.comidas.find((c) => c.momento === m)?.hora);
+    if (real != null) return { min: real, real: true };
+    // Pre y post-entreno, sin hora propia, van pegados al entreno
+    if (m === "pre_entreno") return { min: entreno.min - 30, real: entreno.real };
+    if (m === "post_entreno") return { min: entreno.min + minutosEntreno + 15, real: entreno.real };
+    return { min: aMinutos(HORA_TIPICA[m])!, real: false };
+  };
 
   const conocidas = [
     ...(cn?.comidas ?? []).map((c) => aMinutos(c.hora)),
+    ...Object.values(horasMenu).map((h) => aMinutos(h)),
     entrenoReal
   ].filter((x): x is number => x != null);
   const despReal = aMinutos(cn?.hora_despertar);
@@ -104,7 +118,7 @@ export function horarioDelDia(cn: CuestionarioNutricion | null): HorarioDia {
   const despertar =
     despReal != null
       ? { min: despReal, real: true }
-      : { min: conocidas.length ? Math.max(5 * 60, Math.min(...conocidas) - 60) : 7 * 60, real: false };
+      : { min: conocidas.length ? Math.max(3 * 60 + 30, Math.min(...conocidas) - 30) : 7 * 60, real: false };
   const dormir =
     dormReal != null
       ? { min: dormReal, real: true }
@@ -114,27 +128,55 @@ export function horarioDelDia(cn: CuestionarioNutricion | null): HorarioDia {
 
 // ── Protocolo: ¿aplica hoy y a qué hora? ────────────────────────
 
-// Semana del protocolo (1 = la primera) para una fecha
-export function semanaDelProtocolo(inicio: string, fecha: string): number {
-  const dias = Math.round(
-    (new Date(`${fecha}T12:00:00Z`).getTime() - new Date(`${inicio}T12:00:00Z`).getTime()) / 86_400_000
+// Día del protocolo (1 = la fecha de inicio; 0 o menos = todavía no empezó)
+export function diaDelProtocolo(inicio: string, fecha: string): number {
+  return (
+    Math.round((new Date(`${fecha}T12:00:00Z`).getTime() - new Date(`${inicio}T12:00:00Z`).getTime()) / 86_400_000) + 1
   );
-  return Math.max(1, Math.floor(dias / 7) + 1);
 }
 
+// Semana del protocolo (1 = la primera) para una fecha
+export function semanaDelProtocolo(inicio: string, fecha: string): number {
+  return Math.max(1, Math.floor((diaDelProtocolo(inicio, fecha) - 1) / 7) + 1);
+}
+
+// Fase en la que cae un día del protocolo (1 = la primera); null si el
+// protocolo no tiene fases
+export function faseDelDia(fases: FaseProtocolo[] | undefined, dia: number): number | null {
+  if (!fases?.length) return null;
+  let n = 1;
+  fases.forEach((f, i) => {
+    if (dia >= f.desde_dia) n = i + 1;
+  });
+  return n;
+}
+
+const ANCLAS_DE_ENTRENO: AnclaProtocolo[] = [
+  "antes_entreno",
+  "durante_entreno",
+  "despues_entreno",
+  "con_pre_entreno",
+  "con_post_entreno"
+];
+
 export function aplicaHoy(
-  item: Pick<ProtocoloItem, "dias" | "aplica" | "semana_desde" | "semana_hasta"> & { ancla?: AnclaProtocolo },
+  item: Pick<ProtocoloItem, "dias" | "aplica" | "semana_desde" | "semana_hasta"> &
+    Partial<Pick<ProtocoloItem, "fase_desde" | "fase_hasta">> & { ancla?: AnclaProtocolo },
   diaSemana: number,
   esEntreno: boolean,
-  semana: number
+  semana: number,
+  fase: number | null = null
 ): boolean {
   if (item.dias.length && !item.dias.includes(diaSemana)) return false;
   if (item.aplica === "entreno" && !esEntreno) return false;
   // Antes, durante o después de entrenar no existe en un día de descanso
-  if (!esEntreno && (item.ancla === "antes_entreno" || item.ancla === "durante_entreno" || item.ancla === "despues_entreno")) return false;
+  if (!esEntreno && item.ancla && ANCLAS_DE_ENTRENO.includes(item.ancla)) return false;
   if (item.aplica === "descanso" && esEntreno) return false;
   if (item.semana_desde != null && semana < item.semana_desde) return false;
   if (item.semana_hasta != null && semana > item.semana_hasta) return false;
+  // Las fases solo cuentan si el protocolo las tiene
+  if (fase != null && item.fase_desde != null && fase < item.fase_desde) return false;
+  if (fase != null && item.fase_hasta != null && fase > item.fase_hasta) return false;
   return true;
 }
 
@@ -143,7 +185,9 @@ const ANCLA_COMIDA: Partial<Record<AnclaProtocolo, Momento>> = {
   con_almuerzo: "almuerzo",
   con_merienda: "merienda",
   con_cena: "cena",
-  con_snack: "snack"
+  con_snack: "snack",
+  con_pre_entreno: "pre_entreno",
+  con_post_entreno: "post_entreno"
 };
 
 // Hora del ítem en el día del cliente. `real` = false cuando depende de un
@@ -164,7 +208,8 @@ export function horaDelItem(
     case "al_despertar":
       return mas(h.despertar);
     case "antes_entreno":
-      return mas(h.entreno, -30);
+      // "15 min antes de entrenar" = −15; sin minutos, media hora antes
+      return item.offset_min ? mas(h.entreno) : mas(h.entreno, -30);
     case "durante_entreno":
       return mas(h.entreno, 1);
     case "despues_entreno":
@@ -183,7 +228,9 @@ const SIN_HORA = 24 * 60; // lo que va "en el día" queda al final
 const AGUA = /\bagua\b/;
 
 export function armarDia(e: EntradaDia): ItemHoy[] {
-  const h = horarioDelDia(e.cn);
+  const horasMenu: Partial<Record<Momento, string>> = {};
+  for (const c of e.menu ?? []) if (c.hora) horasMenu[c.momento] = c.hora;
+  const h = horarioDelDia(e.cn, horasMenu, e.minutosEntreno);
   const items: ItemHoy[] = [];
 
   // Comidas: las del menú o, sin menú, las que el cliente dijo que hace
@@ -230,9 +277,10 @@ export function armarDia(e: EntradaDia): ItemHoy[] {
   // ("Cara: limpiador, sérum, protector"), como una rutina, no tres pasos
   if (e.protocolo) {
     const semana = semanaDelProtocolo(e.protocolo.inicio, e.fecha);
+    const fase = faseDelDia(e.protocolo.fases, diaDelProtocolo(e.protocolo.inicio, e.fecha));
     const grupos = new Map<string, { it: ProtocoloItem; hora: { min: number; real: boolean } | null }[]>();
     for (const it of [...e.protocolo.items].sort((a, b) => a.orden - b.orden)) {
-      if (!aplicaHoy(it, e.diaSemana, e.entreno != null, semana)) continue;
+      if (!aplicaHoy(it, e.diaSemana, e.entreno != null, semana, fase)) continue;
       const hora = horaDelItem(it, h, e.minutosEntreno);
       const clave = `${it.segmento}|${hora ? hora.min : SIN_HORA}`;
       (grupos.get(clave) ?? grupos.set(clave, []).get(clave)!).push({ it, hora });
@@ -278,6 +326,51 @@ export function armarDia(e: EntradaDia): ItemHoy[] {
     .map((it, i) => ({ it, i }))
     .sort((a, b) => a.it.orden - b.it.orden || PRIORIDAD[a.it.tipo] - PRIORIDAD[b.it.tipo] || a.i - b.i)
     .map((x) => x.it);
+}
+
+// ── Fases del protocolo ─────────────────────────────────────────
+
+export interface InfoFase {
+  numero: number;
+  total: number;
+  nombre: string;
+  nota: string | null;
+  dia: number; // día del protocolo (1 = el inicio)
+  diaDeLaFase: number;
+  hasta: string | null; // último día de esta fase; null = la última
+  nuevos: string[]; // lo que se suma en esta fase
+  proxima: { numero: number; nombre: string; fecha: string; nuevos: string[] } | null;
+}
+
+// Dónde va el cliente en las fases y qué cambia ahora o en la próxima.
+// Antes del inicio devuelve la fase 1 con día ≤ 0 (para "empieza el…").
+export function infoFase(
+  fases: FaseProtocolo[] | undefined,
+  inicio: string,
+  fecha: string,
+  items: Pick<ProtocoloItem, "titulo" | "fase_desde">[]
+): InfoFase | null {
+  if (!fases?.length) return null;
+  const dia = diaDelProtocolo(inicio, fecha);
+  const numero = faseDelDia(fases, Math.max(1, dia))!;
+  const fase = fases[numero - 1];
+  const sig = fases[numero];
+  const nuevosDe = (n: number) => [
+    ...new Set(items.filter((i) => (i.fase_desde ?? 1) === n).map((i) => i.titulo))
+  ];
+  return {
+    numero,
+    total: fases.length,
+    nombre: fase.nombre,
+    nota: fase.nota,
+    dia,
+    diaDeLaFase: dia - fase.desde_dia + 1,
+    hasta: sig ? sumarDias(inicio, sig.desde_dia - 2) : null,
+    nuevos: nuevosDe(numero),
+    proxima: sig
+      ? { numero: numero + 1, nombre: sig.nombre, fecha: sumarDias(inicio, sig.desde_dia - 1), nuevos: nuevosDe(numero + 1) }
+      : null
+  };
 }
 
 export function porcentaje(items: Pick<ItemHoy, "hecho">[]): number | null {

@@ -102,7 +102,7 @@ export default function AgregarComida({
         </button>
       </div>
 
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         {MOMENTOS.map((m) => (
           <button
             key={m.valor}

@@ -4,8 +4,9 @@
 
 import { getDias, getProtocolo, getUltimaActividad } from "./data";
 import { hoyDiaSemana, hoyFecha, nombreDia, sumarDias } from "./format";
-import { aplicaHoy, semanaDelProtocolo } from "./hoy";
+import { aplicaHoy, diaDelProtocolo, faseDelDia, semanaDelProtocolo } from "./hoy";
 import { recomendacionPara } from "./meal-plan-db";
+import { nombreMomento } from "./nutrition";
 import { estadoPago } from "./pagos";
 import type { CargaPush } from "./push";
 import { checkinPendiente } from "./stats";
@@ -47,15 +48,31 @@ export async function armarAvisoDiario(c: Profile): Promise<CargaPush> {
   const reco = await recomendacionPara(c.id, entrena ? "entreno" : "descanso", c.cuestionario_nutricion);
   const primera = reco?.comidas[0];
   const cabeza = entrena ? `${nombreDia(manana)}: ${diaM?.nombre || "entreno"}` : `${nombreDia(manana)}: descanso`;
-  const comida = primera ? ` · ${primera.plato || primera.momento}` : "";
+  const comida = primera ? ` · ${primera.plato || nombreMomento(primera.momento)}` : "";
   const aviso = reco?.avisos[0] ? ` · ${reco.avisos[0]}` : "";
   const protocolo = await getProtocolo(c.id);
   const fechaM = sumarDias(hoy, 1);
-  const delProtocolo = protocolo
-    ? protocolo.items.filter((i) => aplicaHoy(i, manana, entrena, semanaDelProtocolo(protocolo.inicio, fechaM))).length
-    : 0;
+  const diaProt = protocolo ? diaDelProtocolo(protocolo.inicio, fechaM) : 0;
+  const faseM = protocolo ? faseDelDia(protocolo.protocolo.fases, diaProt) : null;
+  const delProtocolo =
+    protocolo && diaProt >= 1
+      ? protocolo.items.filter((i) => aplicaHoy(i, manana, entrena, semanaDelProtocolo(protocolo.inicio, fechaM), faseM)).length
+      : 0;
   const extra = delProtocolo ? ` · ${delProtocolo} de tu protocolo` : "";
   partes.unshift(`${cabeza}${comida}${aviso}${extra}`);
+
+  // Mañana arranca el protocolo o cambia de fase: qué se suma
+  if (protocolo && faseM != null && diaProt >= 1) {
+    const fase = protocolo.protocolo.fases[faseM - 1];
+    if (fase.desde_dia === diaProt) {
+      const nuevos = [...new Set(protocolo.items.filter((i) => (i.fase_desde ?? 1) === faseM).map((i) => i.titulo))];
+      partes.push(
+        `Mañana empiezas la ${fase.nombre}${nuevos.length ? `: ${faseM === 1 ? "arrancas con" : "se suma"} ${nuevos.slice(0, 4).join(", ")}` : ""}.`
+      );
+    }
+  } else if (protocolo && diaProt === 1) {
+    partes.push("Mañana empieza tu protocolo: lo ves en Hoy, cada cosa a su hora.");
+  }
 
   return {
     titulo: partes.length > 1 ? "Mañana te toca (y algo más)" : "Mañana te toca",

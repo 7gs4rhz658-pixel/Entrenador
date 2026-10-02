@@ -11,9 +11,9 @@ import {
   quitarProtocoloCliente
 } from "@/app/actions/protocolo";
 import type { ProtocoloActivo } from "@/lib/data";
-import { aHora, fmtHora, horaDelItem, horarioDelDia } from "@/lib/hoy";
-import { ANCLAS, SEGMENTOS, textoCuando, textoCuandoAplica, type ItemEntrada } from "@/lib/protocolo";
-import type { CuestionarioNutricion, ProtocoloItem } from "@/lib/types";
+import { aHora, aplicaHoy, fmtHora, horaDelItem, horarioDelDia } from "@/lib/hoy";
+import { ANCLAS, SEGMENTOS, textoCuando, textoCuandoAplica, textoDiasFase, type ItemEntrada } from "@/lib/protocolo";
+import type { CuestionarioNutricion, FaseProtocolo, HorariosMenu, ProtocoloItem } from "@/lib/types";
 
 const DIAS = ["L", "M", "M", "J", "V", "S", "D"];
 
@@ -28,7 +28,9 @@ const NUEVO: ItemEntrada = {
   dias: [1, 2, 3, 4, 5, 6, 7],
   aplica: "todos",
   semana_desde: null,
-  semana_hasta: null
+  semana_hasta: null,
+  fase_desde: null,
+  fase_hasta: null
 };
 
 function desdeItem(i: ProtocoloItem): ItemEntrada {
@@ -43,7 +45,9 @@ function desdeItem(i: ProtocoloItem): ItemEntrada {
     dias: i.dias,
     aplica: i.aplica,
     semana_desde: i.semana_desde,
-    semana_hasta: i.semana_hasta
+    semana_hasta: i.semana_hasta,
+    fase_desde: i.fase_desde,
+    fase_hasta: i.fase_hasta
   };
 }
 
@@ -53,12 +57,14 @@ export default function ProtocoloEditor({
   userId,
   borrador,
   publicado,
-  cn
+  cn,
+  horarios = null
 }: {
   userId: string;
   borrador: ProtocoloActivo | null;
   publicado: ProtocoloActivo | null;
   cn: CuestionarioNutricion | null;
+  horarios?: HorariosMenu | null; // horas del menú por tipo de día
 }) {
   const actual = borrador ?? publicado;
   const items = actual?.items ?? [];
@@ -71,8 +77,11 @@ export default function ProtocoloEditor({
   const [datos, setDatos] = useState({
     nombre: actual?.protocolo.nombre ?? "Protocolo",
     fecha_inicio: actual?.protocolo.fecha_inicio ?? "",
-    fuera: (actual?.protocolo.fuera_protocolo ?? []).join("\n")
+    fuera: (actual?.protocolo.fuera_protocolo ?? []).join("\n"),
+    fases: (actual?.protocolo.fases ?? []) as FaseProtocolo[]
   });
+  const fasesGuardadas = actual?.protocolo.fases ?? [];
+  const [fasePrevia, setFasePrevia] = useState(1);
 
   function correr(fn: () => Promise<{ error?: string }>, ok?: string, despues?: () => void) {
     setError(null);
@@ -98,13 +107,18 @@ export default function ProtocoloEditor({
     .map((s) => ({ segmento: s, lista: items.filter((i) => i.segmento === s).sort((a, b) => a.orden - b.orden) }))
     .filter((g) => g.lista.length);
 
-  // Vista previa: cómo queda ordenado en un día de entreno y uno de descanso
-  const horario = horarioDelDia(cn);
-  const previa = (entreno: boolean) =>
-    items
+  // Vista previa: cómo queda ordenado en un día de entreno y uno de
+  // descanso (con las horas del menú de cada tipo de día y, si hay fases,
+  // en la fase elegida)
+  const previa = (entreno: boolean) => {
+    const horario = horarioDelDia(cn, horarios?.[entreno ? "entreno" : "descanso"] ?? {}, 60);
+    const fase = fasesGuardadas.length ? Math.min(fasePrevia, fasesGuardadas.length) : null;
+    return items
       .filter((i) => i.aplica === "todos" || (i.aplica === "entreno") === entreno)
+      .filter((i) => aplicaHoy({ ...i, dias: [], semana_desde: null, semana_hasta: null }, 1, entreno, 1, fase))
       .map((i) => ({ i, h: horaDelItem(i, horario, 60) }))
       .sort((a, b) => (a.h?.min ?? 9999) - (b.h?.min ?? 9999));
+  };
 
   const set = <K extends keyof ItemEntrada>(k: K, v: ItemEntrada[K]) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -316,6 +330,37 @@ export default function ProtocoloEditor({
             <p className="text-xs text-muted">
               Las semanas sirven para progresiones (ej. retinol 2 noches en las semanas 1-2, 3 noches desde la 3).
             </p>
+            {fasesGuardadas.length > 1 ? (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="label" htmlFor="p-fd">Desde la fase</label>
+                  <select
+                    id="p-fd"
+                    className="input"
+                    value={form.fase_desde ?? 1}
+                    onChange={(e) => set("fase_desde", Number(e.target.value) === 1 ? null : Number(e.target.value))}
+                  >
+                    {fasesGuardadas.map((f, i) => (
+                      <option key={i} value={i + 1}>{f.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="label" htmlFor="p-fh">Hasta la fase</label>
+                  <select
+                    id="p-fh"
+                    className="input"
+                    value={form.fase_hasta ?? 0}
+                    onChange={(e) => set("fase_hasta", Number(e.target.value) || null)}
+                  >
+                    <option value={0}>Hasta el final</option>
+                    {fasesGuardadas.map((f, i) => (
+                      <option key={i} value={i + 1}>{f.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : null}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -344,7 +389,23 @@ export default function ProtocoloEditor({
       {items.length ? (
         <section className="card">
           <h2 className="font-bold">Así lo ve ordenado</h2>
-          <p className="text-xs text-muted">Con los horarios que cargó el cliente (lo que no tiene hora va al final).</p>
+          <p className="text-xs text-muted">
+            Con los horarios del menú y del cliente (lo que no tiene hora va al final; ~ = hora estimada).
+          </p>
+          {fasesGuardadas.length > 1 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {fasesGuardadas.map((f, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setFasePrevia(i + 1)}
+                  className={`chip px-2.5 py-1 text-xs ${fasePrevia === i + 1 ? "border-accent text-accent" : "border-line text-muted"}`}
+                >
+                  {f.nombre}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             {[true, false].map((entreno) => (
               <div key={String(entreno)}>
@@ -375,9 +436,90 @@ export default function ProtocoloEditor({
             <input id="p-nom" className="input" value={datos.nombre} maxLength={80} onChange={(e) => setDatos({ ...datos, nombre: e.target.value })} />
           </div>
           <div>
-            <label className="label" htmlFor="p-ini">Inicio (semana 1 de las progresiones)</label>
+            <label className="label" htmlFor="p-ini">Fecha de inicio (día 1: fase 1 y semana 1)</label>
             <input id="p-ini" type="date" className="input" value={datos.fecha_inicio} onChange={(e) => setDatos({ ...datos, fecha_inicio: e.target.value })} />
             <p className="mt-1 text-xs text-muted">Si lo dejas vacío, arranca el día que lo envías.</p>
+          </div>
+          <div>
+            <p className="label">Fases</p>
+            <p className="text-xs text-muted">
+              Para planes que suman cosas por etapas (ej. Fase 1 días 1-7, Fase 2 días 8-14, Fase 3 desde el 15). La
+              app le muestra al cliente en qué fase va, le avisa la víspera de cada cambio y solo le pone lo de su fase.
+            </p>
+            <ul className="mt-2 flex flex-col gap-2">
+              {datos.fases.map((f, i) => (
+                <li key={i} className="rounded-xl border border-line p-2">
+                  <div className="flex gap-2">
+                    <input
+                      className="input flex-1 py-1.5 text-sm"
+                      value={f.nombre}
+                      maxLength={60}
+                      aria-label={`Nombre de la fase ${i + 1}`}
+                      onChange={(e) =>
+                        setDatos((d) => ({ ...d, fases: d.fases.map((x, k) => (k === i ? { ...x, nombre: e.target.value } : x)) }))
+                      }
+                    />
+                    <label className="flex items-center gap-1 text-xs text-muted">
+                      desde el día
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        className="input w-16 px-2 py-1.5 text-sm"
+                        value={f.desde_dia}
+                        disabled={i === 0}
+                        onChange={(e) =>
+                          setDatos((d) => ({
+                            ...d,
+                            fases: d.fases.map((x, k) => (k === i ? { ...x, desde_dia: Number(e.target.value) || 1 } : x))
+                          }))
+                        }
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      aria-label={`Quitar la fase ${i + 1}`}
+                      onClick={() => setDatos((d) => ({ ...d, fases: d.fases.filter((_, k) => k !== i) }))}
+                      className="px-1 text-danger"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <input
+                    className="input mt-1.5 py-1.5 text-sm"
+                    value={f.nota ?? ""}
+                    maxLength={300}
+                    placeholder="Qué se hace en esta fase (lo ve el cliente)"
+                    aria-label={`Nota de la fase ${i + 1}`}
+                    onChange={(e) =>
+                      setDatos((d) => ({ ...d, fases: d.fases.map((x, k) => (k === i ? { ...x, nota: e.target.value || null } : x)) }))
+                    }
+                  />
+                  {datos.fases.length > 1 ? (
+                    <p className="mt-1 text-[11px] text-muted">{textoDiasFase(datos.fases, i)}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() =>
+                setDatos((d) => {
+                  const ultima = d.fases[d.fases.length - 1];
+                  const nueva = { nombre: `Fase ${d.fases.length + 1}`, desde_dia: ultima ? ultima.desde_dia + 7 : 1, nota: null };
+                  // La primera fase que se agrega trae la 2: una sola fase no es un plan por fases
+                  return { ...d, fases: d.fases.length ? [...d.fases, nueva] : [nueva, { nombre: "Fase 2", desde_dia: 8, nota: null }] };
+                })
+              }
+              className="btn-ghost mt-2 w-full py-1.5 text-sm"
+            >
+              + Agregar fase
+            </button>
+            {datos.fases.length > 1 ? (
+              <p className="mt-1 text-xs text-muted">
+                Guarda los datos y después, en cada ítem, elige desde qué fase se usa.
+              </p>
+            ) : null}
           </div>
           <div>
             <label className="label" htmlFor="p-fuera">Fuera del protocolo (una línea por cosa)</label>
@@ -393,8 +535,8 @@ export default function ProtocoloEditor({
           </div>
           <button
             type="button"
-            disabled={pendiente}
             onClick={() => correr(() => guardarDatosProtocolo({ userId, ...datos }), "✓ Guardado en el borrador.")}
+            disabled={pendiente || datos.fases.length === 1}
             className="btn-ghost"
           >
             Guardar datos

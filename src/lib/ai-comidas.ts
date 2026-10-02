@@ -7,7 +7,7 @@
 
 import { ErrorIA, describirPerfil, generarJSON } from "./ai";
 import type { Macros } from "./nutrition";
-import { normalizarPlanComidas } from "./meal-plan";
+import { normalizarPlanComidas, normalizarTexto } from "./meal-plan";
 import type { BatchCooking, CuestionarioNutricion, PlanComidasGenerado, Profile } from "./types";
 
 const TONO = `Sos el asistente de un entrenador personal. Lo que escribís son RECOMENDACIONES de alimentación como orientación general del entrenador: usá "te recomiendo", "podés", "una opción es". Nunca hables como profesional de la salud, no menciones enfermedades, medicación ni suplementos, y no prometas resultados. Español rioplatense, voseo, frases cortas.`;
@@ -66,16 +66,69 @@ export async function generarRecomendacionComidas(
 
 // ── 2. Interpretar un .txt del entrenador ───────────────────────
 
+const INSTRUCCIONES_TXT = `Eres el asistente de un entrenador personal. Recibes el plan de alimentación que el entrenador escribió para un cliente (texto libre: bloques con horario, listas, tablas, abreviaturas, "150g pollo + 80g arroz") y lo conviertes FIELMENTE a JSON. Transcribes, no recomiendas: no agregues, quites ni cambies comidas, alimentos ni cantidades.
+
+Reglas:
+- Días: si el texto distingue día de entreno y de descanso (o "día A / día B", "con gym / sin gym"), respétalo. Si describe varios días de la semana, usa el más representativo de los que entrena como "entreno" y el más representativo del resto como "descanso". Si trae un solo menú, ponlo en "entreno" y deja "descanso" vacío.
+- Cada bloque de comida del texto es una comida, con su "hora" (HH:MM, 24 h; si da un rango, el inicio; null si no tiene) y su "etiqueta" tal como la nombra el texto ("Pre-Entrenamiento", "Almuerzo / Desayuno sólido", "Comida", "Colación de la tarde", "Cena"). "momento": "pre_entreno" o "post_entreno" para lo que se come antes o después de entrenar; para el resto el que corresponda ("desayuno", "snack" = colación de media mañana, "almuerzo" = la comida del mediodía, "merienda" = colación de la tarde, "cena"). "plato": nombre corto del bloque (ej. "Energía rápida", "Batido post-entreno").
+- Un alimento por fila. Copia la cantidad TAL COMO la escribe el texto en "cantidad" y "unidad": "g" (gramos o mililitros), "pieza" (huevos, claras, galletas, frutas, tortillas…), "scoop", "cucharada", "cucharadita", "taza" o "libre" (si dice "cantidad libre" o no da cantidad; "cantidad": null). Si el texto da piezas Y gramos ("1 plátano mediano (aprox. 100 g)", "1.5 scoops (45 g)"), usa los gramos: unidad "g". En "gramos" pon tu estimación en gramos de la porción (solo es respaldo).
+- Peso crudo o cocido: si el texto dice "peso en crudo", el nombre lleva "(crudo)"; si dice "peso cocido" o "hervido", "(cocido)". Si una carne o pescado no lo aclara, usa el mismo criterio que el resto de las proteínas del plan (si las pesa en crudo, crudo).
+- Opciones: "pollo o pescado blanco" → usa la primera y pon "o pescado blanco" en la nota (siempre que el texto dé opciones, la nota las dice). "Pepino, jícama y zanahoria" son tres alimentos (reparte la cantidad).
+- Todo lo que se come con cantidad va, aunque tenga pocas calorías: aderezos (vinagre, aceite, limón), verduras y ensaladas.
+- Cómo se cocina ("al vapor", "con aceite en aerosol", "licuar con agua y hielo") va en la nota del alimento, no como alimento. El agua, el hielo, la sal, las especias, el café o té sin azúcar no van.
+- No son comida y NO van: suplementos (creatina, vitaminas, omega 3, minerales, probióticos, enzimas, aminoácidos, glutamina, citrulina, beta-alanina, DIM, pre-entreno), los productos de cuidado personal, las listas de compras y las indicaciones de horario sin comida ("cierre de líquidos", "hora de dormir"); eso va al protocolo del entrenador. La proteína en polvo SÍ es comida.
+- Nombres: genéricos, en español de México, sin marcas. Cuando el alimento del texto sea el mismo que uno de la lista base, usa EXACTAMENTE el nombre de la lista.
+- "objetivos": si el texto fija calorías y macros diarios (ej. una tabla "Días de entrenamiento 2,150 kcal…"), cópialos por tipo de día; si no, null.
+- "notas": 1-2 frases del texto para el cliente (ej. "Pesa todo en tu báscula"), o null.
+
+Devuelve SOLO un JSON con esta forma exacta:
+{
+  "nombre": string (corto, ej. "Plan de alimentación"),
+  "notas": string | null,
+  "objetivos": { "entreno": { "kcal": number, "prot_g": number, "carb_g": number, "grasa_g": number } | null, "descanso": { ...igual... } | null } | null,
+  "entreno": [ { "etiqueta": string, "hora": "HH:MM" | null, "momento": "pre_entreno" | "post_entreno" | "desayuno" | "snack" | "almuerzo" | "merienda" | "cena", "plato": string, "ingredientes": [ { "nombre": string, "cantidad": number | null, "unidad": "g" | "pieza" | "scoop" | "cucharada" | "cucharadita" | "taza" | "libre", "gramos": number, "nota": string | null } ] } ],
+  "descanso": [ ...misma forma... ]
+}`;
+
+// La IA gratis tiene un límite de tokens por minuto: se le manda solo lo
+// que sirve. De la base, los nombres que tienen que ver con el texto; del
+// texto, sin la lista de compras del final (no son comidas).
+const raiz = (w: string) => w.replace(/(es|s)$/, "");
+
+export function baseRelevante(base: string[], texto: string): string[] {
+  const delTexto = new Set(normalizarTexto(texto).split(" ").map(raiz));
+  return base.filter((n) =>
+    normalizarTexto(n)
+      .split(" ")
+      .some((w) => w.length >= 4 && delTexto.has(raiz(w)))
+  );
+}
+
+export function sinListaDeCompras(texto: string): string {
+  const m = /^.*lista de (las )?compras.*$/im.exec(texto);
+  return m && m.index > texto.length * 0.5 ? texto.slice(0, m.index).trimEnd() : texto;
+}
+
+// Cambiarla cuando cambien las instrucciones: las lecturas guardadas con
+// la versión anterior dejan de usarse (ver ia-lecturas.ts)
+export const VERSION_MENU_TXT = "2026-10-02";
+
+// Lo que responde la IA, sin sanear (es lo que se guarda)
+export async function pedirComidasTxt(texto: string, perfil: Profile, base: string[] = []): Promise<unknown> {
+  const fuente = sinListaDeCompras(texto).slice(0, 12000);
+  return generarJSON<unknown>(
+    INSTRUCCIONES_TXT,
+    `Lista base de alimentos (usa estos nombres cuando sea el mismo alimento): ${baseRelevante(base, fuente).join("; ")}\n\nPerfil del cliente:\n${describirPerfil(perfil)}\n\nTexto del entrenador:\n"""\n${fuente}\n"""`,
+    { temperatura: 0, maxTokens: 4000 }
+  );
+}
+
 export async function interpretarComidasTxt(
   texto: string,
-  perfil: Profile
+  perfil: Profile,
+  base: string[] = []
 ): Promise<PlanComidasGenerado> {
-  const raw = await generarJSON<unknown>(
-    `${TONO} Recibís una recomendación de comidas escrita a mano por el entrenador (texto libre: listas, tablas, abreviaturas, "150g pollo + 80g arroz", con o sin días ni horarios) y la convertís FIELMENTE a JSON. No inventes comidas ni ingredientes que el texto no mencione; si falta la cantidad, estimá una porción razonable y anotá "cantidad estimada" en la nota. Si el texto distingue día de entreno y día de descanso (o "día A / día B", "con gym / sin gym"), respetalo. Si describe varios días de la semana, usá el más representativo de los días que entrena como "entreno" y el más representativo del resto como "descanso". Si trae un solo menú, usalo para los dos. Mapeá cada comida al momento que corresponda (desayuno, almuerzo, merienda, cena o snack); "colación" y "pre/post entreno" son snack. Si el cuestionario del cliente ya trae horarios, usalos para decidir el momento de cada comida del texto ("Comida 1 a las 12:00" es la comida del cliente más cercana a esa hora). Ignorá lo que no es comida: suplementos sin calorías relevantes (creatina, vitaminas, minerales, magnesio, aminoácidos, electrolitos, pre-entreno), café o té sin azúcar, el agua y los productos de cuidado personal; eso va al protocolo del entrenador. La proteína en polvo sí es comida. ${ESQUEMA_COMIDAS}`,
-    `Perfil del cliente:\n${describirPerfil(perfil)}\n\nTexto del entrenador:\n"""\n${texto.slice(0, 12000)}\n"""`,
-    { temperatura: 0.1 }
-  );
-  return normalizarPlanComidas(raw);
+  return normalizarPlanComidas(await pedirComidasTxt(texto, perfil, base));
 }
 
 // ── 3. Orden de cocción del batch cooking ───────────────────────

@@ -13,7 +13,9 @@ const HORA_SUGERIDA: Record<Momento, string> = {
   almuerzo: "13:00",
   merienda: "17:00",
   cena: "21:00",
-  snack: "11:00"
+  snack: "11:00",
+  pre_entreno: "17:30",
+  post_entreno: "19:30"
 };
 
 function BotonSeguir() {
@@ -35,7 +37,7 @@ export default function CuestionarioComidaForm({ perfil }: { perfil: Profile }) 
     for (const m of MOMENTOS) {
       const prev = cn?.comidas.find((c) => c.momento === m.valor);
       base[m.valor] = {
-        on: prev ? true : !cn && m.valor !== "snack",
+        on: prev ? true : !cn && !["snack", "pre_entreno", "post_entreno"].includes(m.valor),
         hora: prev?.hora || HORA_SUGERIDA[m.valor]
       };
     }
@@ -50,7 +52,7 @@ export default function CuestionarioComidaForm({ perfil }: { perfil: Profile }) 
       <section className="card">
         <h2 className="font-bold">Tus comidas del día</h2>
         <p className="mb-3 mt-0.5 text-sm text-muted">
-          Marcá entre 3 y 6 y poné a qué hora solés comer. El menú se arma con esos momentos.
+          Marcá entre 3 y 7 y poné a qué hora solés comer. El menú se arma con esos momentos.
         </p>
         <div className="flex flex-col gap-2">
           {MOMENTOS.map((m) => {
@@ -86,7 +88,7 @@ export default function CuestionarioComidaForm({ perfil }: { perfil: Profile }) 
             );
           })}
         </div>
-        <p className={`mt-2 text-xs ${elegidas < 3 || elegidas > 6 ? "text-warn" : "text-muted"}`}>
+        <p className={`mt-2 text-xs ${elegidas < 3 || elegidas > 7 ? "text-warn" : "text-muted"}`}>
           {elegidas} comida{elegidas === 1 ? "" : "s"} por día
         </p>
         <div className="mt-3">

@@ -22,7 +22,7 @@ export interface Cuestionario {
 // Cómo come el cliente: define los momentos del menú y las restricciones
 // duras (alergias) de la recomendación de comidas.
 export interface CuestionarioNutricion {
-  comidas: { momento: Momento; hora: string }[]; // 3 a 6, en orden del día
+  comidas: { momento: Momento; hora: string }[]; // 3 a 7, en orden del día
   hora_entreno: string; // "18:30" o "" si varía
   hora_despertar?: string; // "06:30"; ubica lo que va "al despertar"
   hora_dormir?: string; // "23:00"; ubica lo que va "antes de dormir"
@@ -145,7 +145,7 @@ export interface LoggedSet {
   logged_at: string;
 }
 
-export type Momento = "desayuno" | "almuerzo" | "merienda" | "cena" | "snack";
+export type Momento = "desayuno" | "almuerzo" | "merienda" | "cena" | "snack" | "pre_entreno" | "post_entreno";
 export type TipoDia = "entreno" | "descanso";
 
 export interface Ingredient {
@@ -158,6 +158,7 @@ export interface Ingredient {
   prot_100: number;
   carb_100: number;
   grasa_100: number;
+  alias?: string | null; // otros nombres, separados por coma ("banana, banano")
 }
 
 export interface MealLog {
@@ -182,10 +183,15 @@ export interface MealPlan {
   activo: boolean;
   notas: string | null;
   batch_cooking: BatchCooking | null;
+  horarios: HorariosMenu | null;
   publicado: boolean;
   publicado_at: string | null;
   created_at: string;
 }
+
+// Hora de cada comida del menú por tipo de día, cuando el plan del
+// entrenador la fija ("09:30"). Manda sobre los horarios del cuestionario.
+export type HorariosMenu = Partial<Record<TipoDia, Partial<Record<Momento, string>>>>;
 
 export interface MealPlanItem {
   id: string;
@@ -212,6 +218,7 @@ export interface IngredienteGenerado {
 export interface ComidaGenerada {
   momento: Momento;
   plato: string;
+  hora?: string; // "HH:MM" si el texto la fija
   ingredientes: IngredienteGenerado[];
 }
 
@@ -220,6 +227,8 @@ export interface PlanComidasGenerado {
   notas?: string;
   entreno: ComidaGenerada[];
   descanso: ComidaGenerada[];
+  horarios?: HorariosMenu | null;
+  objetivos?: Record<TipoDia, MacrosBase> | null; // los que trae el texto del entrenador
 }
 
 // Ítem ya resuelto contra la base (ingredient null = no se encontró; el
@@ -239,6 +248,8 @@ export interface PlanComidasResuelto {
   nombre: string;
   notas: string | null;
   items: ItemComidaResuelto[];
+  horarios: HorariosMenu | null;
+  objetivos: Record<TipoDia, MacrosBase> | null;
 }
 
 // Guía de batch cooking guardada en meal_plans.batch_cooking
@@ -483,6 +494,8 @@ export type AnclaProtocolo =
   | "con_merienda"
   | "con_cena"
   | "con_snack"
+  | "con_pre_entreno"
+  | "con_post_entreno"
   | "antes_dormir"
   | "en_el_dia";
 
@@ -498,8 +511,17 @@ export interface Protocolo {
   publicado_at: string | null;
   fecha_inicio: string | null;
   fuera_protocolo: string[];
+  fases: FaseProtocolo[];
   notas: string | null;
   created_at: string;
+}
+
+// Fase del protocolo ("Fase 2 · días 8-14"): dura hasta que empieza la
+// siguiente; la última sigue. El día 1 es la fecha de inicio.
+export interface FaseProtocolo {
+  nombre: string;
+  desde_dia: number;
+  nota: string | null;
 }
 
 export interface ProtocoloItem {
@@ -517,5 +539,7 @@ export interface ProtocoloItem {
   aplica: AplicaDia;
   semana_desde: number | null;
   semana_hasta: number | null;
+  fase_desde: number | null; // desde qué fase se usa (null = todas)
+  fase_hasta: number | null;
   orden: number;
 }

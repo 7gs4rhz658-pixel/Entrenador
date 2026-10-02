@@ -23,12 +23,16 @@ export const ETIQUETAS_ACTIVIDAD: Record<NivelActividad, string> = {
   alto: "Alto (trabajo físico exigente)"
 };
 
+// Nombres de México: "comida" es la del mediodía y las colaciones, las
+// de entre comidas (los valores internos no cambian).
 export const MOMENTOS: { valor: Momento; texto: string }[] = [
   { valor: "desayuno", texto: "Desayuno" },
-  { valor: "almuerzo", texto: "Almuerzo" },
-  { valor: "merienda", texto: "Merienda" },
+  { valor: "almuerzo", texto: "Comida" },
+  { valor: "merienda", texto: "Colación de la tarde" },
   { valor: "cena", texto: "Cena" },
-  { valor: "snack", texto: "Snack" }
+  { valor: "snack", texto: "Colación" },
+  { valor: "pre_entreno", texto: "Pre-entreno" },
+  { valor: "post_entreno", texto: "Post-entreno" }
 ];
 
 export const ETIQUETAS_OBJETIVO: Record<Objetivo, string> = {

@@ -187,6 +187,7 @@ export default async function ClientePage({
           borrador={protocoloBorrador}
           publicado={await getProtocolo(perfil.id)}
           cn={perfil.cuestionario_nutricion}
+          horarios={planComidas?.plan.horarios ?? null}
           />
         </div>
       ) : null}

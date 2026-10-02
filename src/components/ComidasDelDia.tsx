@@ -52,7 +52,7 @@ export default function ComidasDelDia({
       <ul className="mt-3 flex flex-col gap-2">
         {reco.comidas.map((c) => {
           const hecha = c.items.every((i) => hechos.has(i.id));
-          const hora = horaDe(c.momento, cn);
+          const hora = horaDe(c.momento, cn, c.hora);
           return (
             <li key={c.momento} className="rounded-xl border border-line px-3 py-2">
               <div className="flex items-start justify-between gap-2">

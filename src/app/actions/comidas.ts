@@ -11,7 +11,7 @@ import {
   type RecomendacionPreparada
 } from "@/lib/comidas-service";
 import { exec, getComidas, getPerfil, getPlanComidas } from "@/lib/data";
-import { quitarPlanComidas } from "@/lib/meal-plan-db";
+import { quitarPlanComidas, sanearHorarios } from "@/lib/meal-plan-db";
 import { db } from "@/lib/supabase/server";
 import type { MacrosManual, Momento, PlanComidasResuelto, TipoDia } from "@/lib/types";
 
@@ -41,24 +41,29 @@ export async function generarComidasIA(input: {
 export async function interpretarComidasTxtAction(input: {
   userId: string;
   texto: string;
-}): Promise<{ resultado?: RecomendacionPreparada; error?: string }> {
+  releer?: boolean; // ignorar la lectura guardada de este texto
+}): Promise<{ resultado?: RecomendacionPreparada; lecturaGuardada?: boolean; error?: string }> {
   const texto = input.texto.trim();
   if (texto.length < 20) return { error: "El texto es demasiado corto para ser una recomendación." };
   if (!iaDisponible()) return { error: SIN_IA };
   try {
     await requireEntrenador();
     const perfil = await getPerfil(input.userId);
-    return { resultado: await prepararRecomendacionTxt(perfil, texto) };
+    const { lecturaGuardada, ...resultado } = await prepararRecomendacionTxt(perfil, texto, !!input.releer);
+    return { resultado, lecturaGuardada };
   } catch (e) {
     return { error: mensaje(e) };
   }
 }
 
-// Aplica la vista previa (ya revisada y editada por el entrenador).
+// Aplica la vista previa (ya revisada y editada por el entrenador). Si el
+// texto traía calorías y macros y el entrenador lo pide, pasan a ser la
+// referencia diaria del cliente.
 export async function aplicarComidas(input: {
   userId: string;
   plan: PlanComidasResuelto;
   origen: "ia" | "txt";
+  usarObjetivos?: boolean;
 }): Promise<Resultado> {
   try {
     await requireEntrenador();
@@ -72,9 +77,15 @@ export async function aplicarComidas(input: {
         plato: String(i.plato ?? "").slice(0, 80),
         cantidad_g: Math.min(2000, Math.max(1, Math.round(Number(i.cantidad_g) || 0))),
         nota: i.nota ? String(i.nota).slice(0, 80) : null
-      }))
+      })),
+      horarios: sanearHorarios(input.plan.horarios),
+      objetivos: null
     };
     await aplicarRecomendacion(perfil, plan, input.origen);
+    if (input.usarObjetivos && input.plan.objetivos) {
+      const r = await guardarMacrosManual({ userId: input.userId, macros: input.plan.objetivos });
+      if (r.error) return { error: `El menú se guardó, pero la referencia no: ${r.error}` };
+    }
   } catch (e) {
     return { error: mensaje(e) };
   }
