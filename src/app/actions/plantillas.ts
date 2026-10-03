@@ -22,7 +22,7 @@ export async function guardarPlantillaDesdeCliente(input: {
   descripcion?: string;
 }): Promise<Resultado> {
   const nombre = input.nombre.trim().slice(0, 80);
-  if (nombre.length < 3) return { error: "Poné un nombre para la plantilla." };
+  if (nombre.length < 3) return { error: "Ponle un nombre a la plantilla." };
   try {
     const { userId: entrenador } = await requireEntrenador();
     const plan = await planDesdeRutina(input.userId);

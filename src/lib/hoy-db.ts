@@ -15,6 +15,7 @@ import {
   type ProtocoloActivo
 } from "./data";
 import { diaSemanaDe, fechaLocal, hoyFecha, sumarDias } from "./format";
+import { activoEnSemana } from "./rutina";
 import {
   armarDia,
   fechasHaciaAtras,
@@ -140,7 +141,7 @@ async function preparar(
   for (const t of ticks) de(t.fecha).ticks.add(t.item_key);
 
   const cn = perfil.cuestionario_nutricion;
-  const porDia = ejerciciosPorDia(ejercicios);
+  const porDia = ejerciciosPorDia(meso ? ejercicios.filter((e) => activoEnSemana(e, meso.semana_actual)) : ejercicios);
   const menus = plan
     ? {
         entreno: menuDelDia(comidasPorMomento(plan.items, "entreno", plan.plan.horarios)),

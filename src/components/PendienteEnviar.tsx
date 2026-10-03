@@ -33,8 +33,8 @@ export default function PendienteEnviar({
     <section className="card mb-4 border-warn/50">
       <p className="text-xs font-semibold uppercase tracking-wide text-warn">Pendiente de enviar</p>
       <p className="mt-1 text-sm text-muted">
-        El cliente todavía no lo ve. Revisalo en las pestañas (Rutina / Comida / Protocolo) y cuando esté bien,
-        envialo: le llega un aviso y un mensaje tuyo.
+        El cliente todavía no lo ve (sigue con lo que ya tenía). Revísalo en las pestañas (Rutina / Comida / Protocolo) y cuando esté bien,
+        envíalo: le llega un aviso y un mensaje tuyo.
       </p>
       <div className="mt-3 flex flex-col gap-2">
         {rutina ? (

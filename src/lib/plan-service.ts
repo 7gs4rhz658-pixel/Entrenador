@@ -19,8 +19,10 @@ import {
   acotarSugerencia,
   faseDe,
   planSiguiente,
+  planSiguienteFijo,
   usaPeso
 } from "./progression";
+import { activoEnSemana } from "./rutina";
 import type { Exercise, LoggedSet, Mesocycle, PlannedSet } from "./types";
 
 interface FilaPlan {
@@ -36,10 +38,13 @@ interface FilaPlan {
   nota_ia: string | null;
 }
 
-// Propuestas deterministas para la semana `semanaBase + 1`.
+// Propuestas deterministas para la semana `semanaBase + 1`. Los
+// ejercicios que terminan con su fase no siguen; los de la fase que
+// empieza ya tienen su plan desde que se envió la rutina.
 async function proponerSemana(
   meso: Mesocycle,
-  semanaBase: number
+  semanaBase: number,
+  nuevoBloque = false
 ): Promise<{ filas: FilaPlan[]; items: ItemAjuste[] }> {
   const [ejercicios, planes, logs] = await Promise.all([
     getEjercicios(meso.user_id),
@@ -54,11 +59,14 @@ async function proponerSemana(
 
   const filas: FilaPlan[] = [];
   const items: ItemAjuste[] = [];
+  const delEntrenador = meso.progresion === "plan";
   for (const ex of ejercicios) {
     const plan = mPlanes[ex.id];
-    if (!plan) continue;
+    if (!plan || (!nuevoBloque && !activoEnSemana(ex, semanaBase + 1))) continue;
     const registros = mLogs[ex.id] ?? [];
-    const sig = planSiguiente(ex, semanaBase, plan, mPlanesPrev[ex.id] ?? null, registros);
+    const sig = delEntrenador
+      ? planSiguienteFijo(ex, plan, registros)
+      : planSiguiente(ex, semanaBase, plan, mPlanesPrev[ex.id] ?? null, registros);
     filas.push({
       user_id: meso.user_id,
       mesocycle_id: meso.id,
@@ -72,7 +80,8 @@ async function proponerSemana(
       nota_ia: sig.nota || null
     });
     // Solo pedimos ajuste a la IA si hay peso y registros reales que mirar
-    if (usaPeso(ex) && plan.peso_kg != null && sig.peso_kg != null && registros.length) {
+    // (el plan del entrenador sigue su regla, sin IA)
+    if (!delEntrenador && usaPeso(ex) && plan.peso_kg != null && sig.peso_kg != null && registros.length) {
       items.push(itemAjuste(ex, semanaBase, plan, registros, sig));
     }
   }
@@ -192,7 +201,9 @@ export async function crearNuevoBloque(userId: string): Promise<void> {
     throw new Error("El bloque actual todavía está activo.");
   }
 
-  const { filas, items } = await proponerSemana(anterior, anterior.total_semanas);
+  // Siguen los ejercicios de la última semana (en un plan por fases, los
+  // de la última fase); el resto se da de baja (el historial queda)
+  const { filas, items } = await proponerSemana(anterior, anterior.total_semanas, true);
   await ajustarConIA(filas, items);
 
   const n = await contarBloques(userId);
@@ -203,7 +214,9 @@ export async function crearNuevoBloque(userId: string): Promise<void> {
       nombre: `Bloque ${n + 1}`,
       fecha_inicio: new Date().toISOString().slice(0, 10),
       total_semanas: 8,
-      origen: "manual"
+      origen: "manual",
+      progresion: anterior.progresion,
+      notas: anterior.fases.length ? null : anterior.notas
     })
     .select()
     .single();
@@ -217,5 +230,14 @@ export async function crearNuevoBloque(userId: string): Promise<void> {
         .from("planned_sets")
         .insert(filas.map((f) => ({ ...f, mesocycle_id: nuevo.id as string, semana: 1 })))
     );
+  }
+  if (anterior.fases.length) {
+    const siguen = filas.map((f) => f.exercise_id);
+    const ejercicios = await getEjercicios(userId);
+    const bajas = ejercicios.filter((e) => !siguen.includes(e.id)).map((e) => e.id);
+    if (siguen.length) {
+      await exec(db().from("exercises").update({ semana_desde: null, semana_hasta: null }).in("id", siguen));
+    }
+    if (bajas.length) await exec(db().from("exercises").update({ activo: false }).in("id", bajas));
   }
 }

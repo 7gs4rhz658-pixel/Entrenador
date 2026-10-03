@@ -45,13 +45,22 @@ export function fmtKcal(n: number): string {
   return `${n.toLocaleString("es-MX")} kcal`;
 }
 
+// `rango`: en el plan del entrenador se muestra el rango ("4 × 6–8")
+// en vez del número de la semana
 export function resumenPlan(
   plan: Pick<PlannedSet, "series" | "reps" | "peso_kg" | "al_fallo"> | null,
-  unidad: Unidad
+  unidad: Unidad,
+  rango?: { min: number | null; max: number | null; porLado?: boolean } | null
 ): string {
   if (!plan) return "sin plan esta semana";
   if (plan.al_fallo) return `${plan.series} series al fallo`;
-  const reps = plan.reps != null ? ` × ${plan.reps}` : "";
+  const lado = rango?.porLado ? " por lado" : "";
+  const reps =
+    rango?.min != null && rango.max != null && rango.max > rango.min
+      ? ` × ${rango.min}–${rango.max}${lado}`
+      : plan.reps != null
+        ? ` × ${plan.reps}${lado}`
+        : "";
   if (unidad === "kg") {
     const peso = plan.peso_kg != null ? ` · ${fmtNum(plan.peso_kg)} kg` : " · peso a definir";
     return `${plan.series}${reps}${peso}`;

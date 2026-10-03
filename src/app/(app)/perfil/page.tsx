@@ -14,7 +14,7 @@ export default async function PerfilPage() {
     <main>
       <h1 className="mb-1 text-2xl font-bold">Perfil</h1>
       <p className="mb-4 text-sm text-muted">
-        Si actualizás tu peso u objetivo, las calorías y los macros se
+        Si actualizas tu peso u objetivo, las calorías y los macros se
         recalculan solos.
       </p>
 
@@ -43,9 +43,9 @@ export default async function PerfilPage() {
       </section>
 
       <section className="card mt-4 text-sm">
-        <p className="font-semibold">Cómo comés</p>
+        <p className="font-semibold">Cómo comes</p>
         <p className="mt-1 text-muted">
-          Comidas por día, horarios, alergias y si cocinás en tandas. Con esto se arma tu
+          Comidas por día, horarios, alergias y si cocinas en tandas. Con esto se arma tu
           recomendación de comidas.{" "}
           <Link href="/cuestionario/comida" className="font-semibold text-accent">
             Editar →
@@ -70,7 +70,7 @@ export default async function PerfilPage() {
       <section className="card mt-4 text-sm">
         <p className="font-semibold">Mensajes</p>
         <p className="mt-1 text-muted">
-          Hablá con tu entrenador dentro de la app.{" "}
+          Habla con tu entrenador dentro de la app.{" "}
           <Link href="/mensajes" className="font-semibold text-accent">
             Abrir →
           </Link>

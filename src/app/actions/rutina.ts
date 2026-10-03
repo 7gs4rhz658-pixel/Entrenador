@@ -5,6 +5,7 @@ import { resolverUsuario } from "@/lib/auth";
 import { exec, getBloque, getDiaPorId, getEjercicio, getEjercicios, semanaCerrada } from "@/lib/data";
 import { infoEjercicio } from "@/lib/exercise-info";
 import { recalcularSemanaSiguiente } from "@/lib/plan-service";
+import { activoEnSemana, parsearTempo } from "@/lib/rutina";
 import { db } from "@/lib/supabase/server";
 import type { ModoProgresion, TipoEjercicio, Unidad } from "@/lib/types";
 
@@ -53,7 +54,17 @@ export interface EjercicioInput {
   descanso_seg: number;
   descripcion: string;
   tips: string[];
-  // Plan de la semana actual
+  // Plan del entrenador por fases y cómo se ejecuta
+  semana_desde: number | null;
+  semana_hasta: number | null;
+  tempo: string; // "3-5-3-0" o vacío
+  parciales: number | null;
+  por_lado: boolean;
+  superserie: string;
+  nota: string;
+  pasos: string[];
+  clave: string;
+  // Plan de la semana actual (o de la primera de su fase)
   series: number;
   reps: number | null;
   peso_kg: number | null;
@@ -72,6 +83,10 @@ export async function guardarEjercicio(
     return { error: "El descanso tiene que estar entre 0 y 600 segundos." };
   if (input.rep_min != null && input.rep_max != null && input.rep_max < input.rep_min)
     return { error: "El tope del rango de reps no puede ser menor que el piso." };
+  if (input.semana_desde != null && input.semana_hasta != null && input.semana_hasta < input.semana_desde)
+    return { error: "La semana final no puede ser antes de la inicial." };
+  const tempo = input.tempo.trim() ? parsearTempo(input.tempo) : null;
+  if (input.tempo.trim() && !tempo) return { error: "La cadencia va como 3-5-3-0 (sube, aprieta, baja, pausa abajo)." };
 
   try {
     const dia = await getDiaPorId(input.training_day_id);
@@ -99,7 +114,16 @@ export async function guardarEjercicio(
       rep_max: input.rep_max,
       descanso_seg: Math.round(input.descanso_seg),
       descripcion,
-      tips
+      tips,
+      semana_desde: input.semana_desde,
+      semana_hasta: input.semana_hasta,
+      tempo,
+      parciales: input.parciales && input.parciales > 0 ? Math.round(input.parciales) : null,
+      por_lado: input.por_lado,
+      superserie: input.superserie.trim().slice(0, 10) || null,
+      nota: input.nota.trim().slice(0, 200) || null,
+      pasos: input.pasos.map((p) => p.trim()).filter(Boolean).slice(0, 10),
+      clave: input.clave.trim().slice(0, 220) || null
     };
 
     let exerciseId = input.id;
@@ -124,9 +148,11 @@ export async function guardarEjercicio(
       exerciseId = data.id as string;
     }
 
-    // Actualiza el plan de la semana actual del bloque vigente
+    // Actualiza el plan de la semana actual del bloque vigente (o el de
+    // la primera semana de su fase, si todavía no le toca)
     const meso = await getBloque(userId);
     if (meso) {
+      const semana = activoEnSemana(campos, meso.semana_actual) ? meso.semana_actual : Math.max(meso.semana_actual, campos.semana_desde ?? 1);
       await exec(
         db()
           .from("planned_sets")
@@ -135,7 +161,7 @@ export async function guardarEjercicio(
               user_id: userId,
               mesocycle_id: meso.id,
               exercise_id: exerciseId,
-              semana: meso.semana_actual,
+              semana,
               series: input.series,
               reps: input.al_fallo ? null : input.reps,
               peso_kg: input.unidad === "kg" ? input.peso_kg : null,
@@ -146,7 +172,7 @@ export async function guardarEjercicio(
           )
       );
       // Si la semana actual ya estaba cerrada, que impacte en la siguiente
-      if (await semanaCerrada(meso.id, meso.semana_actual)) {
+      if (semana === meso.semana_actual && (await semanaCerrada(meso.id, meso.semana_actual))) {
         await recalcularSemanaSiguiente(meso.id, meso.semana_actual);
       }
     }

@@ -18,7 +18,7 @@ function Dato({ etiqueta, valor, sub }: { etiqueta: string; valor: string; sub?:
 }
 
 // "Tu mes": antes/después de las últimas 4 semanas cerradas, con los
-// números reales. Es el momento de renovar: el recordatorio va acá.
+// números reales. Es el momento de renovar: el recordatorio va aquí.
 export default async function MesPage() {
   const { perfil } = await requireCliente();
   const [mes, pago, fotos] = await Promise.all([resumenMes(perfil), Promise.resolve(estadoPago(perfil, hoyFecha())), getFotos(perfil.id)]);
@@ -35,7 +35,7 @@ export default async function MesPage() {
           ← Inicio
         </Link>
         <p className="card mt-3 text-center text-sm text-muted">
-          Cuando cierres tu primera semana y hagas el check-in, acá vas a ver tu antes y después.
+          Cuando cierres tu primera semana y hagas el check-in, aquí vas a ver tu antes y después.
         </p>
       </main>
     );
@@ -137,7 +137,7 @@ export default async function MesPage() {
       ) : (
         <Link href="/progreso?tab=medidas" className="card mt-3 block text-sm">
           <p className="font-semibold">Medidas</p>
-          <p className="mt-1 text-muted">Cargá tus medidas una vez por semana y acá ves el antes y después →</p>
+          <p className="mt-1 text-muted">Registra tus medidas una vez por semana y aquí ves el antes y después →</p>
         </Link>
       )}
 

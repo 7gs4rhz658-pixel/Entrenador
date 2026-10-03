@@ -6,7 +6,7 @@ import { claveTexto } from "./clave-texto";
 import { db } from "./supabase/server";
 
 export async function conLectura<T>(
-  tipo: "menu" | "protocolo",
+  tipo: "menu" | "protocolo" | "rutina",
   version: string,
   texto: string,
   releer: boolean,

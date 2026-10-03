@@ -31,8 +31,8 @@ export default function NewBlockButton({
     <div className="card border-ok/40">
       <p className="font-semibold">✓ {nombreAnterior} finalizado</p>
       <p className="mt-1 text-sm text-muted">
-        Buen trabajo. Arrancá un bloque nuevo de 8 semanas: la semana 1 arranca
-        con el peso de tu última semana de carga.
+        Buen trabajo. Empieza un bloque nuevo de 8 semanas: la semana 1 arranca
+        con los pesos de tu última semana.
       </p>
       {error ? (
         <p className="mt-2 text-sm font-medium text-danger">✗ {error}</p>

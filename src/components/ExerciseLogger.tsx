@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import RestTimer from "./RestTimer";
 import Stepper from "./Stepper";
+import { ComoSeHace, EtiquetasEjercicio } from "./TecnicaEjercicio";
 import {
   borrarSerie,
   guardarSerie,
@@ -75,7 +76,9 @@ export default function ExerciseLogger({
   logs,
   logsPrev,
   mesoId,
-  semana
+  semana,
+  conRango = false,
+  companero = null
 }: {
   ejercicio: Exercise;
   plan: PlannedSet | null;
@@ -83,6 +86,8 @@ export default function ExerciseLogger({
   logsPrev: LoggedSet[];
   mesoId: string;
   semana: number;
+  conRango?: boolean; // plan del entrenador: muestra el rango ("6–8")
+  companero?: string | null; // el otro ejercicio de su superserie
 }) {
   const [filas, setFilas] = useState<Fila[]>(() => construirFilas(plan, logs));
   const [error, setError] = useState<string | null>(null);
@@ -206,9 +211,14 @@ export default function ExerciseLogger({
       <header className="flex items-start justify-between gap-3">
         <h2 className="text-base font-bold leading-snug">{ejercicio.nombre}</h2>
         <span className="shrink-0 text-sm font-medium text-muted">
-          {resumenPlan(plan, ejercicio.unidad)}
+          {resumenPlan(plan, ejercicio.unidad, {
+            min: conRango ? ejercicio.rep_min : null,
+            max: conRango ? ejercicio.rep_max : null,
+            porLado: ejercicio.por_lado
+          })}
         </span>
       </header>
+      <EtiquetasEjercicio ej={ejercicio} companero={companero} />
 
       {pasada ? (
         <p className="mt-1 text-sm text-muted">
@@ -224,23 +234,7 @@ export default function ExerciseLogger({
         </p>
       ) : null}
 
-      {(ejercicio.descripcion || ejercicio.tips.length > 0) && (
-        <details className="mt-2 rounded-xl bg-surface2 px-3 py-2">
-          <summary className="cursor-pointer select-none text-sm font-medium text-accent">
-            Técnica y tips
-          </summary>
-          {ejercicio.descripcion ? (
-            <p className="mt-2 text-sm text-ink/90">{ejercicio.descripcion}</p>
-          ) : null}
-          {ejercicio.tips.length > 0 ? (
-            <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 text-sm text-muted">
-              {ejercicio.tips.map((tip, i) => (
-                <li key={i}>{tip}</li>
-              ))}
-            </ul>
-          ) : null}
-        </details>
-      )}
+      <ComoSeHace ej={ejercicio} />
 
       <div className="mt-3">
         <RestTimer

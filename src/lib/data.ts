@@ -160,6 +160,19 @@ export async function getPlanes(
   );
 }
 
+// Para ver la rutina completa: de cada ejercicio, su plan de esta semana;
+// si es de otra fase, el de su primera semana (o el último, si ya pasó)
+export async function getPlanesVista(mesoId: string, semana: number): Promise<Record<string, PlannedSet>> {
+  const todos = await q<PlannedSet[]>(db().from("planned_sets").select("*").eq("mesocycle_id", mesoId).order("semana"));
+  const m: Record<string, PlannedSet> = {};
+  for (const p of todos) {
+    const actual = m[p.exercise_id];
+    const dist = (x: PlannedSet) => (x.semana === semana ? 0 : x.semana > semana ? x.semana - semana : 100 + semana - x.semana);
+    if (!actual || dist(p) < dist(actual)) m[p.exercise_id] = p;
+  }
+  return m;
+}
+
 export async function getLogs(
   mesoId: string,
   semana: number

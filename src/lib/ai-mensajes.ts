@@ -36,7 +36,7 @@ function describir(c: ContextoMensaje): string {
 
 export async function redactarMensaje(contexto: ContextoMensaje): Promise<string> {
   const data = await generarJSON<{ texto: string }>(
-    `Sos un entrenador personal escribiéndole un mensaje corto y personal a un cliente por la app (como un WhatsApp). Máximo 4 frases. Usá solo los datos que te doy, mencioná algo concreto de su semana, y cerrá con UNA acción simple para hoy o mañana. Cercano, sin culpa, sin sermón, sin emojis, español rioplatense con voseo estricto (registrá, mandame, seguís; nunca "sigue" ni "registra"). Nunca hables como profesional de la salud ni menciones enfermedades, medicación o suplementos. Devolvé SOLO JSON: {"texto": string}.`,
+    `Eres un entrenador personal escribiéndole un mensaje corto y personal a un cliente por la app (como un WhatsApp). Máximo 4 frases. Usa solo los datos que te doy, menciona algo concreto de su semana y cierra con UNA acción simple para hoy o mañana. Cercano, sin culpa, sin sermón, sin emojis, español de México de tú (registra, mándame, sigues; nunca voseo como "registrá" o "mandame"). Nunca hables como profesional de la salud ni menciones enfermedades, medicación o suplementos. Devuelve SOLO JSON: {"texto": string}.`,
     describir(contexto),
     { temperatura: 0.6, maxTokens: 600 }
   );

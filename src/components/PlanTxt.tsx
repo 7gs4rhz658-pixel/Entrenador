@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { aplicarPlanCliente, interpretarTxt, previsualizarPlan } from "@/app/actions/entrenador";
+import { aplicarPlanCliente, interpretarTxt, leerPdf, previsualizarPlan } from "@/app/actions/entrenador";
 import { borrarPlantilla, cargarPlantilla, guardarPlantillaDesdeCliente } from "@/app/actions/plantillas";
-import { nombreDia } from "@/lib/format";
+import ExplicarRutina from "./ExplicarRutina";
+import PlanRutinaVista from "./PlanRutinaVista";
 import type { PlanGenerado } from "@/lib/types";
 
-// Rutina nueva para el cliente: la propone la IA desde el cuestionario o
-// la escribe el entrenador en un .txt → vista previa → queda como
-// borrador hasta que el entrenador la envía.
+// Rutina nueva para el cliente: la propone la IA desde el cuestionario,
+// sale de una plantilla o la sube el entrenador (.txt, PDF o texto
+// pegado) → vista previa → borrador (el cliente sigue con su rutina)
+// → paso a paso de cada ejercicio → el entrenador la revisa y la envía.
 export interface PlantillaResumen {
   id: string;
   nombre: string;
@@ -32,14 +34,21 @@ export default function PlanTxt({
   const [texto, setTexto] = useState("");
   const [plan, setPlan] = useState<PlanGenerado | null>(null);
   const [origen, setOrigen] = useState<"txt" | "ia" | "plantilla">("txt");
+  const [lecturaGuardada, setLecturaGuardada] = useState(false);
+  const [espera, setEspera] = useState(0);
+  const [inicio, setInicio] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState(false);
+  const [guardado, setGuardado] = useState<{ total: number; explicar: boolean } | null>(null);
   const [pendiente, iniciar] = useTransition();
 
-  function generar() {
+  function limpiar() {
     setError(null);
     setPlan(null);
-    setOk(false);
+    setGuardado(null);
+  }
+
+  function generar() {
+    limpiar();
     iniciar(async () => {
       const r = await previsualizarPlan({ userId });
       if (r.error || !r.plan) setError(r.error ?? "No se pudo generar.");
@@ -52,9 +61,7 @@ export default function PlanTxt({
 
   function usarPlantilla() {
     if (!plantillaSel) return;
-    setError(null);
-    setPlan(null);
-    setOk(false);
+    limpiar();
     iniciar(async () => {
       const r = await cargarPlantilla({ id: plantillaSel });
       if (r.error || !r.plan) setError(r.error ?? "No se pudo cargar la plantilla.");
@@ -66,12 +73,12 @@ export default function PlanTxt({
   }
 
   function guardarComoPlantilla() {
-    const nombre = window.prompt("Nombre de la plantilla (ej. \"Full body 3 días principiante\"):", nombreBloque ?? "");
+    const nombre = window.prompt('Nombre de la plantilla (ej. "Full body 3 días principiante"):', nombreBloque ?? "");
     if (!nombre) return;
     setAvisoPlantilla(null);
     iniciar(async () => {
       const r = await guardarPlantillaDesdeCliente({ userId, nombre });
-      setAvisoPlantilla(r.error ? `✗ ${r.error}` : "✓ Plantilla guardada. Ya la podés usar con otros clientes.");
+      setAvisoPlantilla(r.error ? `✗ ${r.error}` : "✓ Plantilla guardada. Ya la puedes usar con otros clientes.");
     });
   }
 
@@ -83,59 +90,109 @@ export default function PlanTxt({
     });
   }
 
-  async function leerArchivo(f: File | undefined) {
+  function leerArchivo(f: File | undefined) {
     if (!f) return;
-    setTexto(await f.text());
+    setError(null);
+    if (f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf")) {
+      const datos = new FormData();
+      datos.set("archivo", f);
+      iniciar(async () => {
+        const r = await leerPdf(datos);
+        if (r.error || !r.texto) setError(r.error ?? "No se pudo leer el PDF.");
+        else setTexto(r.texto);
+      });
+      return;
+    }
+    void f.text().then(setTexto);
   }
 
-  function interpretar() {
-    setError(null);
-    setPlan(null);
+  function interpretar(releer = false) {
+    limpiar();
     iniciar(async () => {
-      const r = await interpretarTxt({ userId, texto });
-      if (r.error || !r.plan) setError(r.error ?? "No se pudo interpretar.");
-      else {
-        setPlan(r.plan);
-        setOrigen("txt");
+      // Si la IA gratis pide unos segundos, se espera aquí y se reintenta
+      for (let intento = 0; intento < 3; intento++) {
+        const r = await interpretarTxt({ userId, texto, releer });
+        if (r.reintentarEn) {
+          for (let s = r.reintentarEn; s > 0; s--) {
+            setEspera(s);
+            await new Promise((ok) => setTimeout(ok, 1000));
+          }
+          setEspera(0);
+          continue;
+        }
+        if (r.error || !r.plan) setError(r.error ?? "No se pudo leer el plan.");
+        else {
+          setPlan(r.plan);
+          setOrigen("txt");
+          setLecturaGuardada(!!r.lecturaGuardada);
+        }
+        return;
       }
+      setError("La IA gratis sigue ocupada. Espera un minuto y vuelve a intentar.");
     });
   }
 
   function aplicar() {
     if (!plan) return;
-    if (
-      nombreBloque &&
-      !window.confirm(
-        `¿Reemplazar "${nombreBloque}" con esta rutina? Queda como borrador hasta que la envíes; el historial de registros se conserva.`
-      )
-    )
-      return;
     setError(null);
     iniciar(async () => {
-      const r = await aplicarPlanCliente({ userId, plan, origen });
+      const r = await aplicarPlanCliente({ userId, plan: { ...plan, fecha_inicio: inicio || null }, origen });
       if (r.error) setError(r.error);
       else {
-        setOk(true);
+        const total = plan.dias.reduce((n, d) => n + d.ejercicios.length, 0);
+        const sinPasos = plan.dias.some((d) => d.ejercicios.some((e) => !e.pasos?.length));
+        setGuardado({ total, explicar: conIA && sinPasos && origen === "txt" });
         setPlan(null);
         setTexto("");
       }
     });
   }
 
+  const ejercicios = plan ? plan.dias.reduce((n, d) => n + d.ejercicios.length, 0) : 0;
+
   return (
     <div className="flex flex-col gap-3">
       <section className="card">
         <h2 className="font-bold">Rutina nueva</h2>
         <p className="mt-1 text-sm text-muted">
-          Generala con IA desde el cuestionario del cliente, o subí/pegá tu propio plan (días,
-          ejercicios, series × reps, pesos, descansos). En los dos casos ves una vista previa,
-          la guardás como borrador, la ajustás en la pestaña Rutina y recién cuando la enviás
-          el cliente la ve.
+          Súbela tú (PDF, .txt o texto pegado), usa una plantilla o genérala con IA desde el cuestionario. Siempre
+          ves una vista previa y queda como borrador: el cliente sigue con su rutina actual hasta que la envías.
         </p>
-        <button type="button" onClick={generar} disabled={pendiente} className="btn-primary mt-3 w-full">
-          {pendiente && !plan ? "Generando…" : conIA ? "Generar con IA desde el cuestionario" : "Generar con plantilla"}
+
+        <p className="mt-4 text-sm font-semibold">Sube tu plan</p>
+        {!conIA ? (
+          <p className="mt-2 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">
+            Falta configurar la IA (GROQ_API_KEY): sin ella no se puede leer el plan. Mientras tanto puedes editar la
+            rutina a mano en la pestaña Rutina.
+          </p>
+        ) : null}
+        <input
+          type="file"
+          accept=".txt,text/plain,.md,.pdf,application/pdf"
+          onChange={(e) => leerArchivo(e.target.files?.[0])}
+          className="mt-3 block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface2 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-ink"
+        />
+        <textarea
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          rows={10}
+          className="input mt-3 font-mono text-sm"
+          placeholder={`FASE 1: SEMANAS 1 A 4 — CADENCIA 3-5-3-0\nDía 1: Push\n• Press inclinado mancuernas: 4 series × 20 reps (10 completas + 10 parciales)\n• Aperturas polea baja: 3 × 20 (5s contracción)\n\nFASE 2: SEMANAS 5 A 8\nDía 1: Push\n• Press inclinado mancuernas: 4 × 6–8\n...`}
+        />
+        <p className="mt-1 text-xs text-muted">
+          La IA lee fases, días, series, repeticiones, cadencias, parciales, superseries y notas. Solo transcribe: no
+          agrega ejercicios ni cambia lo que escribiste.
+        </p>
+        <button
+          type="button"
+          onClick={() => interpretar(false)}
+          disabled={pendiente || !conIA || texto.trim().length < 20}
+          className="btn-primary mt-3 w-full"
+        >
+          {espera ? `La IA gratis pide una pausa: sigo en ${espera} s…` : pendiente && !plan ? "Leyendo tu plan…" : "Leer mi plan con IA"}
         </button>
-        <p className="mt-4 text-sm font-semibold">O usá una plantilla tuya</p>
+
+        <p className="mt-5 text-sm font-semibold">O usa una plantilla tuya</p>
         {plantillas.length ? (
           <div className="mt-2 flex gap-2">
             <select value={plantillaSel} onChange={(e) => setPlantillaSel(e.target.value)} className="input flex-1 py-1.5 text-sm">
@@ -162,87 +219,69 @@ export default function PlanTxt({
             </button>
           </div>
         ) : (
-          <p className="mt-1 text-xs text-muted">Todavía no guardaste ninguna. Guardá la rutina de un cliente como plantilla y la reutilizás con otros en un clic.</p>
+          <p className="mt-1 text-xs text-muted">
+            Todavía no guardas ninguna. Guarda la rutina de un cliente como plantilla y la reutilizas con otros en un clic.
+          </p>
         )}
         {nombreBloque ? (
           <button type="button" onClick={guardarComoPlantilla} disabled={pendiente} className="mt-2 text-sm font-semibold text-accent">
-            + Guardar la rutina actual de este cliente como plantilla
+            + Guardar la rutina de este cliente como plantilla
           </button>
         ) : null}
         {avisoPlantilla ? <p className="mt-1 text-sm">{avisoPlantilla}</p> : null}
 
-        <p className="mt-4 text-sm font-semibold">O cargá tu .txt</p>
-        {!conIA ? (
-          <p className="mt-2 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">
-            Falta configurar la IA (GROQ_API_KEY): sin ella no se puede interpretar el texto. Mientras
-            tanto podés editar la rutina a mano en la pestaña Rutina.
-          </p>
-        ) : null}
-        <input
-          type="file"
-          accept=".txt,text/plain,.md"
-          onChange={(e) => leerArchivo(e.target.files?.[0])}
-          className="mt-3 block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface2 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-ink"
-        />
-        <textarea
-          value={texto}
-          onChange={(e) => setTexto(e.target.value)}
-          rows={10}
-          className="input mt-3 font-mono text-sm"
-          placeholder={`Lunes - Pecho y tríceps\nPress banca 4x8-10 60kg desc 120s\nAperturas 3x12-15 12kg\nTríceps polea 3x12 25kg\n\nMiércoles - Pierna\nSentadilla 4x8 80kg\n...`}
-        />
-        {error ? <p className="mt-2 text-sm font-medium text-danger">✗ {error}</p> : null}
-        {ok ? (
-          <p className="mt-2 text-sm font-medium text-ok">
-            ✓ Rutina guardada como borrador. Revisala en la pestaña Rutina y enviala desde arriba.
-          </p>
-        ) : null}
-        <button
-          type="button"
-          onClick={interpretar}
-          disabled={pendiente || !conIA || texto.trim().length < 20}
-          className="btn-ghost mt-3 w-full"
-        >
-          {pendiente && !plan ? "Interpretando…" : "Interpretar el .txt con IA"}
+        <p className="mt-5 text-sm font-semibold">O genérala con IA</p>
+        <button type="button" onClick={generar} disabled={pendiente} className="btn-ghost mt-2 w-full">
+          {conIA ? "Generar desde el cuestionario" : "Generar con plantilla base"}
         </button>
+        {error ? <p className="mt-2 text-sm font-medium text-danger">✗ {error}</p> : null}
       </section>
+
+      {guardado ? (
+        <section className="card border-ok/40">
+          <p className="font-semibold text-ok">✓ Rutina guardada como borrador</p>
+          <p className="mt-1 text-sm text-muted">
+            El cliente sigue con su rutina actual. Revisa el borrador en la pestaña Rutina y envíalo desde arriba.
+          </p>
+          {guardado.explicar ? (
+            <div className="mt-3">
+              <ExplicarRutina userId={userId} hechos={0} total={guardado.total} auto />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {plan ? (
         <section className="card border-accent/50">
           <h2 className="font-bold">
             Vista previa: {plan.nombre_bloque}
             <span className="ml-2 text-xs font-normal text-muted">
-              {origen === "txt" ? "de tu .txt" : origen === "ia" ? "generada con IA" : "de plantilla"}
+              {origen === "txt" ? "de tu plan" : origen === "ia" ? "generada con IA" : "de plantilla"} · {plan.dias.length} días ·{" "}
+              {ejercicios} ejercicios
+              {plan.total_semanas ? ` · ${plan.total_semanas} semanas` : ""}
             </span>
           </h2>
-          {plan.notas ? <p className="mt-1 text-sm text-muted">{plan.notas}</p> : null}
-          <div className="mt-3 flex flex-col gap-3">
-            {plan.dias.map((d) => (
-              <div key={d.dia_semana} className="rounded-xl border border-line p-3">
-                <p className="font-semibold">
-                  {nombreDia(d.dia_semana)} — {d.nombre}
-                </p>
-                <ul className="mt-1.5 flex flex-col gap-1 text-sm">
-                  {d.ejercicios.map((e, i) => (
-                    <li key={i} className="flex justify-between gap-2">
-                      <span>{e.nombre}</span>
-                      <span className="shrink-0 text-muted" style={{ fontVariantNumeric: "tabular-nums" }}>
-                        {e.series} × {e.rep_min}
-                        {e.rep_max !== e.rep_min ? `–${e.rep_max}` : ""}
-                        {e.unidad === "kg"
-                          ? e.peso_inicial_kg != null
-                            ? ` · ${e.peso_inicial_kg} kg`
-                            : " · peso a definir"
-                          : e.unidad === "peso_corporal"
-                            ? " · peso corporal"
-                            : ""}
-                        {` · ${e.descanso_seg} s`}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+          {origen === "txt" && lecturaGuardada ? (
+            <p className="mt-1 text-xs text-muted">
+              Es la misma lectura de la vez pasada.{" "}
+              <button type="button" onClick={() => interpretar(true)} disabled={pendiente} className="font-semibold text-accent">
+                Leerlo de nuevo
+              </button>
+            </p>
+          ) : null}
+          {plan.progresion === "plan" ? (
+            <p className="mt-2 rounded-xl border border-line px-3 py-2 text-xs text-muted">
+              Progresión: la de tu plan. Cada semana repite tus series y rangos, y el peso sube un escalón cuando el
+              cliente llega al tope del rango en todas las series. Sin descargas automáticas.
+            </p>
+          ) : null}
+          <div className="mt-3">
+            <PlanRutinaVista plan={plan} />
+          </div>
+          <div className="mt-3">
+            <label className="label">Fecha de inicio (opcional)</label>
+            <input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} className="input" />
+            <p className="mt-1 text-xs text-muted">Vacía: empieza el día que la envías.</p>
           </div>
           <div className="mt-3 flex gap-2">
             <button type="button" onClick={() => setPlan(null)} className="btn-ghost flex-1" disabled={pendiente}>

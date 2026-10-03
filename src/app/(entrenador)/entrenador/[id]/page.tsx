@@ -12,6 +12,8 @@ import PendienteEnviar from "@/components/PendienteEnviar";
 import ChecklistHoy from "@/components/ChecklistHoy";
 import ProtocoloEditor from "@/components/ProtocoloEditor";
 import ProtocoloTxt from "@/components/ProtocoloTxt";
+import BorradorRutina from "@/components/BorradorRutina";
+import { TarjetaFase } from "@/components/FasesRutina";
 import CloseWeekButton from "@/components/CloseWeekButton";
 import NewBlockButton from "@/components/NewBlockButton";
 import NutricionDia from "@/components/NutricionDia";
@@ -37,7 +39,7 @@ import {
   getLogs,
   getPerfil,
   getPlanComidas,
-  getPlanes,
+  getPlanesVista,
   getPlantillas,
   getProtocolo,
   getRecords,
@@ -45,7 +47,6 @@ import {
   getUltimoRegistro,
   logsPorEjercicio,
   urlFoto,
-  planesPorEjercicio,
   q
 } from "@/lib/data";
 import { informeATexto } from "@/lib/ai-informe";
@@ -56,7 +57,8 @@ import { fmtTiempoRelativo, horaLocal, hoyDiaSemana, hoyFecha, nombreDia } from 
 import { checklistHoy } from "@/lib/hoy-db";
 import { estadoPago } from "@/lib/pagos";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
-import { faseDe, nombreFase } from "@/lib/progression";
+import { getBorradorRutina } from "@/lib/plan-import";
+import { activoEnSemana, etapaDelBloque } from "@/lib/rutina";
 import { db } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 
@@ -256,18 +258,18 @@ async function ChecklistCliente({ perfil }: { perfil: Profile }) {
 }
 
 async function Resumen({ perfil }: { perfil: Profile }) {
-  const meso = await getBloque(perfil.id, { conBorrador: true });
+  const meso = await getBloque(perfil.id);
   const c = perfil.cuestionario;
   if (!meso) {
     return (
       <section className="card">
-        <p className="font-semibold">Sin plan todavía</p>
+        <p className="font-semibold">Sin rutina enviada todavía</p>
         <p className="mt-1 text-sm text-muted">
           {!perfil.onboarding_completo
             ? "El cliente todavía no completó el cuestionario."
             : perfil.estado_pago !== "pagado"
-              ? "El cliente todavía no pagó. Podés marcarlo como pagado arriba y generar el plan."
-              : "Armá la rutina en la pestaña \"Rutina nueva\" (con IA o con tu .txt) y después enviala."}
+              ? "El cliente todavía no pagó. Puedes marcarlo como pagado arriba y armar el plan."
+              : "Arma la rutina en la pestaña \"Rutina nueva\" (con tu PDF o .txt, una plantilla o IA) y después envíala."}
         </p>
       </section>
     );
@@ -279,9 +281,8 @@ async function Resumen({ perfil }: { perfil: Profile }) {
     getLogs(meso.id, meso.semana_actual),
     getSesionesSemana(meso.id, meso.semana_actual)
   ]);
-  const porDia = ejerciciosPorDia(ejercicios);
+  const porDia = ejerciciosPorDia(ejercicios.filter((e) => activoEnSemana(e, meso.semana_actual)));
   const logsEj = logsPorEjercicio(logs);
-  const fase = faseDe(meso.semana_actual);
   const cerradas = await q<{ semana: number }[]>(
     db().from("week_closures").select("semana").eq("mesocycle_id", meso.id).order("semana")
   );
@@ -290,17 +291,23 @@ async function Resumen({ perfil }: { perfil: Profile }) {
     <div className="flex flex-col gap-3">
       <section className="card">
         <p className="text-sm text-muted">
-          {meso.nombre} · origen: {meso.origen}
-          {!meso.publicado ? <span className="ml-2 chip border-warn/40 text-warn">borrador sin enviar</span> : null}
+          {meso.nombre} · origen: {meso.origen} · progresión {meso.progresion === "plan" ? "del plan" : "ondulada"}
         </p>
         <p className="text-xl font-bold">
           Semana {meso.semana_actual} de {meso.total_semanas}
         </p>
-        <p className="text-sm text-accent">Fase {fase} · {nombreFase(fase)}</p>
+        <p className="text-sm text-accent">{etapaDelBloque(meso, meso.semana_actual)}</p>
         <p className="mt-1 text-xs text-muted">
           Semanas cerradas: {cerradas.length ? cerradas.map((w) => w.semana).join(", ") : "ninguna"}
         </p>
       </section>
+
+      {meso.notas_entrenador ? (
+        <section className="card">
+          <h2 className="font-bold">Tus notas del bloque</h2>
+          <p className="mt-1 whitespace-pre-line text-sm text-muted">{meso.notas_entrenador}</p>
+        </section>
+      ) : null}
 
       <ChecklistCliente perfil={perfil} />
 
@@ -386,6 +393,7 @@ async function Resumen({ perfil }: { perfil: Profile }) {
           mesoId={meso.id}
           semana={meso.semana_actual}
           esUltima={meso.semana_actual >= meso.total_semanas}
+          progresion={meso.progresion}
         />
       ) : (
         <NewBlockButton nombreAnterior={meso.nombre} userId={perfil.id} />
@@ -529,30 +537,51 @@ async function ConsultasCliente({ userId }: { userId: string }) {
 }
 
 async function Rutina({ userId }: { userId: string }) {
-  const [meso, dias, ejercicios] = await Promise.all([
-    getBloque(userId, { conBorrador: true }),
+  const [meso, borrador, dias, ejercicios] = await Promise.all([
+    getBloque(userId),
+    getBorradorRutina(userId),
     getDias(userId),
     getEjercicios(userId)
   ]);
-  if (!dias.length) {
-    return <p className="card text-center text-muted">Este cliente todavía no tiene rutina.</p>;
-  }
-  const planes = meso ? planesPorEjercicio(await getPlanes(meso.id, meso.semana_actual)) : {};
+  const planes = meso ? await getPlanesVista(meso.id, meso.semana_actual) : {};
   const porDia = ejerciciosPorDia(ejercicios);
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted">
-        Editás la rutina del cliente. Los cambios de series, reps y peso aplican a la semana actual
-        {meso ? ` (semana ${meso.semana_actual})` : ""}.
-      </p>
-      {dias.map((dia) => (
-        <RutinaDia
-          key={dia.id}
-          dia={dia}
-          ejercicios={(porDia[dia.id] ?? []).sort((a, b) => a.orden - b.orden)}
-          planes={planes}
+      {borrador ? (
+        <BorradorRutina
+          // Se rearma cuando el servidor cambia el plan (pasos nuevos o cambios guardados)
+          key={JSON.stringify(borrador.plan).length}
+          userId={userId}
+          nombre={borrador.nombre}
+          plan={borrador.plan}
+          conIA={iaDisponible()}
         />
-      ))}
+      ) : null}
+      {!dias.length || !meso ? (
+        <p className="card text-center text-muted">
+          {borrador ? "El cliente todavía no tiene una rutina enviada." : "Este cliente todavía no tiene rutina."}
+        </p>
+      ) : (
+        <>
+          <h2 className="mt-2 text-lg font-bold">{borrador ? "La rutina que usa hoy" : "Su rutina"}</h2>
+          <TarjetaFase fases={meso.fases} semana={meso.semana_actual} compacta />
+          <p className="text-sm text-muted">
+            Editas la rutina del cliente. Los cambios de series, reps y peso aplican a la semana actual (semana{" "}
+            {meso.semana_actual}).
+          </p>
+          {dias.map((dia) => (
+            <RutinaDia
+              key={dia.id}
+              dia={dia}
+              ejercicios={(porDia[dia.id] ?? []).sort((a, b) => a.orden - b.orden)}
+              planes={planes}
+              semana={meso.semana_actual}
+              fases={meso.fases}
+              conRango={meso.progresion === "plan"}
+            />
+          ))}
+        </>
+      )}
     </div>
   );
 }

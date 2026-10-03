@@ -21,7 +21,13 @@ Facts · Vercel.
 - **Comenzar rutina:** modo guiado ejercicio por ejercicio y serie por serie;
   al registrar cada serie arranca solo el **cronómetro de descanso**
   (configurable por ejercicio y ajustable por serie con −15/+15), con sonido
-  y vibración. Muestra el **peso de la semana pasada** por serie.
+  y vibración. Muestra el **peso de la semana pasada** por serie. Con un plan
+  por cadencia, la **guía de la serie** cuenta cada repetición ("Sube 3 s →
+  Aprieta 5 s → Baja 3 s", luego las parciales) con pitido y vibración; en
+  **superseries** alterna los ejercicios y el descanso va al final.
+- **Plan del entrenador por fases:** la fase de la semana (reglas, cómo es
+  cada serie, aviso cuando cambia), solo los ejercicios de esa fase y el
+  **paso a paso** de cada ejercicio con su cadencia, parciales y la clave.
 - **Registro clásico:** cada día con steppers grandes, RIR/al fallo, "Todo
   según plan", series extra, navegación entre semanas.
 - **Progresión ondulada de 4 semanas** (`src/lib/progression.ts`):
@@ -50,9 +56,12 @@ Facts · Vercel.
 - **Ficha de cliente:** resumen de la semana y cuestionario, **rutina
   editable** (mismo editor que el cliente), progreso, comida del día, cerrar
   semana / nuevo bloque, marcar pago, dar de baja.
-- **Reemplazo total por `.txt`:** pegar o subir el plan escrito a mano → la IA
-  lo interpreta → vista previa → confirmar. Reemplaza la rutina completa y
-  conserva el historial.
+- **Rutina nueva desde tu plan (PDF, `.txt` o texto pegado):** la IA lee fases,
+  días, series, cadencias, parciales, superseries y notas (solo transcribe) →
+  vista previa → **borrador** (el cliente sigue con su rutina) → la IA escribe
+  el paso a paso de cada ejercicio por tandas → lo revisas y editas → Enviar.
+  Progresión "del plan": mismas series y rangos, sube el peso al llegar al
+  tope en todas las series, sin descargas automáticas. Conserva el historial.
 - **Regenerar plan** desde el cuestionario (IA o plantilla).
 
 ### Seguridad
@@ -91,7 +100,9 @@ Facts · Vercel.
    `supabase/migrations/0015_protocolos_checklist.sql` (checklist de Hoy y protocolos del entrenador) y
    `supabase/migrations/0016_alimentos_mx_y_fases.sql` (alimentos de México con sinónimos, comidas
    pre/post-entreno, fases del protocolo y lecturas de la IA guardadas) y
-   `supabase/migrations/0017_menu_borrador.sql` (menú enviado y borrador a la vez).
+   `supabase/migrations/0017_menu_borrador.sql` (menú enviado y borrador a la vez) y
+   `supabase/migrations/0018_rutina_fases.sql` (rutinas del entrenador por fases: cadencia,
+   parciales, superseries, paso a paso, y la rutina nueva en borrador sin cortar la actual).
 5. Authentication → Providers → Email: recomendado **desactivar "Confirm
    email"** (el SMTP gratuito manda muy pocos correos por hora). Si lo dejás,
    la app muestra la pantalla "Confirmá tu correo".
@@ -190,7 +201,7 @@ src/
     nutrition.ts          TMB, macros por objetivo, regla de tres
     off.ts                Open Food Facts + caché en `ingredients`
     pagos.ts              checkout simulado (punto de cambio a pago real)
-supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes) · 0003 recomendación de comidas · 0004 asistente · 0005 check-ins · 0006 ajuste de macros · 0007 vencimiento del pago · 0008 mensajes, push y referidos · 0009 revisión del entrenador · 0010 medidas · 0011 sesiones · 0012 fotos · 0013 récords · 0014 plantillas · 0015 checklist y protocolos · 0016 alimentos de México, pre/post-entreno y fases · 0017 menú en borrador
+supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes) · 0003 recomendación de comidas · 0004 asistente · 0005 check-ins · 0006 ajuste de macros · 0007 vencimiento del pago · 0008 mensajes, push y referidos · 0009 revisión del entrenador · 0010 medidas · 0011 sesiones · 0012 fotos · 0013 récords · 0014 plantillas · 0015 checklist y protocolos · 0016 alimentos de México, pre/post-entreno y fases · 0017 menú en borrador · 0018 rutinas por fases
 scripts/                  tests: progresión, planes/nutrición, RLS
 ```
 

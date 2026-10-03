@@ -25,11 +25,25 @@ export function iaDisponible(): boolean {
   return proveedor() !== null;
 }
 
-export class ErrorIA extends Error {}
+// `reintentarEn`: segundos que pide esperar el límite por minuto de la IA
+// gratis (solo con `sinEspera`: la pantalla cuenta y reintenta sola).
+export class ErrorIA extends Error {
+  constructor(
+    mensaje: string,
+    readonly reintentarEn: number | null = null
+  ) {
+    super(mensaje);
+  }
+}
 
 interface Opciones {
   temperatura?: number;
   maxTokens?: number;
+  // No esperar dentro de la llamada si la IA pide unos segundos: con una
+  // lectura larga, esperar + leer pasaría los 60 s que da el servidor.
+  sinEspera?: boolean;
+  // gpt-oss: "low" alcanza para transcribir; explicar técnica pide más
+  razonamiento?: "low" | "medium";
 }
 
 export async function generarJSON<T>(instrucciones: string, prompt: string, opciones: Opciones = {}): Promise<T> {
@@ -76,7 +90,7 @@ async function llamarGroq(
       max_tokens: opciones.maxTokens ?? 8192,
       // gpt-oss razona antes de responder; con esfuerzo alto gasta miles
       // de tokens y puede truncar el JSON. Bajo alcanza para estas tareas.
-      ...(modelo.startsWith("openai/gpt-oss") ? { reasoning_effort: "low" } : {})
+      ...(modelo.startsWith("openai/gpt-oss") ? { reasoning_effort: opciones.razonamiento ?? "low" } : {})
     }),
     cache: "no-store"
   });
@@ -87,6 +101,9 @@ async function llamarGroq(
       // y su menú seguidos lo pasa. Se espera lo que pida (hasta 45 s; la
       // página del entrenador permite 60) y se reintenta.
       const seg = Number(cuerpo.match(/try again in ([\d.]+)s/i)?.[1] ?? res.headers.get("retry-after") ?? 0);
+      if (opciones.sinEspera && seg > 0 && seg <= 90 && !/per day|TPD|RPD/i.test(cuerpo)) {
+        throw new ErrorIA("La IA gratuita pide esperar unos segundos.", Math.ceil(seg) + 1);
+      }
       if (intento < 2 && seg > 0 && seg <= 45) {
         await new Promise((r) => setTimeout(r, Math.ceil(seg * 1000) + 500));
         return llamarGroq(instrucciones, prompt, opciones, intento + 1, modoJson);
@@ -168,7 +185,7 @@ async function llamarGemini(instrucciones: string, prompt: string, opciones: Opc
 
 // ── Contexto compartido ─────────────────────────────────────────
 
-const ESQUEMA_PLAN = `Devolvé SOLO un JSON con esta forma exacta:
+const ESQUEMA_PLAN = `Devuelve SOLO un JSON con esta forma exacta:
 {
   "nombre_bloque": string,
   "notas": string (1-2 frases para el cliente),
@@ -188,14 +205,14 @@ const ESQUEMA_PLAN = `Devolvé SOLO un JSON con esta forma exacta:
           "peso_inicial_kg": number | null (null = a definir en el primer entreno),
           "incremento_kg": 1 | 1.25 | 2.5 | 5,
           "descanso_seg": number (60-180),
-          "descripcion": string (1 frase de técnica, en español rioplatense, voseo),
+          "descripcion": string (1 frase de técnica, español de México, de tú: "baja", "empuja"; nunca voseo),
           "tips": [string, string, string]
         }
       ]
     }
   ]
 }
-Reglas: compuestos (press, sentadilla, peso muerto, remo, jalón, dominadas) → progresion "compuesto", rango 8-12 o 6-10; aislamientos → "aislamiento", rango 10-15 o 12-20; ejercicios de peso corporal → "solo_reps"; abdominales/cuello al fallo → "al_fallo". Incluí solo los días que entrena; el resto no va en la lista.`;
+Reglas: compuestos (press, sentadilla, peso muerto, remo, jalón, dominadas) → progresion "compuesto", rango 8-12 o 6-10; aislamientos → "aislamiento", rango 10-15 o 12-20; ejercicios de peso corporal → "solo_reps"; abdominales/cuello al fallo → "al_fallo". Incluye solo los días que entrena; el resto no va en la lista.`;
 
 export function describirPerfil(perfil: Profile): string {
   return [
@@ -221,26 +238,14 @@ function describirCuestionario(c: Cuestionario | null): string {
 
 export async function generarPlanInicial(perfil: Profile): Promise<PlanGenerado> {
   const raw = await generarJSON<unknown>(
-    `Sos un entrenador personal experto en hipertrofia. Diseñás mesociclos de 8 semanas con progresión ondulada de 4 semanas (semana 1 piso de reps, semana 2 tope de reps, semana 3 sube el peso, semana 4 descarga al 50 %). Elegís ejercicios seguros para el equipamiento y las lesiones del cliente, 4-7 ejercicios por día según los minutos disponibles, y estimás un peso inicial conservador cuando la experiencia lo permite (principiantes: null en los compuestos con barra). ${ESQUEMA_PLAN}`,
-    `Perfil del cliente:\n${describirPerfil(perfil)}\n\nCuestionario:\n${describirCuestionario(perfil.cuestionario)}\n\nGenerá el plan inicial.`,
+    `Eres un entrenador personal experto en hipertrofia. Diseñas mesociclos de 8 semanas con progresión ondulada de 4 semanas (semana 1 piso de reps, semana 2 tope de reps, semana 3 sube el peso, semana 4 descarga al 50 %). Eliges ejercicios seguros para el equipamiento y las lesiones del cliente, 4-7 ejercicios por día según los minutos disponibles, y estimas un peso inicial conservador cuando la experiencia lo permite (principiantes: null en los compuestos con barra). ${ESQUEMA_PLAN}`,
+    `Perfil del cliente:\n${describirPerfil(perfil)}\n\nCuestionario:\n${describirCuestionario(perfil.cuestionario)}\n\nGenera el plan inicial.`,
     { temperatura: 0.5 }
   );
   return normalizarPlan(raw, perfil.cuestionario?.dias_disponibles);
 }
 
-// ── 2. Interpretar un plan en texto libre (.txt del entrenador) ─
-
-export async function interpretarPlanTxt(
-  texto: string,
-  perfil: Profile
-): Promise<PlanGenerado> {
-  const raw = await generarJSON<unknown>(
-    `Sos el asistente de un entrenador personal. Recibís un plan de entrenamiento escrito a mano (texto libre, puede tener abreviaturas, tablas o listas) y lo convertís FIELMENTE a JSON estructurado: respetá los ejercicios, el orden, las series, los rangos de reps, los pesos y los descansos que diga el texto. Si el texto no indica un dato, inferilo con criterio (rango 10-15 aislamientos, 8-12 compuestos, descanso 90 s, peso null). Si el texto nombra días ("Lunes", "Día 1"...), mapealos a dia_semana; si solo dice "Día 1, 2, 3", asignalos a lunes, miércoles y viernes. No inventes ejercicios que el texto no menciona. ${ESQUEMA_PLAN}`,
-    `Perfil del cliente:\n${describirPerfil(perfil)}\n\nPlan del entrenador (texto):\n"""\n${texto.slice(0, 12000)}\n"""`,
-    { temperatura: 0.1 }
-  );
-  return normalizarPlan(raw);
-}
+// ── 2. El .txt del entrenador se lee en ai-rutina.ts ──────────────
 
 // ── 3. Ajuste de carga semanal ──────────────────────────────────
 
@@ -263,13 +268,13 @@ export interface Ajuste {
 export async function sugerirAjustes(items: ItemAjuste[]): Promise<Ajuste[]> {
   if (!items.length) return [];
   const data = await generarJSON<{ ajustes: Ajuste[] }>(
-    `Sos un entrenador de fuerza que ajusta cargas semana a semana. Para cada ejercicio recibís: la fase del ciclo ondulado de 4 semanas que acaba de terminar, el plan que tenía, lo que el cliente registró realmente (reps, kg y RIR por serie) y la propuesta determinista del sistema para la semana que viene. Tu trabajo es devolver el peso concreto en kg para la semana siguiente:
-- Si el cliente cumplió con RIR alto (≥3) en todas las series, podés subir un poco más que la propuesta.
-- Si le costó (RIR 0-1, o no llegó a las reps en alguna serie), mantené o bajá levemente.
-- En descargas (fase 3 → 4) respetá la propuesta del 50 %.
+    `Eres un entrenador de fuerza que ajusta cargas semana a semana. Para cada ejercicio recibes: la fase del ciclo ondulado de 4 semanas que acaba de terminar, el plan que tenía, lo que el cliente registró realmente (reps, kg y RIR por serie) y la propuesta determinista del sistema para la semana que viene. Tu trabajo es devolver el peso concreto en kg para la semana siguiente:
+- Si el cliente cumplió con RIR alto (≥3) en todas las series, puedes subir un poco más que la propuesta.
+- Si le costó (RIR 0-1, o no llegó a las reps en alguna serie), mantén o baja levemente.
+- En descargas (fase 3 → 4) respeta la propuesta del 50 %.
 - Nunca te alejes más de ±15 % de la propuesta ni uses valores que no sean múltiplos del incremento_kg.
-- El motivo va en español rioplatense (voseo), máximo 110 caracteres, hablándole al cliente.
-Devolvé SOLO JSON: {"ajustes": [{"exercise_id": string, "peso_kg": number, "motivo": string}]} con TODOS los ejercicios recibidos.`,
+- El motivo va en español de México, de tú (subes, mantienes; nunca voseo), máximo 110 caracteres, hablándole al cliente.
+Devuelve SOLO JSON: {"ajustes": [{"exercise_id": string, "peso_kg": number, "motivo": string}]} con TODOS los ejercicios recibidos.`,
     JSON.stringify({ ejercicios: items }),
     { temperatura: 0.2 }
   );

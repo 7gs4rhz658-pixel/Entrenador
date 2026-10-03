@@ -11,6 +11,7 @@ import {
   planesPorEjercicio
 } from "@/lib/data";
 import { nombreDia } from "@/lib/format";
+import { activoEnSemana } from "@/lib/rutina";
 
 export default async function EntrenarPage({ params }: { params: { id: string } }) {
   const { userId } = await requireCliente();
@@ -27,7 +28,7 @@ export default async function EntrenarPage({ params }: { params: { id: string } 
     semana > 1 ? getLogs(meso.id, semana - 1) : Promise.resolve([])
   ]);
   const exsDia = ejercicios
-    .filter((e) => e.training_day_id === dia.id)
+    .filter((e) => e.training_day_id === dia.id && activoEnSemana(e, semana))
     .sort((a, b) => a.orden - b.orden);
   if (!exsDia.length) redirect(`/dia/${dia.id}`);
 
@@ -41,6 +42,8 @@ export default async function EntrenarPage({ params }: { params: { id: string } 
       planes={planesPorEjercicio(planes)}
       logs={logsPorEjercicio(logs)}
       logsPrev={logsPorEjercicio(logsPrev)}
+      fases={meso.fases}
+      conRango={meso.progresion === "plan"}
     />
   );
 }

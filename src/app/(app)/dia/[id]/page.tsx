@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import ExerciseLogger from "@/components/ExerciseLogger";
+import { TarjetaFase } from "@/components/FasesRutina";
 import { requireCliente } from "@/lib/auth";
 import {
   getBloque,
@@ -13,7 +14,7 @@ import {
   semanaCerrada
 } from "@/lib/data";
 import { nombreDia } from "@/lib/format";
-import { faseDe, nombreFase } from "@/lib/progression";
+import { activoEnSemana, etapaDelBloque, grupoSuperserie } from "@/lib/rutina";
 
 export default async function DiaPage({
   params,
@@ -41,13 +42,13 @@ export default async function DiaPage({
     semana > 1 ? getLogs(meso.id, semana - 1) : Promise.resolve([]),
     semanaCerrada(meso.id, semana)
   ]);
+  // Solo los de la fase de esta semana
   const exsDia = ejercicios
-    .filter((e) => e.training_day_id === dia.id)
+    .filter((e) => e.training_day_id === dia.id && activoEnSemana(e, semana))
     .sort((a, b) => a.orden - b.orden);
   const mPlanes = planesPorEjercicio(planes);
   const mLogs = logsPorEjercicio(logs);
   const mLogsPrev = logsPorEjercicio(logsPrev);
-  const fase = faseDe(semana);
 
   return (
     <main>
@@ -82,16 +83,16 @@ export default async function DiaPage({
             ) : null}
           </div>
         </div>
-        <p className="mt-1 text-sm text-accent">
-          Fase {fase} · {nombreFase(fase)}
-        </p>
+        <p className="mt-1 text-sm text-accent">{etapaDelBloque(meso, semana)}</p>
         {cerrada ? (
           <p className="mt-2 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn">
-            Semana ya cerrada: si editás lo realizado, el plan de la semana
+            Semana ya cerrada: si editas lo realizado, el plan de la semana
             siguiente se recalcula solo.
           </p>
         ) : null}
       </header>
+
+      <TarjetaFase fases={meso.fases} semana={semana} compacta />
 
       {!dia.es_descanso && exsDia.length > 0 && semana === meso.semana_actual ? (
         <Link href={`/dia/${dia.id}/entrenar`} className="btn-primary mb-4 w-full">
@@ -101,20 +102,27 @@ export default async function DiaPage({
 
       {dia.es_descanso ? (
         <p className="card text-center text-muted">
-          Este día está marcado como descanso. Podés cambiarlo desde la
+          Este día está marcado como descanso. Puedes cambiarlo desde la
           pestaña Rutina.
         </p>
       ) : exsDia.length === 0 ? (
         <p className="card text-center text-muted">
-          Este día no tiene ejercicios todavía. Agregalos desde la pestaña
+          Este día no tiene ejercicios esta semana. Agrégalos desde la pestaña
           Rutina.
         </p>
       ) : (
         <div className="flex flex-col gap-4">
-          {exsDia.map((ex) => (
+          {exsDia.map((ex, i) => (
             <ExerciseLogger
               key={`${ex.id}-${semana}`}
               ejercicio={ex}
+              conRango={meso.progresion === "plan"}
+              companero={
+                grupoSuperserie(exsDia, i)
+                  .filter((k) => k !== i)
+                  .map((k) => exsDia[k].nombre)
+                  .join(" y ") || null
+              }
               plan={mPlanes[ex.id] ?? null}
               logs={mLogs[ex.id] ?? []}
               logsPrev={mLogsPrev[ex.id] ?? []}

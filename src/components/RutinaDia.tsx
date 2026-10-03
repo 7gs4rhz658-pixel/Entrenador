@@ -8,13 +8,16 @@ import {
   type EjercicioInput
 } from "@/app/actions/rutina";
 import { nombreDia, resumenPlan } from "@/lib/format";
+import { activoEnSemana, faseDeSemana, textoSemanas, textoTempo } from "@/lib/rutina";
 import type {
   Exercise,
+  FaseRutina,
   ModoProgresion,
   PlannedSet,
   TrainingDay,
   Unidad
 } from "@/lib/types";
+import { ComoSeHace, EtiquetasEjercicio } from "./TecnicaEjercicio";
 
 type PlanLite = Pick<
   PlannedSet,
@@ -63,6 +66,16 @@ function ExerciseForm({
   const [rir, setRir] = useState<number | null>(plan?.rir_objetivo ?? null);
   const [descripcion, setDescripcion] = useState(ejercicio?.descripcion ?? "");
   const [tips, setTips] = useState((ejercicio?.tips ?? []).join("\n"));
+  const [semanaDesde, setSemanaDesde] = useState<string>(ejercicio?.semana_desde?.toString() ?? "");
+  const [semanaHasta, setSemanaHasta] = useState<string>(ejercicio?.semana_hasta?.toString() ?? "");
+  const [tempo, setTempo] = useState(ejercicio?.tempo ? textoTempo(ejercicio.tempo) : "");
+  const [parciales, setParciales] = useState<string>(ejercicio?.parciales?.toString() ?? "");
+  const [porLado, setPorLado] = useState(ejercicio?.por_lado ?? false);
+  const [superserie, setSuperserie] = useState(ejercicio?.superserie ?? "");
+  const [nota, setNota] = useState(ejercicio?.nota ?? "");
+  const [pasos, setPasos] = useState((ejercicio?.pasos ?? []).join("\n"));
+  const [clave, setClave] = useState(ejercicio?.clave ?? "");
+  const conPlan = !!(ejercicio?.semana_desde || ejercicio?.tempo || ejercicio?.pasos.length || ejercicio?.nota);
 
   function guardar() {
     setError(null);
@@ -80,6 +93,15 @@ function ExerciseForm({
       descanso_seg: descanso,
       descripcion,
       tips: tips.split("\n"),
+      semana_desde: semanaDesde ? Number(semanaDesde) : null,
+      semana_hasta: semanaHasta ? Number(semanaHasta) : null,
+      tempo,
+      parciales: parciales ? Number(parciales) : null,
+      por_lado: porLado,
+      superserie,
+      nota,
+      pasos: pasos.split("\n"),
+      clave,
       series,
       reps: alFallo ? null : reps,
       peso_kg: unidad === "kg" && peso > 0 ? peso : null,
@@ -286,6 +308,59 @@ function ExerciseForm({
         Series al fallo (sin objetivo de reps)
       </label>
 
+      <details className="rounded-xl border border-line px-3 py-2" open={conPlan}>
+        <summary className="cursor-pointer select-none text-sm font-semibold">
+          Fase, cadencia y paso a paso
+        </summary>
+        <div className="mt-3 flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Desde la semana</label>
+              <input type="number" inputMode="numeric" min={1} max={12} value={semanaDesde} onChange={(e) => setSemanaDesde(e.target.value)} placeholder="1" className="input" />
+            </div>
+            <div>
+              <label className="label">Hasta la semana</label>
+              <input type="number" inputMode="numeric" min={1} max={12} value={semanaHasta} onChange={(e) => setSemanaHasta(e.target.value)} placeholder="todas" className="input" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Cadencia</label>
+              <input value={tempo} onChange={(e) => setTempo(e.target.value)} placeholder="3-5-3-0" className="input" />
+              <p className="mt-1 text-[11px] text-muted">sube · aprieta · baja · pausa estirado (s)</p>
+            </div>
+            <div>
+              <label className="label">Parciales al final</label>
+              <input type="number" inputMode="numeric" min={0} max={50} value={parciales} onChange={(e) => setParciales(e.target.value)} placeholder="0" className="input" />
+              <p className="mt-1 text-[11px] text-muted">de las reps, cuántas son parciales</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Superserie</label>
+              <input value={superserie} onChange={(e) => setSuperserie(e.target.value)} placeholder="ej. 1" className="input" />
+              <p className="mt-1 text-[11px] text-muted">mismo número = se alternan</p>
+            </div>
+            <label className="mt-6 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={porLado} onChange={(e) => setPorLado(e.target.checked)} className="h-5 w-5 accent-[var(--accent)]" />
+              Reps por lado
+            </label>
+          </div>
+          <div>
+            <label className="label">Indicación del plan</label>
+            <input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="ej. 5 s de isometría arriba" className="input" />
+          </div>
+          <div>
+            <label className="label">Paso a paso, uno por línea</label>
+            <textarea value={pasos} onChange={(e) => setPasos(e.target.value)} rows={5} className="input" />
+          </div>
+          <div>
+            <label className="label">Clave (lo más importante)</label>
+            <input value={clave} onChange={(e) => setClave(e.target.value)} className="input" />
+          </div>
+        </div>
+      </details>
+
       <div>
         <label className="label">Descripción (vacía = se genera sola)</label>
         <textarea
@@ -336,11 +411,17 @@ function ExerciseForm({
 export default function RutinaDia({
   dia,
   ejercicios,
-  planes
+  planes,
+  semana = 1,
+  fases = [],
+  conRango = false
 }: {
   dia: TrainingDay;
   ejercicios: Exercise[];
   planes: Record<string, PlanLite>;
+  semana?: number; // semana actual del bloque: los de otras fases van aparte
+  fases?: FaseRutina[];
+  conRango?: boolean; // plan del entrenador: "4 × 6–8" en vez de las reps de la semana
 }) {
   const [pendiente, iniciar] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -399,14 +480,19 @@ export default function RutinaDia({
           </div>
 
           <ul className="mt-3 flex flex-col gap-2">
-            {ejercicios.map((ex) => (
+            {ejercicios.filter((ex) => activoEnSemana(ex, semana) || abierto === ex.id).map((ex) => (
               <li key={ex.id} className="rounded-xl border border-line p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{ex.nombre}</p>
                     <p className="text-sm text-muted">
-                      {resumenPlan(planes[ex.id] ?? null, ex.unidad)}
+                      {resumenPlan(
+                        planes[ex.id] ?? null,
+                        ex.unidad,
+                        conRango ? { min: ex.rep_min, max: ex.rep_max, porLado: ex.por_lado } : { min: null, max: null, porLado: ex.por_lado }
+                      )}
                     </p>
+                    <EtiquetasEjercicio ej={ex} />
                   </div>
                   <div className="flex shrink-0 gap-3 text-sm font-medium">
                     <button
@@ -433,10 +519,43 @@ export default function RutinaDia({
                     plan={planes[ex.id] ?? null}
                     alCerrar={() => setAbierto(null)}
                   />
-                ) : null}
+                ) : (
+                  <ComoSeHace ej={ex} />
+                )}
               </li>
             ))}
           </ul>
+
+          {(() => {
+            const otros = ejercicios.filter((ex) => !activoEnSemana(ex, semana) && abierto !== ex.id);
+            if (!otros.length) return null;
+            return (
+              <details className="mt-3 rounded-xl border border-dashed border-line px-3 py-2">
+                <summary className="cursor-pointer select-none text-sm font-medium text-muted">
+                  De otras fases ({otros.length})
+                </summary>
+                <ul className="mt-2 flex flex-col gap-1.5 text-sm">
+                  {otros.map((ex) => {
+                    const f = faseDeSemana(fases, ex.semana_desde ?? 1);
+                    return (
+                      <li key={ex.id} className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate">
+                          {ex.nombre}
+                          <span className="ml-1 text-xs text-muted">
+                            · {f ? `fase ${f.numero}, ` : ""}
+                            {textoSemanas({ semana_desde: ex.semana_desde ?? 1, semana_hasta: ex.semana_hasta ?? ex.semana_desde ?? 1 })}
+                          </span>
+                        </span>
+                        <button onClick={() => setAbierto(ex.id)} className="shrink-0 text-xs font-semibold text-accent">
+                          Editar
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </details>
+            );
+          })()}
 
           {abierto === "nuevo" ? (
             <ExerciseForm
@@ -456,7 +575,7 @@ export default function RutinaDia({
         </>
       ) : (
         <p className="mt-2 text-sm text-muted">
-          Día de descanso. Activá &quot;Entreno&quot; para sumarle ejercicios
+          Día de descanso. Activa &quot;Entreno&quot; para agregarle ejercicios
           (por ejemplo, un día de cardio o un cuarto día de pesas).
         </p>
       )}

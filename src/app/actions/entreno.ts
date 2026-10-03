@@ -25,7 +25,7 @@ async function exigirMesVigente(): Promise<void> {
   const s = await requireSesion();
   if (s.perfil.rol === "entrenador") return;
   if (estadoPago(s.perfil, hoyFecha()).vencido) {
-    throw new Error("Tu mes venció. Renová desde Inicio para cerrar la semana y seguir con el plan.");
+    throw new Error("Tu mes venció. Renueva desde Inicio para cerrar la semana y seguir con el plan.");
   }
 }
 

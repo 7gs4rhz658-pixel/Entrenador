@@ -23,7 +23,7 @@ const sucio = {
       nombre: "Empuje",
       ejercicios: [
         { nombre: "Press banca", grupo_muscular: "pecho", unidad: "kg", progresion: "compuesto",
-          series: 9, rep_min: 8, rep_max: 6, peso_inicial_kg: 60.3, incremento_kg: 3, descanso_seg: 9999 },
+          series: 14, rep_min: 8, rep_max: 6, peso_inicial_kg: 60.3, incremento_kg: 3, descanso_seg: 9999 },
         { nombre: "", grupo_muscular: "pecho" },
         { nombre: "Flexiones", grupo_muscular: "pecho", unidad: "peso_corporal", progresion: "compuesto",
           series: 3, rep_min: 10, rep_max: 15 }
@@ -39,7 +39,7 @@ check("nombre del bloque recortado", plan.nombre_bloque === "Hipertrofia 3 días
 check("día vacío descartado; días 1, 3 y 5 (repetido y fuera de rango reubicados en los disponibles)",
   plan.dias.map((d) => d.dia_semana).join() === "1,3,5", plan.dias.map((d) => d.dia_semana));
 const press = plan.dias[0].ejercicios[0];
-check("series acotadas a 8", press.series === 8, press.series);
+check("series acotadas a 10", press.series === 10, press.series);
 check("rep_max nunca menor que rep_min", press.rep_max >= press.rep_min, [press.rep_min, press.rep_max]);
 check("peso redondeado a 0,25", press.peso_inicial_kg === 60.25, press.peso_inicial_kg);
 check("incremento inválido → 2,5", press.incremento_kg === 2.5);
@@ -48,7 +48,7 @@ check("ejercicio sin nombre descartado", plan.dias[0].ejercicios.length === 2);
 const flex = plan.dias[0].ejercicios[1];
 check("peso corporal fuerza progresión solo_reps", flex.progresion === "solo_reps", flex.progresion);
 check("descripción y tips autogenerados si faltan", !!flex.descripcion && (flex.tips?.length ?? 0) > 0);
-check("grupo inválido → otro", plan.dias[1].ejercicios[0].grupo_muscular === "otro");
+check("grupo inválido → se deduce del nombre (sentadilla → pierna)", plan.dias[1].ejercicios[0].grupo_muscular === "pierna", plan.dias[1].ejercicios[0].grupo_muscular);
 
 // 2. Sin ningún día válido → error
 let tiro = false;

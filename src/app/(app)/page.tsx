@@ -22,7 +22,7 @@ import { recomendacionPara } from "@/lib/meal-plan-db";
 import { estadoPago } from "@/lib/pagos";
 import { checkinPendiente } from "@/lib/stats";
 import { macrosDe, objetivosCliente, sumarMacros } from "@/lib/nutrition";
-import { faseDe, nombreFase } from "@/lib/progression";
+import { activoEnSemana, etapaDelBloque, faseDeSemana, faseQueEmpieza } from "@/lib/rutina";
 
 // Cerrar semana consulta a la IA: margen para la server action.
 export const maxDuration = 60;
@@ -41,7 +41,7 @@ export default async function Home({
         <p className="text-lg font-semibold">Tu entrenador está armando tu plan</p>
         <p className="mt-2 text-sm text-muted">
           Está revisando tu rutina y tu recomendación de comidas con tus datos. Cuando te las
-          envíe te llega un aviso y aparecen acá. Mientras tanto podés activar los avisos en
+          envíe te llega un aviso y aparecen aquí. Mientras tanto puedes activar los avisos en
           Perfil.
         </p>
       </main>
@@ -56,7 +56,8 @@ export default async function Home({
     getLogs(meso.id, meso.semana_actual),
     getComidas(userId, fecha)
   ]);
-  const porDia = ejerciciosPorDia(ejercicios);
+  // Los de la fase de esta semana (en un plan por fases cambian)
+  const porDia = ejerciciosPorDia(ejercicios.filter((e) => activoEnSemana(e, meso.semana_actual)));
   const logsEj = logsPorEjercicio(logs);
 
   const diaHoy = dias.find((d) => d.dia_semana === hoy);
@@ -64,7 +65,9 @@ export default async function Home({
 
   const objetivos = objetivosCliente(perfil, esEntrenoHoy);
   const consumido = sumarMacros(comidas.map((c) => macrosDe(c.ingredient, c.cantidad_g)));
-  const fase = faseDe(meso.semana_actual);
+  const faseSig = faseQueEmpieza(meso.fases, meso.semana_actual);
+  const faseAhora = faseDeSemana(meso.fases, meso.semana_actual);
+  const faseNueva = faseAhora && faseAhora.numero > 1 && faseAhora.fase.semana_desde === meso.semana_actual ? faseAhora : null;
 
   // Desde las 18 la app mira al día siguiente
   const manana = horaLocal() >= 18;
@@ -86,8 +89,8 @@ export default async function Home({
   const avisoPago =
     pago.pagado && pago.diasRestantes != null && (pago.vencido || pago.diasRestantes <= 3)
       ? pago.vencido
-        ? { titulo: "Tu mes venció", texto: "Seguís viendo tu rutina y tu historial. Para cerrar semanas, recibir informes y arrancar el próximo bloque, renová →" }
-        : { titulo: pago.diasRestantes === 0 ? "Tu mes vence hoy" : `Tu mes vence en ${pago.diasRestantes} día${pago.diasRestantes === 1 ? "" : "s"}`, texto: "Renová ahora y los días que te quedan se suman →" }
+        ? { titulo: "Tu mes venció", texto: "Sigues viendo tu rutina y tu historial. Para cerrar semanas, recibir informes y empezar el próximo bloque, renueva →" }
+        : { titulo: pago.diasRestantes === 0 ? "Tu mes vence hoy" : `Tu mes vence en ${pago.diasRestantes} día${pago.diasRestantes === 1 ? "" : "s"}`, texto: "Renueva ahora y los días que te quedan se suman →" }
       : null;
 
   return (
@@ -96,7 +99,7 @@ export default async function Home({
         <section className="card mb-4 border-ok/40">
           <p className="font-semibold">✓ ¡Tu plan está listo, {perfil.nombre.split(" ")[0]}!</p>
           <p className="mt-1 text-sm text-muted">
-            Abajo tenés tu semana. Tocá el día de hoy y usá &quot;Comenzar
+            Abajo tienes tu semana. Toca el día de hoy y usa &quot;Comenzar
             rutina&quot; para que la app te guíe ejercicio por ejercicio.
           </p>
         </section>
@@ -106,9 +109,9 @@ export default async function Home({
         <section className="card mb-4 border-ok/40">
           <p className="font-semibold">✓ Check-in enviado</p>
           <p className="mt-1 text-sm text-muted">
-            Tu entrenador revisa el informe de la semana y te lo manda acá mismo.{" "}
+            Tu entrenador revisa el informe de la semana y te lo manda aquí mismo.{" "}
             <Link href="/progreso?tab=medidas" className="font-semibold text-accent">
-              ¿Cargás tus medidas de la semana? →
+              ¿Registras tus medidas de la semana? →
             </Link>
           </p>
         </section>
@@ -126,7 +129,7 @@ export default async function Home({
           <p className="font-semibold">{pago.vencido ? "⏸️" : "📅"} {avisoPago.titulo}</p>
           <p className="mt-1 text-sm text-muted">{avisoPago.texto}</p>
           {checkins.length >= 2 ? (
-            <span className="mt-1 block text-xs font-semibold text-accent">Antes, mirá tu mes: peso, cargas y adherencia</span>
+            <span className="mt-1 block text-xs font-semibold text-accent">Antes, mira tu mes: peso, cargas y adherencia</span>
           ) : null}
         </Link>
       ) : null}
@@ -142,7 +145,7 @@ export default async function Home({
 
       {noLeidos ? (
         <Link href="/mensajes" className="card mb-4 block border-accent/60">
-          <p className="font-semibold">💬 {noLeidos === 1 ? "Tenés un mensaje nuevo" : `Tenés ${noLeidos} mensajes nuevos`} de tu entrenador</p>
+          <p className="font-semibold">💬 {noLeidos === 1 ? "Tienes un mensaje nuevo" : `Tienes ${noLeidos} mensajes nuevos`} de tu entrenador</p>
           <p className="mt-1 text-sm text-muted">Leer y responder →</p>
         </Link>
       ) : null}
@@ -155,7 +158,13 @@ export default async function Home({
           Semana {meso.semana_actual} de {meso.total_semanas}
         </h1>
         <p className="mt-0.5 text-sm text-accent">
-          Fase {fase} · {nombreFase(fase)}
+          {etapaDelBloque(meso, meso.semana_actual)}
+          {meso.fecha_inicio > fecha ? (
+            <span className="text-muted">
+              {" · empieza el "}
+              {new Date(`${meso.fecha_inicio}T12:00:00`).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" })}
+            </span>
+          ) : null}
           {checkins.length ? (
             <>
               {" · "}
@@ -181,9 +190,22 @@ export default async function Home({
         </div>
       </header>
 
+      {faseSig || faseNueva ? (
+        <Link href="/rutina" className={`card mb-4 block ${faseNueva ? "border-ok/50" : "border-warn/50"}`}>
+          <p className="font-semibold">
+            {faseNueva
+              ? `🔁 Empezaste la fase ${faseNueva.numero}: ${faseNueva.fase.nombre}`
+              : `🔜 La próxima semana empieza la fase ${faseSig!.numero}: ${faseSig!.fase.nombre}`}
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            Cambian los ejercicios y la forma de entrenar. Mira cómo se hace cada serie →
+          </p>
+        </Link>
+      ) : null}
+
       {!objetivos ? (
         <Link href="/perfil" className="card mb-4 block">
-          <p className="font-semibold">Completá tu perfil</p>
+          <p className="font-semibold">Completa tu perfil</p>
           <p className="text-sm text-muted">
             Con tus datos calculamos calorías y macros diarios →
           </p>
@@ -262,8 +284,8 @@ export default async function Home({
       <section className="mt-5">
         {pago.vencido ? (
           <Link href="/pago" className="card block text-center">
-            <p className="font-semibold">Renová tu mes para cerrar la semana</p>
-            <p className="mt-1 text-sm text-muted">Tus registros se guardan igual; al renovar seguís exactamente donde estabas.</p>
+            <p className="font-semibold">Renueva tu mes para cerrar la semana</p>
+            <p className="mt-1 text-sm text-muted">Tus registros se guardan igual; al renovar sigues exactamente donde estabas.</p>
           </Link>
         ) : meso.estado === "activo" ? (
           <CloseWeekButton
@@ -271,6 +293,7 @@ export default async function Home({
             semana={meso.semana_actual}
             esUltima={meso.semana_actual >= meso.total_semanas}
             conCheckin
+            progresion={meso.progresion}
           />
         ) : (
           <NewBlockButton nombreAnterior={meso.nombre} />

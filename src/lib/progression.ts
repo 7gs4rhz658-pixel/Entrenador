@@ -144,7 +144,7 @@ export function planSiguiente(
         .filter((r) => r.completado && r.peso_kg != null)
         .map((r) => r.peso_kg!);
       if (!pesos.length) {
-        base.nota = "Peso a definir: registrá una serie para fijar la base.";
+        base.nota = "Peso a definir: registra una serie para fijar la base.";
         return base;
       }
       base.peso_kg = red2(Math.max(...pesos));
@@ -154,7 +154,7 @@ export function planSiguiente(
     switch (fase) {
       case 1:
         base.reps = max;
-        base.nota = `Mismo peso, subís al tope del rango (${max} reps).`;
+        base.nota = `Mismo peso, subes al tope del rango (${max} reps).`;
         return base;
       case 2: {
         if (!cumplioMinimo(planActual, registros, min)) {
@@ -164,7 +164,7 @@ export function planSiguiente(
         }
         base.reps = min;
         base.peso_kg = red2(peso + inc);
-        base.nota = `Semana de carga: +${inc} kg y volvés a ${min} reps.`;
+        base.nota = `Semana de carga: +${inc} kg y vuelves a ${min} reps.`;
         return base;
       }
       case 3:
@@ -176,7 +176,7 @@ export function planSiguiente(
         const pesoFase3 = planAnterior?.peso_kg ?? red2(peso * 2);
         base.reps = min;
         base.peso_kg = pesoFase3;
-        base.nota = `Nuevo ciclo: arrancás con ${pesoFase3} kg (el peso de la semana de carga).`;
+        base.nota = `Nuevo ciclo: empiezas con ${pesoFase3} kg (el peso de la semana de carga).`;
         return base;
       }
     }
@@ -188,7 +188,7 @@ export function planSiguiente(
   switch (fase) {
     case 1:
       base.reps = reps + delta;
-      base.nota = `Subís al tope del rango (${base.reps} reps).`;
+      base.nota = `Subes al tope del rango (${base.reps} reps).`;
       return base;
     case 2:
       base.reps = reps - delta + 2;
@@ -200,9 +200,57 @@ export function planSiguiente(
       return base;
     case 4:
       base.reps = planAnterior?.reps ?? reps * 2;
-      base.nota = `Nuevo ciclo: arrancás con ${base.reps} reps.`;
+      base.nota = `Nuevo ciclo: empiezas con ${base.reps} reps.`;
       return base;
   }
+}
+
+// Plan del entrenador (bloque con progresión "plan"): cada semana repite
+// sus series y su rango; el peso sube un escalón solo cuando todas las
+// series llegaron al tope del rango con el peso del plan. Sin descargas
+// automáticas: si el plan las quiere, las escribe el entrenador.
+export function planSiguienteFijo(
+  ex: ConfigEjercicio,
+  planActual: PlanBase,
+  registros: RegistroSerie[]
+): Propuesta {
+  const base: Propuesta = { ...planActual, nota: "" };
+  if (ex.progresion === "al_fallo" || planActual.al_fallo) {
+    base.nota = "Series al fallo: se mantiene igual.";
+    return base;
+  }
+  const { min, max } = rangoReps(ex);
+  base.reps = min;
+  if (!usaPeso(ex)) {
+    base.nota = "Mismas series y repeticiones del plan.";
+    return base;
+  }
+  const hechas = registros.filter((r) => r.completado);
+  if (base.peso_kg == null) {
+    const pesos = hechas.filter((r) => r.peso_kg != null).map((r) => r.peso_kg!);
+    if (!pesos.length) {
+      base.nota = "Peso a definir: registra una serie para fijar la base.";
+      return base;
+    }
+    base.peso_kg = red2(Math.max(...pesos));
+  }
+  const peso = base.peso_kg;
+  if (!hechas.length) {
+    base.nota = "Sin registros la semana pasada: se mantiene el peso.";
+    return base;
+  }
+  const primeras = [...hechas].sort((a, b) => a.serie - b.serie).slice(0, planActual.series);
+  const alTope =
+    hechas.length >= planActual.series &&
+    primeras.every((r) => (r.reps ?? 0) >= max && (r.peso_kg ?? 0) >= peso - 0.01);
+  if (alTope) {
+    const inc = ex.incremento_kg > 0 ? ex.incremento_kg : 2.5;
+    base.peso_kg = red2(peso + inc);
+    base.nota = `Llegaste a ${max} reps en todas las series: +${inc} kg (si la técnica salió limpia).`;
+  } else {
+    base.nota = `Mismo peso: busca ${max} reps en todas las series para subir.`;
+  }
+  return base;
 }
 
 // Peso final tras la sugerencia de la IA: acotado a ±15 % de la propuesta

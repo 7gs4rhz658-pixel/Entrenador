@@ -91,7 +91,7 @@ export default function CheckinForm({
         </div>
         <p className="mt-2 text-xs text-muted">
           Pesate a la misma hora que siempre, mejor en ayunas. Una semana no dice nada sola: lo que
-          importa es la tendencia. ¿Tenés cinta métrica? Después del check-in cargá tus medidas en{" "}
+          importa es la tendencia. ¿Tienes cinta métrica? Después del check-in registra tus medidas en{" "}
           <a href="/progreso?tab=medidas" className="font-semibold text-accent">
             Progreso → Medidas
           </a>

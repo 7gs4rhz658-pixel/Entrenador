@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "npx --yes tsx scripts/test-progresion.ts && npx --yes tsx scripts/test-planes.ts && npx --yes tsx scripts/test-hoy.ts && npx --yes tsx scripts/test-protocolo.ts && npx --yes tsx scripts/test-comidas.ts",
+    "test": "npx --yes tsx scripts/test-progresion.ts && npx --yes tsx scripts/test-planes.ts && npx --yes tsx scripts/test-hoy.ts && npx --yes tsx scripts/test-protocolo.ts && npx --yes tsx scripts/test-comidas.ts && npx --yes tsx scripts/test-rutina.ts",
     "test:comidas": "npx --yes tsx scripts/test-comidas.ts",
+    "test:rutina": "npx --yes tsx scripts/test-rutina.ts",
     "test:hoy": "npx --yes tsx scripts/test-hoy.ts",
     "test:protocolo": "npx --yes tsx scripts/test-protocolo.ts",
     "test:progresion": "npx --yes tsx scripts/test-progresion.ts",
@@ -21,6 +22,7 @@
     "next": "^14.2.15",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "unpdf": "^1.8.1",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

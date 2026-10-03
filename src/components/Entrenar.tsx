@@ -3,12 +3,16 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { resumenSemanaPasada } from "./ExerciseLogger";
+import { TarjetaFase } from "./FasesRutina";
+import GuiaCadencia from "./GuiaCadencia";
 import RestTimer from "./RestTimer";
 import Stepper from "./Stepper";
+import { ComoSeHace, EtiquetasEjercicio } from "./TecnicaEjercicio";
 import { guardarSerie, guardarSesion, type RecordDetectado } from "@/app/actions/entreno";
 import { guardarDescanso } from "@/app/actions/rutina";
 import { fmtNum, fmtSegundos, resumenPlan } from "@/lib/format";
-import type { Exercise, LoggedSet, PlannedSet } from "@/lib/types";
+import { grupoSuperserie, repsDeSerie } from "@/lib/rutina";
+import type { Exercise, FaseRutina, LoggedSet, PlannedSet } from "@/lib/types";
 
 interface SerieHecha {
   serie: number;
@@ -20,7 +24,9 @@ interface SerieHecha {
 
 // Modo "Comenzar rutina": guía ejercicio por ejercicio y serie por serie,
 // dispara el cronómetro al registrar cada serie y muestra el peso de la
-// semana pasada para decidir si repetir o subir.
+// semana pasada para decidir si repetir o subir. Con cadencia, la guía
+// cuenta cada repetición; en superserie alterna los ejercicios y el
+// descanso va después del último.
 export default function Entrenar({
   diaId,
   titulo,
@@ -29,7 +35,9 @@ export default function Entrenar({
   ejercicios,
   planes,
   logs,
-  logsPrev
+  logsPrev,
+  fases = [],
+  conRango = false
 }: {
   diaId: string;
   titulo: string;
@@ -39,6 +47,8 @@ export default function Entrenar({
   planes: Record<string, PlannedSet>;
   logs: Record<string, LoggedSet[]>;
   logsPrev: Record<string, LoggedSet[]>;
+  fases?: FaseRutina[];
+  conRango?: boolean;
 }) {
   // Series ya registradas (de la base) + las que se registran ahora
   const [hechas, setHechas] = useState<Record<string, SerieHecha[]>>(() => {
@@ -142,16 +152,34 @@ export default function Entrenar({
         setError(r.error);
         return;
       }
-      setHechas((h) => ({
-        ...h,
+      const nuevas = {
+        ...hechas,
         [ex.id]: [
-          ...(h[ex.id] ?? []),
+          ...(hechas[ex.id] ?? []),
           { serie: serieActual, reps: fila.reps, peso: conPeso ? fila.peso : null, rir: fila.rir, alFallo: fila.alFallo }
         ]
-      }));
+      };
+      setHechas(nuevas);
       setBorrador(null);
-      setDisparo((d) => d + 1);
       if (r.record) setRecords((l) => [...l, r.record!]);
+      // Superserie: del primero al siguiente sin descanso; después del
+      // último, descanso y de vuelta al primero que tenga series pendientes
+      const grupo = grupoSuperserie(ejercicios, indice);
+      if (grupo.length > 1) {
+        const pendientes = (k: number) =>
+          (nuevas[ejercicios[k].id]?.length ?? 0) < (planes[ejercicios[k].id]?.series ?? 3) + (extras[ejercicios[k].id] ?? 0);
+        const pos = grupo.indexOf(indice);
+        const siguiente = grupo.slice(pos + 1).find(pendientes);
+        if (siguiente != null) {
+          setIndice(siguiente);
+          return;
+        }
+        setDisparo((d) => d + 1);
+        const primero = grupo.find(pendientes);
+        if (primero != null) setIndice(primero);
+        return;
+      }
+      setDisparo((d) => d + 1);
     });
   }
 
@@ -214,6 +242,12 @@ export default function Entrenar({
 
   const completo = hechasEx.length >= totalSeries;
   const pasada = resumenSemanaPasada(prevEx, conPeso);
+  const companero =
+    grupoSuperserie(ejercicios, indice)
+      .filter((k) => k !== indice)
+      .map((k) => ejercicios[k].nombre)
+      .join(" y ") || null;
+  const { completas, parciales } = repsDeSerie(ex);
 
   return (
     <main>
@@ -239,12 +273,18 @@ export default function Entrenar({
         </div>
       </header>
 
+      {indice === 0 ? <TarjetaFase fases={fases} semana={semana} compacta /> : null}
+
       <section className="card">
         <h1 className="text-xl font-bold leading-snug">{ex.nombre}</h1>
         <p className="mt-0.5 text-sm text-muted">
-          Plan: <span className="font-semibold text-ink">{resumenPlan(plan, ex.unidad)}</span>
-          {ex.descanso_seg ? ` · descanso ${descansos[ex.id]} s` : ""}
+          Plan:{" "}
+          <span className="font-semibold text-ink">
+            {resumenPlan(plan, ex.unidad, { min: conRango ? ex.rep_min : null, max: conRango ? ex.rep_max : null, porLado: ex.por_lado })}
+          </span>
+          {ex.descanso_seg ? (companero ? ` · descanso ${descansos[ex.id]} s al terminar la superserie` : ` · descanso ${descansos[ex.id]} s`) : ""}
         </p>
+        <EtiquetasEjercicio ej={ex} companero={companero} />
         {pasada ? (
           <p className="mt-0.5 text-sm text-muted">
             Semana pasada: <span className="font-semibold text-ink">{pasada}</span>
@@ -255,21 +295,7 @@ export default function Entrenar({
             💡 {plan.nota_ia}
           </p>
         ) : null}
-        {(ex.descripcion || ex.tips.length > 0) && (
-          <details className="mt-2 rounded-xl bg-surface2 px-3 py-2">
-            <summary className="cursor-pointer select-none text-sm font-medium text-accent">
-              Técnica y tips
-            </summary>
-            {ex.descripcion ? <p className="mt-2 text-sm text-ink/90">{ex.descripcion}</p> : null}
-            {ex.tips.length > 0 ? (
-              <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 text-sm text-muted">
-                {ex.tips.map((t, i) => (
-                  <li key={i}>{t}</li>
-                ))}
-              </ul>
-            ) : null}
-          </details>
-        )}
+        <ComoSeHace ej={ex} abierto={hechasEx.length === 0} />
       </section>
 
       <div className="mt-3">
@@ -311,6 +337,17 @@ export default function Entrenar({
               </span>
             ) : null}
           </div>
+          {ex.tempo ? (
+            <GuiaCadencia
+              key={clave}
+              tempo={ex.tempo}
+              verbos={ex.verbos}
+              completas={completas}
+              parciales={parciales}
+              porLado={ex.por_lado}
+              onTerminar={(reps) => setBorrador({ ...actual, reps })}
+            />
+          ) : null}
           <div className="mt-3 flex flex-wrap items-end justify-around gap-3">
             <Stepper
               etiqueta="Reps"
@@ -378,7 +415,7 @@ export default function Entrenar({
         <section className="card mt-3 border-ok/40 text-center">
           <p className="font-semibold text-ok">✓ Ejercicio completo</p>
           <p className="mt-1 text-sm text-muted">
-            Podés sumar una serie extra o pasar al siguiente.
+            Puedes sumar una serie extra o pasar al siguiente.
           </p>
           <button
             type="button"

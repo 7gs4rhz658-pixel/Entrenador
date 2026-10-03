@@ -75,6 +75,10 @@ export interface Profile {
   updated_at: string;
 }
 
+// 'ondulada': motor de 4 semanas (ver progression.ts). 'plan': respeta las
+// series y rangos del entrenador y sube el peso al llegar al tope del rango.
+export type ProgresionBloque = "ondulada" | "plan";
+
 export interface Mesocycle {
   id: string;
   user_id: string;
@@ -86,6 +90,34 @@ export interface Mesocycle {
   origen: "ia" | "txt" | "plantilla" | "manual";
   publicado: boolean;
   publicado_at: string | null;
+  plan: PlanGenerado | null; // borrador sin enviar: todavía no se escribió como ejercicios
+  fases: FaseRutina[];
+  notas: string | null;
+  notas_entrenador: string | null;
+  progresion: ProgresionBloque;
+}
+
+// Cadencia en segundos: fase de fuerza (concéntrica), pausa apretando en
+// la contracción, regreso (excéntrica) y pausa en el estiramiento.
+// `texto` es como la escribió el entrenador ("3-5-3-0").
+export interface Tempo {
+  concentrico: number;
+  contraccion: number;
+  excentrico: number;
+  estiramiento: number;
+  texto?: string;
+}
+
+// Fase del plan del entrenador: qué semanas cubre y cómo se entrena
+export interface FaseRutina {
+  nombre: string;
+  semana_desde: number;
+  semana_hasta: number;
+  objetivo: string;
+  reglas: string[]; // técnica y reglas de la fase, para el cliente
+  tempo: Tempo | null; // cadencia por defecto de la fase
+  descanso_seg: number | null;
+  rir: number | null; // RIR objetivo al final de cada serie
 }
 
 export interface TrainingDay {
@@ -113,6 +145,22 @@ export interface Exercise {
   descanso_seg: number;
   orden: number;
   activo: boolean;
+  semana_desde: number | null; // null = desde la semana 1
+  semana_hasta: number | null; // null = hasta el final del bloque
+  tempo: Tempo | null;
+  parciales: number | null; // de las reps, cuántas son parciales cortas al final
+  por_lado: boolean;
+  superserie: string | null; // mismo valor = se alternan sin descanso
+  nota: string | null; // indicación literal del plan ("5s isometría arriba")
+  pasos: string[];
+  clave: string | null;
+  verbos: VerbosCadencia | null;
+}
+
+// Cómo nombrar las fases de la repetición en la guía de cadencia
+export interface VerbosCadencia {
+  fuerza: string; // "Empuja", "Jala", "Sube"
+  regreso: string; // "Baja", "Regresa"
 }
 
 export interface PlannedSet {
@@ -276,6 +324,19 @@ export interface EjercicioGenerado {
   descanso_seg: number;
   descripcion?: string;
   tips?: string[];
+  // Plan del entrenador por fases (todo opcional: los planes de IA y las
+  // plantillas viejas no lo traen)
+  semana_desde?: number | null;
+  semana_hasta?: number | null;
+  tempo?: Tempo | null;
+  parciales?: number | null;
+  por_lado?: boolean;
+  superserie?: string | null;
+  nota?: string | null;
+  pasos?: string[];
+  clave?: string | null;
+  verbos?: VerbosCadencia | null;
+  al_fallo?: boolean;
 }
 
 export interface DiaGenerado {
@@ -288,6 +349,11 @@ export interface PlanGenerado {
   nombre_bloque: string;
   notas?: string;
   dias: DiaGenerado[];
+  total_semanas?: number;
+  fases?: FaseRutina[];
+  notas_entrenador?: string;
+  progresion?: ProgresionBloque;
+  fecha_inicio?: string | null; // "YYYY-MM-DD"; null = el día que se envía
 }
 
 // ── Asistente de situaciones ────────────────────────────────────

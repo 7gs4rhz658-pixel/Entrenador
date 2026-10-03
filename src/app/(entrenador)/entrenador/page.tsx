@@ -1,7 +1,7 @@
 import Link from "next/link";
 import ActivarAvisos from "@/components/ActivarAvisos";
 import { propuestaAjuste } from "@/lib/ajuste-macros";
-import { contarNoLeidos, getBloque, getClientes, getDias, getInformesPendientes, getUltimaActividad, getUltimoRegistro } from "@/lib/data";
+import { contarNoLeidos, getBloque, getBloqueBorrador, getClientes, getDias, getInformesPendientes, getUltimaActividad, getUltimoRegistro } from "@/lib/data";
 import { fechaLocal, fmtTiempoRelativo, hoyDiaSemana, hoyFecha, sumarDias } from "@/lib/format";
 import { cumplimientoRango } from "@/lib/hoy-db";
 import { checkinPendiente } from "@/lib/stats";
@@ -14,8 +14,10 @@ export default async function ClientesPage() {
   const filas = await Promise.all(
     clientes.map(async (c) => {
       const ayer = sumarDias(hoyFecha(), -1);
-      const [meso, ultimo, ajuste, ultimaActividad, noLeidos, dias, checkin, cumplioAyer] = await Promise.all([
-        getBloque(c.id, { conBorrador: true }),
+      // `meso`: la rutina que el cliente usa; `borrador`: la nueva sin enviar
+      const [meso, borrador, ultimo, ajuste, ultimaActividad, noLeidos, dias, checkin, cumplioAyer] = await Promise.all([
+        getBloque(c.id),
+        getBloqueBorrador(c.id),
         getUltimoRegistro(c.id),
         propuestaAjuste(c),
         getUltimaActividad(c.id),
@@ -25,15 +27,15 @@ export default async function ClientesPage() {
         c.activo && c.estado_pago === "pagado" ? cumplimientoRango(c, ayer, ayer).then((r) => r.promedio) : Promise.resolve(null)
       ]);
       const diaHoy = dias.find((d) => d.dia_semana === hoyDiaSemana());
-      const entrenaHoy = !!diaHoy && !diaHoy.es_descanso && !!meso?.publicado;
+      const entrenaHoy = !!diaHoy && !diaHoy.es_descanso && !!meso;
       const entrenoHoy = !!ultimo && fechaLocal(ultimo) === hoyFecha();
       const diasSin = ultimaActividad ? Math.floor((Date.now() - new Date(ultimaActividad).getTime()) / 86_400_000) : null;
       // Sin registros hace 4+ días: candidato a abandono, va arriba
-      const abandono = c.activo && c.estado_pago === "pagado" && meso != null && meso.publicado && (diasSin == null || diasSin >= 4);
-      const nuevo = c.activo && c.onboarding_completo && c.estado_pago === "pagado" && (!meso || !meso.publicado);
+      const abandono = c.activo && c.estado_pago === "pagado" && meso != null && (diasSin == null || diasSin >= 4);
+      const nuevo = c.activo && c.onboarding_completo && c.estado_pago === "pagado" && !meso;
       // Ayer cumplió menos de la mitad del checklist (y no está ya como caído)
       const flojoAyer = !abandono && !nuevo && cumplioAyer != null && cumplioAyer < 50;
-      return { c, meso, ultimo, ajuste, diasSin, noLeidos, abandono, nuevo, entrenaHoy, entrenoHoy, checkin, diaHoy, cumplioAyer, flojoAyer };
+      return { c, meso, borrador, ultimo, ajuste, diasSin, noLeidos, abandono, nuevo, entrenaHoy, entrenoHoy, checkin, diaHoy, cumplioAyer, flojoAyer };
     })
   );
   const hoy = hoyFecha();
@@ -53,22 +55,22 @@ export default async function ClientesPage() {
 
       {filas.length === 0 ? (
         <p className="card text-center text-muted">
-          Todavía no hay clientes. Cuando alguien se registre en la app aparece acá.
+          Todavía no hay clientes. Cuando alguien se registre en la app aparece aquí.
         </p>
       ) : (
         <PanelHoy filas={activos} conInforme={conInforme} hoy={hoy} />
       )}
 
       <ul className="flex flex-col gap-3">
-        {[...activos, ...inactivos].map(({ c, meso, ultimo, ajuste, diasSin, noLeidos, abandono }) => {
+        {[...activos, ...inactivos].map(({ c, meso, borrador, ultimo, ajuste, diasSin, noLeidos, abandono }) => {
           const pendientes: string[] = [];
           if (!c.onboarding_completo) pendientes.push("cuestionario");
           if (c.estado_pago !== "pagado") pendientes.push("pago");
           const pago = estadoPago(c, hoy);
           if (pago.vencido) pendientes.push("mes vencido");
           else if (pago.diasRestantes != null && pago.diasRestantes <= 3) pendientes.push(`vence en ${pago.diasRestantes} d`);
-          if (c.onboarding_completo && c.estado_pago === "pagado" && !meso) pendientes.push("nuevo: armar rutina y menú");
-          if (meso && !meso.publicado) pendientes.push("rutina sin enviar");
+          if (c.onboarding_completo && c.estado_pago === "pagado" && !meso && !borrador) pendientes.push("nuevo: armar rutina y menú");
+          if (borrador) pendientes.push("rutina sin enviar");
           if (conInforme.has(c.id)) pendientes.push("informe por aprobar");
           if (ajuste) pendientes.push("ajuste de kcal sugerido");
           if (abandono) pendientes.push(diasSin == null ? "nunca registró" : `sin registros hace ${diasSin} d`);

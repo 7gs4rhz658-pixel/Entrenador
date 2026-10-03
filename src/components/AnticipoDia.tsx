@@ -45,7 +45,7 @@ export default function AnticipoDia({
             </span>
           </>
         ) : (
-          <span className="text-muted">😌 Día de descanso: caminá, dormí bien y comé según tu menú.</span>
+          <span className="text-muted">😌 Día de descanso: camina, duerme bien y come según tu menú.</span>
         )}
       </p>
 

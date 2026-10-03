@@ -66,7 +66,7 @@ export default function Sustituir({
         onClick={() => setAbierto(true)}
         disabled={!hayComidas}
         className="btn-ghost w-full"
-        title={hayComidas ? "" : "Primero registrá alguna comida"}
+        title={hayComidas ? "" : "Primero registra alguna comida"}
       >
         🔄 Sustituir un ingrediente
       </button>
@@ -82,7 +82,7 @@ export default function Sustituir({
         </button>
       </div>
       <p className="mt-1 text-sm text-muted">
-        Escribí el cambio y calculamos la cantidad que mantiene{" "}
+        Escribe el cambio y calculamos la cantidad que mantiene{" "}
         {conIA ? "los macros del plato" : "las calorías"}.
       </p>
       <div className="mt-3 flex gap-2">

@@ -22,7 +22,7 @@ export default async function ProgresoCliente({
   base: string; // ruta a la que apuntan los chips (?e=)
 }) {
   const [meso, dias, ejercicios, sesiones, records] = await Promise.all([
-    getBloque(userId, { conBorrador: true }),
+    getBloque(userId),
     getDias(userId),
     getEjercicios(userId),
     getSesiones(userId, 8),
@@ -34,7 +34,7 @@ export default async function ProgresoCliente({
   if (!meso || ejercicios.length === 0) {
     return (
       <p className="card text-center text-muted">
-        Todavía no hay datos. Cuando haya rutina y registros aparecen acá.
+        Todavía no hay datos. Cuando haya rutina y registros aparecen aquí.
       </p>
     );
   }
