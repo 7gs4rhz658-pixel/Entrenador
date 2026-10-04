@@ -5,7 +5,7 @@ su rutina de 8 semanas con progresión ondulada, su nutrición con macros y su
 seguimiento; el entrenador ve y edita todo desde su panel. Mobile-first, en
 español (Argentina).
 
-**Stack:** Next.js 14 (App Router) + TypeScript + Tailwind · Supabase
+**Stack:** Next.js 15 (App Router, React 19) + TypeScript + Tailwind · Supabase
 (Postgres + Auth + Row Level Security) · Groq o Gemini (IA, opcional) · Open Food
 Facts · Vercel.
 

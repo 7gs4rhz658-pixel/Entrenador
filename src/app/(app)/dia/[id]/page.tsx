@@ -17,12 +17,13 @@ import { nombreDia } from "@/lib/format";
 import { activoEnSemana, etapaDelBloque, grupoSuperserie } from "@/lib/rutina";
 
 export default async function DiaPage({
-  params,
-  searchParams
+  params: pParams,
+  searchParams: pSearch
 }: {
-  params: { id: string };
-  searchParams?: { semana?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ semana?: string }>;
 }) {
+  const [params, searchParams] = await Promise.all([pParams, pSearch]);
   const { userId } = await requireCliente();
   const dia = await getDiaPorId(params.id);
   if (!dia || dia.user_id !== userId) notFound();

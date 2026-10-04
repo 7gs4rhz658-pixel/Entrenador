@@ -28,10 +28,11 @@ import { activoEnSemana, etapaDelBloque, faseDeSemana, faseQueEmpieza } from "@/
 export const maxDuration = 60;
 
 export default async function Home({
-  searchParams
+  searchParams: pSearch
 }: {
-  searchParams?: { checkin?: string };
+  searchParams: Promise<{ checkin?: string }>;
 }) {
+  const searchParams = await pSearch;
   const { userId, perfil } = await requireCliente();
 
   const meso = await getBloque(userId);

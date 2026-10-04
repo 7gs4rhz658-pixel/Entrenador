@@ -77,12 +77,13 @@ const TABS = [
 type Tab = (typeof TABS)[number]["id"];
 
 export default async function ClientePage({
-  params,
-  searchParams
+  params: pParams,
+  searchParams: pSearch
 }: {
-  params: { id: string };
-  searchParams?: { tab?: string; e?: string; fecha?: string; desde?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string; e?: string; fecha?: string; desde?: string }>;
 }) {
+  const [params, searchParams] = await Promise.all([pParams, pSearch]);
   let perfil: Profile;
   try {
     perfil = await getPerfil(params.id);

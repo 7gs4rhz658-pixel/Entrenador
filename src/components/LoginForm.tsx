@@ -1,10 +1,9 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
 import { login } from "@/app/actions/auth";
+import { useFormulario } from "@/lib/use-formulario";
 
-function BotonEntrar() {
-  const { pending } = useFormStatus();
+function BotonEntrar({ pending }: { pending: boolean }) {
   return (
     <button type="submit" className="btn-primary w-full" disabled={pending}>
       {pending ? "Entrando…" : "Entrar"}
@@ -13,9 +12,9 @@ function BotonEntrar() {
 }
 
 export default function LoginForm() {
-  const [estado, accion] = useFormState(login, {});
+  const [estado, enviar, pendiente] = useFormulario(login, {});
   return (
-    <form action={accion} className="card flex flex-col gap-4">
+    <form onSubmit={enviar} className="card flex flex-col gap-4">
       <div>
         <label htmlFor="email" className="label">
           Correo
@@ -48,7 +47,7 @@ export default function LoginForm() {
       {estado.error ? (
         <p className="text-sm font-medium text-danger">✗ {estado.error}</p>
       ) : null}
-      <BotonEntrar />
+      <BotonEntrar pending={pendiente} />
     </form>
   );
 }

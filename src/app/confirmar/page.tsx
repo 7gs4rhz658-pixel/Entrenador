@@ -1,10 +1,11 @@
 import Link from "next/link";
 
-export default function ConfirmarPage({
-  searchParams
+export default async function ConfirmarPage({
+  searchParams: pSearch
 }: {
-  searchParams?: { email?: string };
+  searchParams: Promise<{ email?: string }>;
 }) {
+  const searchParams = await pSearch;
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-6 py-10">
       <div className="card text-center">

@@ -6,10 +6,11 @@ import { hoyFecha } from "@/lib/format";
 export const maxDuration = 60;
 
 export default async function NutricionPage({
-  searchParams
+  searchParams: pSearch
 }: {
-  searchParams?: { fecha?: string };
+  searchParams: Promise<{ fecha?: string }>;
 }) {
+  const searchParams = await pSearch;
   const { perfil } = await requireCliente();
   const hoy = hoyFecha();
   const f = searchParams?.fecha;

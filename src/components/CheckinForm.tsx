@@ -1,7 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
 import { guardarCheckin } from "@/app/actions/checkin";
+import { useFormulario } from "@/lib/use-formulario";
 
 function Escala({ nombre, etiqueta, bajo, alto }: { nombre: string; etiqueta: string; bajo: string; alto: string }) {
   return (
@@ -25,8 +25,7 @@ function Escala({ nombre, etiqueta, bajo, alto }: { nombre: string; etiqueta: st
   );
 }
 
-function BotonEnviar() {
-  const { pending } = useFormStatus();
+function BotonEnviar({ pending }: { pending: boolean }) {
   return (
     <button type="submit" className="btn-primary w-full" disabled={pending}>
       {pending ? "Guardando y armando tu informe…" : "Enviar check-in"}
@@ -45,9 +44,9 @@ export default function CheckinForm({
   semana: number;
   pesoActual: number | null;
 }) {
-  const [estado, accion] = useFormState(guardarCheckin, {});
+  const [estado, enviar, pendiente] = useFormulario(guardarCheckin, {});
   return (
-    <form action={accion} className="flex flex-col gap-4">
+    <form onSubmit={enviar} className="flex flex-col gap-4">
       <input type="hidden" name="meso" value={mesoId} />
       <input type="hidden" name="semana" value={semana} />
 
@@ -119,7 +118,7 @@ export default function CheckinForm({
       </section>
 
       {estado.error ? <p className="text-sm font-medium text-danger">✗ {estado.error}</p> : null}
-      <BotonEnviar />
+      <BotonEnviar pending={pendiente} />
     </form>
   );
 }

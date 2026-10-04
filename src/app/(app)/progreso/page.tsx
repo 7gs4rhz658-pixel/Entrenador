@@ -15,10 +15,11 @@ const TABS = [
 ] as const;
 
 export default async function ProgresoPage({
-  searchParams
+  searchParams: pSearch
 }: {
-  searchParams?: { e?: string; tab?: string };
+  searchParams: Promise<{ e?: string; tab?: string }>;
 }) {
+  const searchParams = await pSearch;
   const { userId, perfil } = await requireCliente();
   const tab = TABS.find((t) => t.id === searchParams?.tab)?.id ?? "fuerza";
   return (

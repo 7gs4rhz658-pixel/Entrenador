@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
 import { guardarPerfil } from "@/app/actions/perfil";
 import { fmtKcal, fmtLitros } from "@/lib/format";
 import {
@@ -11,9 +10,9 @@ import {
   objetivosDiarios
 } from "@/lib/nutrition";
 import type { NivelActividad, Objetivo, Profile, Sexo } from "@/lib/types";
+import { useFormulario } from "@/lib/use-formulario";
 
-function BotonGuardar() {
-  const { pending } = useFormStatus();
+function BotonGuardar({ pending }: { pending: boolean }) {
   return (
     <button type="submit" className="btn-primary w-full" disabled={pending}>
       {pending ? "Guardando…" : "Guardar cambios"}
@@ -22,7 +21,7 @@ function BotonGuardar() {
 }
 
 export default function ProfileForm({ perfil }: { perfil: Profile }) {
-  const [estado, accion] = useFormState(guardarPerfil, {});
+  const [estado, enviar, pendiente] = useFormulario(guardarPerfil, {});
   const [edad, setEdad] = useState(perfil.edad ?? 25);
   const [sexo, setSexo] = useState<Sexo>(perfil.sexo ?? "masculino");
   const [peso, setPeso] = useState(perfil.peso_kg ?? 75);
@@ -44,7 +43,7 @@ export default function ProfileForm({ perfil }: { perfil: Profile }) {
   const descanso = datos ? objetivosDiarios(datos, false) : null;
 
   return (
-    <form action={accion} className="flex flex-col gap-4">
+    <form onSubmit={enviar} className="flex flex-col gap-4">
       <div className="card grid grid-cols-2 gap-4">
         <div className="col-span-2">
           <label htmlFor="nombre" className="label">
@@ -206,7 +205,7 @@ export default function ProfileForm({ perfil }: { perfil: Profile }) {
         <p className="text-sm font-medium text-ok">✓ Guardado</p>
       ) : null}
 
-      <BotonGuardar />
+      <BotonGuardar pending={pendiente} />
     </form>
   );
 }

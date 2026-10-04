@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
 import { guardarCuestionarioNutricion } from "@/app/actions/onboarding";
 import { DESCARGO_COMPLETO } from "@/lib/descargo";
 import { DIAS_SEMANA } from "@/lib/format";
 import { MOMENTOS } from "@/lib/nutrition";
 import type { CuestionarioNutricion, Momento, Profile } from "@/lib/types";
+import { useFormulario } from "@/lib/use-formulario";
 
 const HORA_SUGERIDA: Record<Momento, string> = {
   desayuno: "08:00",
@@ -18,8 +18,7 @@ const HORA_SUGERIDA: Record<Momento, string> = {
   post_entreno: "19:30"
 };
 
-function BotonSeguir() {
-  const { pending } = useFormStatus();
+function BotonSeguir({ pending }: { pending: boolean }) {
   return (
     <button type="submit" className="btn-primary w-full" disabled={pending}>
       {pending ? "Guardando…" : "Guardar y seguir"}
@@ -30,7 +29,7 @@ function BotonSeguir() {
 // Paso 2 del onboarding: comidas por día con horario, restricciones,
 // cómo come y aceptación del aviso sobre las recomendaciones.
 export default function CuestionarioComidaForm({ perfil }: { perfil: Profile }) {
-  const [estado, accion] = useFormState(guardarCuestionarioNutricion, {});
+  const [estado, enviar, pendiente] = useFormulario(guardarCuestionarioNutricion, {});
   const cn = perfil.cuestionario_nutricion;
   const [comidas, setComidas] = useState<Record<Momento, { on: boolean; hora: string }>>(() => {
     const base = {} as Record<Momento, { on: boolean; hora: string }>;
@@ -48,7 +47,7 @@ export default function CuestionarioComidaForm({ perfil }: { perfil: Profile }) 
   const elegidas = MOMENTOS.filter((m) => comidas[m.valor].on).length;
 
   return (
-    <form action={accion} className="flex flex-col gap-4">
+    <form onSubmit={enviar} className="flex flex-col gap-4">
       <section className="card">
         <h2 className="font-bold">Tus comidas del día</h2>
         <p className="mb-3 mt-0.5 text-sm text-muted">
@@ -260,7 +259,7 @@ export default function CuestionarioComidaForm({ perfil }: { perfil: Profile }) 
       </section>
 
       {estado.error ? <p className="text-sm font-medium text-danger">✗ {estado.error}</p> : null}
-      <BotonSeguir />
+      <BotonSeguir pending={pendiente} />
     </form>
   );
 }

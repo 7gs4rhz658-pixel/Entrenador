@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useFormState, useFormStatus } from "react-dom";
 import { registro } from "@/app/actions/auth";
+import { useFormulario } from "@/lib/use-formulario";
 
-function BotonCrear() {
-  const { pending } = useFormStatus();
+function BotonCrear({ pending }: { pending: boolean }) {
   return (
     <button type="submit" className="btn-primary w-full" disabled={pending}>
       {pending ? "Creando…" : "Crear cuenta"}
@@ -14,9 +13,9 @@ function BotonCrear() {
 }
 
 export default function RegistroForm({ referido = "" }: { referido?: string }) {
-  const [estado, accion] = useFormState(registro, {});
+  const [estado, enviar, pendiente] = useFormulario(registro, {});
   return (
-    <form action={accion} className="card flex flex-col gap-4">
+    <form onSubmit={enviar} className="card flex flex-col gap-4">
       <div>
         <label htmlFor="nombre" className="label">
           Nombre
@@ -87,7 +86,7 @@ export default function RegistroForm({ referido = "" }: { referido?: string }) {
       {estado.error ? (
         <p className="text-sm font-medium text-danger">✗ {estado.error}</p>
       ) : null}
-      <BotonCrear />
+      <BotonCrear pending={pendiente} />
     </form>
   );
 }

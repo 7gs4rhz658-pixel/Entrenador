@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
 import { guardarMedidas } from "@/app/actions/medidas";
 import { ETIQUETAS_MEDIDA, GRUPOS_MEDIDA, GUIA_MEDIDA } from "@/lib/medidas";
 import type { CampoMedida, Medida } from "@/lib/types";
+import { useFormulario } from "@/lib/use-formulario";
 
-function BotonGuardar() {
-  const { pending } = useFormStatus();
+function BotonGuardar({ pending }: { pending: boolean }) {
   return (
     <button type="submit" className="btn-primary w-full" disabled={pending}>
       {pending ? "Guardando…" : "Guardar medidas"}
@@ -28,7 +27,7 @@ export default function MedidasForm({
   pesoActual: number | null;
   userId?: string; // solo lo pasa el entrenador
 }) {
-  const [estado, accion] = useFormState(guardarMedidas, {});
+  const [estado, enviar, pendiente] = useFormulario(guardarMedidas, {});
   const [abierto, setAbierto] = useState(!ultima);
   const [guia, setGuia] = useState<CampoMedida | null>(null);
 
@@ -45,7 +44,7 @@ export default function MedidasForm({
       </button>
 
       {abierto ? (
-        <form action={accion} className="mt-3 flex flex-col gap-4">
+        <form onSubmit={enviar} className="mt-3 flex flex-col gap-4">
           {userId ? <input type="hidden" name="userId" value={userId} /> : null}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -118,7 +117,7 @@ export default function MedidasForm({
 
           {estado.error ? <p className="text-sm font-medium text-danger">✗ {estado.error}</p> : null}
           {estado.ok ? <p className="text-sm font-medium text-ok">✓ Medidas guardadas.</p> : null}
-          <BotonGuardar />
+          <BotonGuardar pending={pendiente} />
         </form>
       ) : null}
     </section>

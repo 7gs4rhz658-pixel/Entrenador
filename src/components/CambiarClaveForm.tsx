@@ -1,10 +1,9 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
 import { cambiarClave } from "@/app/actions/auth";
+import { useFormulario } from "@/lib/use-formulario";
 
-function BotonGuardar() {
-  const { pending } = useFormStatus();
+function BotonGuardar({ pending }: { pending: boolean }) {
   return (
     <button type="submit" className="btn-primary w-full" disabled={pending}>
       {pending ? "Guardando…" : "Guardar contraseña"}
@@ -13,9 +12,9 @@ function BotonGuardar() {
 }
 
 export default function CambiarClaveForm() {
-  const [estado, accion] = useFormState(cambiarClave, {});
+  const [estado, enviar, pendiente] = useFormulario(cambiarClave, {});
   return (
-    <form action={accion} className="card flex flex-col gap-4">
+    <form onSubmit={enviar} className="card flex flex-col gap-4">
       <div>
         <label htmlFor="nueva" className="label">
           Contraseña nueva (mínimo 8 caracteres)
@@ -48,7 +47,7 @@ export default function CambiarClaveForm() {
         />
       </div>
       {estado.error ? <p className="text-sm font-medium text-danger">✗ {estado.error}</p> : null}
-      <BotonGuardar />
+      <BotonGuardar pending={pendiente} />
     </form>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
 import { guardarCuestionario } from "@/app/actions/onboarding";
 import { DIAS_SEMANA, fmtKcal } from "@/lib/format";
 import {
@@ -11,9 +10,9 @@ import {
   objetivosDiarios
 } from "@/lib/nutrition";
 import type { NivelActividad, Objetivo, Profile, Sexo } from "@/lib/types";
+import { useFormulario } from "@/lib/use-formulario";
 
-function BotonSeguir() {
-  const { pending } = useFormStatus();
+function BotonSeguir({ pending }: { pending: boolean }) {
   return (
     <button type="submit" className="btn-primary w-full" disabled={pending}>
       {pending ? "Guardando…" : "Guardar y seguir"}
@@ -22,7 +21,7 @@ function BotonSeguir() {
 }
 
 export default function CuestionarioForm({ perfil }: { perfil: Profile }) {
-  const [estado, accion] = useFormState(guardarCuestionario, {});
+  const [estado, enviar, pendiente] = useFormulario(guardarCuestionario, {});
   const c = perfil.cuestionario;
   const [edad, setEdad] = useState(perfil.edad ?? 25);
   const [sexo, setSexo] = useState<Sexo>(perfil.sexo ?? "masculino");
@@ -51,7 +50,7 @@ export default function CuestionarioForm({ perfil }: { perfil: Profile }) {
   }
 
   return (
-    <form action={accion} className="flex flex-col gap-4">
+    <form onSubmit={enviar} className="flex flex-col gap-4">
       <section className="card">
         <h2 className="mb-3 font-bold">Tus datos</h2>
         <div className="grid grid-cols-2 gap-4">
@@ -286,7 +285,7 @@ export default function CuestionarioForm({ perfil }: { perfil: Profile }) {
       {estado.error ? (
         <p className="text-sm font-medium text-danger">✗ {estado.error}</p>
       ) : null}
-      <BotonSeguir />
+      <BotonSeguir pending={pendiente} />
     </form>
   );
 }

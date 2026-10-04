@@ -13,7 +13,8 @@ import {
 import { nombreDia } from "@/lib/format";
 import { activoEnSemana } from "@/lib/rutina";
 
-export default async function EntrenarPage({ params }: { params: { id: string } }) {
+export default async function EntrenarPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { userId } = await requireCliente();
   const dia = await getDiaPorId(params.id);
   if (!dia || dia.user_id !== userId) notFound();

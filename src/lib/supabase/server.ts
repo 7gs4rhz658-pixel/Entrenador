@@ -19,18 +19,20 @@ function config() {
   return { url, key };
 }
 
+// En Next 15 `cookies()` es asíncrono: se lee recién cuando Supabase pide
+// las cookies, así `db()` sigue siendo síncrono para todo el código.
 const dbSesion = cache(() => {
   const { url, key } = config();
-  const store = cookies();
   return createServerClient(url, key, {
     cookies: {
-      getAll() {
-        return store.getAll();
+      async getAll() {
+        return (await cookies()).getAll();
       },
-      setAll(lista) {
+      async setAll(lista) {
         // En server components las cookies son de solo lectura; el
-        // middleware ya refresca la sesión, así que ignorar acá es seguro.
+        // middleware ya refresca la sesión, así que ignorarlo es seguro.
         try {
+          const store = await cookies();
           for (const { name, value, options } of lista) {
             store.set(name, value, options);
           }
