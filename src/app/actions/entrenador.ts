@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireEntrenador } from "@/lib/auth";
 import { ErrorIA, generarPlanInicial, iaDisponible } from "@/lib/ai";
 import { pedirRutinaTxt, VERSION_RUTINA_TXT } from "@/lib/ai-rutina";
-import { exec, getPerfil } from "@/lib/data";
+import { exec, getBloque, getPerfil } from "@/lib/data";
 import { conLectura } from "@/lib/ia-lecturas";
 import { hoyFecha } from "@/lib/format";
 import { publicarPlanComidas } from "@/lib/meal-plan-db";
@@ -216,20 +216,47 @@ export async function enviarMenu(input: { userId: string }): Promise<Resultado> 
   return { ok: true };
 }
 
+// El cobro es manual: el entrenador confirma el pago (o lo renueva) y el
+// cliente recibe el aviso con la nueva fecha de vencimiento.
 export async function marcarPago(input: {
   userId: string;
   estado: "pendiente" | "pagado";
 }): Promise<Resultado> {
   try {
     await requireEntrenador();
-    // "Marcar pagado" cubre 30 días desde hoy (o desde el vencimiento
-    // vigente si todavía no pasó)
+    // "Marcar pagado" o "renovar" cubre 30 días desde hoy (o desde el
+    // vencimiento vigente si todavía no pasó)
     const perfil = await getPerfil(input.userId);
-    const cambios =
-      input.estado === "pagado"
-        ? { estado_pago: "pagado", pagado_at: new Date().toISOString(), pago_vence_at: nuevoVencimiento(perfil.pago_vence_at, hoyFecha()) }
-        : { estado_pago: "pendiente" };
-    await exec(db().from("profiles").update(cambios).eq("id", input.userId));
+    if (input.estado === "pendiente") {
+      await exec(db().from("profiles").update({ estado_pago: "pendiente" }).eq("id", input.userId));
+    } else {
+      const vence = nuevoVencimiento(perfil.pago_vence_at, hoyFecha());
+      await exec(
+        db()
+          .from("profiles")
+          .update({ estado_pago: "pagado", pagado_at: new Date().toISOString(), pago_vence_at: vence })
+          .eq("id", input.userId)
+      );
+      const fecha = new Date(`${vence}T12:00:00`).toLocaleDateString("es-MX", { day: "numeric", month: "long" });
+      const tieneRutina = !!(await getBloque(input.userId, { conBorrador: true }));
+      await exec(
+        db()
+          .from("mensajes")
+          .insert({
+            user_id: input.userId,
+            de: "entrenador",
+            texto: tieneRutina
+              ? `Confirmé tu pago: tu plan está activo hasta el ${fecha}.`
+              : `Confirmé tu pago: tu plan está activo hasta el ${fecha}. Ahora armo tu rutina y tu menú y te aviso cuando estén listos.`
+          })
+      );
+      await enviarPush(input.userId, {
+        titulo: "Pago confirmado",
+        cuerpo: `Tu plan está activo hasta el ${fecha}.`,
+        url: "/",
+        tag: "pago"
+      });
+    }
   } catch (e) {
     return { error: mensaje(e) };
   }

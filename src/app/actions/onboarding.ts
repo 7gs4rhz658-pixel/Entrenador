@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSesion } from "@/lib/auth";
 import { exec, getBloque } from "@/lib/data";
-import { hoyFecha } from "@/lib/format";
-import { nuevoVencimiento, procesarPago } from "@/lib/pagos";
+import { avisoPagoPendiente, HORAS_ENTRE_AVISOS } from "@/lib/pagos";
 import { avisarEntrenadores } from "@/lib/push";
 import { db } from "@/lib/supabase/server";
 import type { Cuestionario, CuestionarioNutricion, Momento, NivelActividad, Objetivo, Sexo } from "@/lib/types";
@@ -138,54 +137,48 @@ export async function guardarCuestionarioNutricion(
   redirect(sesion.perfil.estado_pago === "pagado" ? "/" : "/pago");
 }
 
-// Checkout (simulado). Marca el mes pagado y avisa al entrenador; la
-// rutina y el menú los arma él desde su panel y los envía cuando los
-// revisó. Renovar solo extiende el vencimiento.
-export async function pagar(_prev: Estado, formData: FormData): Promise<Estado> {
+// "Ya pagué": el cobro es manual (transferencia o efectivo). Le avisa al
+// entrenador, que confirma el pago desde su panel; el cliente no puede
+// marcarse pagado (trigger de 0019).
+export async function avisarPago(): Promise<{ ok?: boolean; error?: string }> {
   const sesion = await requireSesion();
+  if (sesion.perfil.rol === "entrenador") redirect("/entrenador");
   if (!sesion.perfil.onboarding_completo) redirect("/cuestionario");
 
-  const r = await procesarPago({
-    titular: String(formData.get("titular") ?? ""),
-    numero: String(formData.get("numero") ?? ""),
-    vencimiento: String(formData.get("vencimiento") ?? ""),
-    cvv: String(formData.get("cvv") ?? "")
-  });
-  if (!r.ok) return { error: r.error };
-
-  // Renovación: ya tiene rutina, solo se extiende el mes
+  const { perfil } = sesion;
+  const ultimo = perfil.pago_avisado_at ? Date.parse(perfil.pago_avisado_at) : 0;
+  if (avisoPagoPendiente(perfil) && Date.now() - ultimo < HORAS_ENTRE_AVISOS * 3_600_000) {
+    return { error: "Ya le avisamos a tu entrenador. Si pasan unas horas sin respuesta, escríbele." };
+  }
+  // Renovación: ya tiene rutina; alta nueva: hay que armarle todo
   const renovacion = !!(await getBloque(sesion.userId, { conBorrador: true }));
+  const nombre = perfil.nombre || sesion.email;
   try {
+    await exec(db().from("profiles").update({ pago_avisado_at: new Date().toISOString() }).eq("id", sesion.userId));
     await exec(
       db()
-        .from("profiles")
-        .update({
-          estado_pago: "pagado",
-          pagado_at: new Date().toISOString(),
-          pago_vence_at: nuevoVencimiento(sesion.perfil.pago_vence_at, hoyFecha())
+        .from("mensajes")
+        .insert({
+          user_id: sesion.userId,
+          de: "cliente",
+          texto: renovacion ? "Ya pagué la renovación de mi mes." : "Ya pagué mi plan. Quedo atento a que lo actives."
         })
-        .eq("id", sesion.userId)
     );
   } catch (e) {
     return { error: mensaje(e) };
   }
-  if (renovacion) {
-    revalidatePath("/", "layout");
-    redirect("/?renovado=1");
-  }
-
-  // Alta nueva: la rutina y el menú los arma y revisa el entrenador desde
-  // su panel; acá solo le avisamos que tiene un cliente nuevo.
   try {
     await avisarEntrenadores({
-      titulo: "Cliente nuevo para armar",
-      cuerpo: `${sesion.perfil.nombre || sesion.email} ya pagó: armale la rutina y el menú desde su ficha.`,
-      url: "/entrenador",
-      tag: "nuevo-cliente"
+      titulo: renovacion ? "Renovación por confirmar" : "Cliente nuevo: confirma su pago",
+      cuerpo: renovacion
+        ? `${nombre} dice que ya pagó su mes: confírmalo en su ficha.`
+        : `${nombre} dice que ya pagó: confírmalo en su ficha y ármale la rutina y el menú.`,
+      url: `/entrenador/${sesion.userId}`,
+      tag: "pago"
     });
   } catch (e) {
     console.error("Aviso al entrenador falló:", mensaje(e));
   }
   revalidatePath("/", "layout");
-  redirect("/?bienvenida=1");
+  return { ok: true };
 }

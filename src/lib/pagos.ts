@@ -1,14 +1,17 @@
-// Cobro del plan. Hoy es un checkout SIMULADO: acepta cualquier tarjeta
-// con formato válido y marca al cliente como pagado. Para cobrar de
-// verdad, reemplazá `procesarPago` por la integración del proveedor
-// (Mercado Pago Checkout Pro o Stripe Checkout): el resto de la app solo
-// mira `profiles.estado_pago`, así que el cambio queda contenido acá.
+// Cobro del plan. Es MANUAL: el cliente le paga al entrenador por
+// transferencia o en efectivo, toca "Ya pagué" y el entrenador lo
+// confirma desde su panel ("marcar pagado" / "renovar"). La app no toca
+// datos de tarjeta. El resto de la app solo mira `profiles.estado_pago` y
+// `pago_vence_at`, que un cliente no puede cambiar (trigger de 0019).
 
-// El precio se cambia desde Vercel (variable PLAN_PRECIO_USD) sin tocar
-// código; si no está definida vale 50.
+// Precio, moneda y cómo pagar se cambian desde Vercel sin tocar código.
 function precioMes(): number {
-  const n = Number(process.env.PLAN_PRECIO_USD);
+  const n = Number(process.env.PLAN_PRECIO ?? process.env.PLAN_PRECIO_USD);
   return Number.isFinite(n) && n > 0 ? n : 50;
+}
+
+function monedaPlan(): "MXN" | "USD" {
+  return process.env.PLAN_MONEDA?.trim().toUpperCase() === "MXN" ? "MXN" : "USD";
 }
 
 export const PLAN = {
@@ -16,42 +19,35 @@ export const PLAN = {
   get precio() {
     return precioMes();
   },
-  moneda: "USD",
-  simbolo: "US$",
+  get moneda() {
+    return monedaPlan();
+  },
+  get simbolo() {
+    return monedaPlan() === "MXN" ? "$" : "US$";
+  },
   incluye: [
-    "Rutina personalizada de 8 semanas con progresión ondulada",
+    "Rutina personalizada por bloques, con el paso a paso de cada ejercicio",
     "Ajustes de carga semana a semana",
     "Recomendación de comidas a tu medida, lista de compras y registro diario",
     "Seguimiento de tu entrenador desde su panel"
   ]
 };
 
-export const PAGO_SIMULADO = true;
-
-export interface DatosTarjeta {
-  titular: string;
-  numero: string;
-  vencimiento: string; // MM/AA
-  cvv: string;
+// Datos para pagar (banco, CLABE, titular, "efectivo en el gym"…): texto
+// libre de la variable PAGO_INSTRUCCIONES. Sin ella, el entrenador se los
+// pasa en persona.
+export function instruccionesPago(): string | null {
+  const t = process.env.PAGO_INSTRUCCIONES?.replace(/\\n/g, "\n").trim();
+  return t ? t : null;
 }
 
-export interface ResultadoPago {
-  ok: boolean;
-  referencia?: string;
-  error?: string;
-}
+// "Ya pagué" se puede volver a tocar recién pasado este tiempo
+export const HORAS_ENTRE_AVISOS = 12;
 
-export async function procesarPago(datos: DatosTarjeta): Promise<ResultadoPago> {
-  const numero = datos.numero.replace(/\s+/g, "");
-  if (datos.titular.trim().length < 3) return { ok: false, error: "Poné el nombre del titular." };
-  if (!/^\d{13,19}$/.test(numero)) return { ok: false, error: "El número de tarjeta no es válido." };
-  if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(datos.vencimiento.trim())) {
-    return { ok: false, error: "El vencimiento tiene que ser MM/AA." };
-  }
-  if (!/^\d{3,4}$/.test(datos.cvv.trim())) return { ok: false, error: "Revisá el código de seguridad." };
-  // Tarjeta de prueba clásica para simular un rechazo
-  if (numero.endsWith("0002")) return { ok: false, error: "Pago rechazado por el banco (simulado)." };
-  return { ok: true, referencia: `SIM-${Date.now().toString(36).toUpperCase()}` };
+// ¿El último "ya pagué" del cliente sigue sin confirmar?
+export function avisoPagoPendiente(perfil: { pago_avisado_at: string | null; pagado_at: string | null }): boolean {
+  if (!perfil.pago_avisado_at) return false;
+  return !perfil.pagado_at || Date.parse(perfil.pago_avisado_at) > Date.parse(perfil.pagado_at);
 }
 
 // ── Vigencia del mes ────────────────────────────────────────────

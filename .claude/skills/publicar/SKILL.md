@@ -102,7 +102,7 @@ desde el teléfono y que el link sea compartible.
    tiene que decir "Success".
    > El seed también carga ~55 ingredientes base (USDA) para el módulo de
    > nutrición. Los clientes NO se cargan por SQL: cada uno se registra desde
-   > la app, completa el cuestionario y paga (checkout simulado).
+   > la app, completa el cuestionario, paga a mano y el entrenador confirma el pago.
 
    Por último, borrá el editor otra vez, leé `supabase/migrations/0003_recomendacion_comidas.sql`
    (tablas de la recomendación de comidas, cuestionario nutricional y descargo), pegalo
@@ -121,7 +121,8 @@ desde el teléfono y que el link sea compartible.
    `supabase/migrations/0015_protocolos_checklist.sql` (checklist de Hoy y protocolos) y con
    `supabase/migrations/0016_alimentos_mx_y_fases.sql` (alimentos de México, pre/post-entreno y fases) y con
    `supabase/migrations/0017_menu_borrador.sql` (menú enviado y borrador a la vez) y con
-   `supabase/migrations/0018_rutina_fases.sql` (rutinas por fases y rutina nueva en borrador).
+   `supabase/migrations/0018_rutina_fases.sql` (rutinas por fases y rutina nueva en borrador) y con
+   `supabase/migrations/0019_proteger_perfil.sql` (cobro manual y perfil protegido).
 
 4. **Configurar el login por correo.** Guiá: menú izquierdo → **Authentication**
    → **Providers** → **Email**. Recomendá **desactivar "Confirm email"** (el
@@ -204,8 +205,10 @@ datos** que va a pedir, así después es solo pegar:
   las cuentas nuevas suelen quedar en Prepago sin saldo y no responden.
 - Opcional: **`GROQ_MODEL`** (por defecto `openai/gpt-oss-120b`),
   **`GEMINI_MODEL`** (por defecto `gemini-3.6-flash`) y **`TZ_APP`**
-  (zona horaria, por defecto `America/Mexico_City`) y **`PLAN_PRECIO_USD`** (precio
-  del mes en dólares que ve el cliente al pagar; por defecto 50).
+  (zona horaria, por defecto `America/Mexico_City`).
+- **Cobro (manual):** **`PLAN_PRECIO`** (precio del mes, por defecto 50),
+  **`PLAN_MONEDA`** (`MXN` o `USD`) y **`PAGO_INSTRUCCIONES`** (cómo pagarle:
+  banco, CLABE, titular o "efectivo"; `\n` separa líneas). No son secretas.
 - **Avisos al teléfono (opcional, recomendado).** Cinco variables más; sin
   ellas la app funciona igual, solo no manda notificaciones:
   - **`NEXT_PUBLIC_VAPID_PUBLIC_KEY`** y **`VAPID_PRIVATE_KEY`**: generalas
@@ -247,8 +250,8 @@ Después:
 **Validación obligatoria:** que entre al link, toque "Empezá acá", se registre
 **con el correo que puso en la tabla `entrenadores`** y llegue al **Panel de
 entrenador** (vacío al principio). Después, que se registre con otro correo
-como cliente de prueba: cuestionario → pago simulado (cualquier tarjeta, ej.
-4111 1111 1111 1111) → la semana con su rutina. **Si aparece "Algo salió mal"
+como cliente de prueba: cuestionario → "Ya pagué" → en el panel de entrenador,
+"confirmar pago" en la ficha del cliente → el cliente entra a su semana. **Si aparece "Algo salió mal"
 u otro error, NO es el final:** andá a `errores-comunes.md`. El caso típico es
 la URL con `/rest/v1/` al final o el nombre de la variable mal escrito. Se ve
 el error real en Vercel → proyecto → **"Logs"**.
@@ -265,8 +268,8 @@ Una vez que entra y ve la rutina:
     principal".
 - **En la compu:** guardar en favoritos (estrella ⭐ de la barra).
 - **Compartir:** mandar el link a cada cliente. Cada uno crea su cuenta,
-  completa el cuestionario y paga (hoy el pago es simulado: ver `lib/pagos.ts`
-  para conectar Mercado Pago o Stripe). El entrenador los ve en su panel.
+  completa el cuestionario, le paga al entrenador y toca "Ya pagué". El
+  entrenador confirma el pago desde su panel.
 - **Sumar otro entrenador:** en Supabase → SQL Editor:
   `insert into entrenadores (email) values ('correo@...');` antes de que se
   registre.

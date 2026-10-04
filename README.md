@@ -13,9 +13,9 @@ Facts · Vercel.
 
 ### Cliente
 - **Alta:** registro con correo → cuestionario (datos corporales, objetivo,
-  experiencia, días, tiempo, equipamiento, lesiones) → pago (checkout
-  **simulado**, con ruta a pago real en `src/lib/pagos.ts`) → la IA genera el
-  plan inicial (o una plantilla si la IA no está configurada).
+  experiencia, días, tiempo, equipamiento, lesiones) → pago **manual** (ve el
+  precio y cómo pagarle al entrenador, toca "Ya pagué" y el entrenador lo
+  confirma desde su panel) → el entrenador arma y envía la rutina y el menú.
 - **Semana:** dashboard con la semana del bloque, la fase del ciclo, el estado
   de cada día y la comida de hoy.
 - **Comenzar rutina:** modo guiado ejercicio por ejercicio y serie por serie;
@@ -55,7 +55,8 @@ Facts · Vercel.
   pendientes (cuestionario, pago, sin plan).
 - **Ficha de cliente:** resumen de la semana y cuestionario, **rutina
   editable** (mismo editor que el cliente), progreso, comida del día, cerrar
-  semana / nuevo bloque, marcar pago, dar de baja.
+  semana / nuevo bloque, confirmar pago y renovar (+30 días), dar de baja.
+  "Avisaron que pagaron" aparece arriba en el panel Hoy.
 - **Rutina nueva desde tu plan (PDF, `.txt` o texto pegado):** la IA lee fases,
   días, series, cadencias, parciales, superseries y notas (solo transcribe) →
   vista previa → **borrador** (el cliente sigue con su rutina) → la IA escribe
@@ -67,8 +68,13 @@ Facts · Vercel.
 ### Seguridad
 - Supabase Auth (correo + contraseña). Cada fila lleva `user_id` y **RLS**
   garantiza que un cliente solo ve y toca lo suyo; el entrenador (rol
-  `entrenador`) ve todo. La app usa solo la clave pública (anon): no hay
-  service_role en ningún lado.
+  `entrenador`) ve todo. Las pantallas usan solo la clave pública (anon);
+  la clave service_role la usan únicamente el cron de avisos (sin usuario) y
+  acciones puntuales del entrenador, siempre en el servidor.
+- Un cliente no puede tocar en su perfil lo que decide el entrenador: pago,
+  vigencia, alta/baja, macros ni referidos (trigger `proteger_perfil`), y sus
+  mensajes siempre salen "de cliente" (trigger `proteger_mensaje`).
+- El cobro es manual: la app nunca pide ni recibe datos de tarjeta.
 - El rol lo decide un trigger al registrarse: correos listados en la tabla
   `entrenadores` → entrenador; el resto → cliente. Un cliente no puede
   cambiarse el rol (trigger).
@@ -102,7 +108,9 @@ Facts · Vercel.
    pre/post-entreno, fases del protocolo y lecturas de la IA guardadas) y
    `supabase/migrations/0017_menu_borrador.sql` (menú enviado y borrador a la vez) y
    `supabase/migrations/0018_rutina_fases.sql` (rutinas del entrenador por fases: cadencia,
-   parciales, superseries, paso a paso, y la rutina nueva en borrador sin cortar la actual).
+   parciales, superseries, paso a paso, y la rutina nueva en borrador sin cortar la actual) y
+   `supabase/migrations/0019_proteger_perfil.sql` (cobro manual: el cliente no puede
+   marcarse pagado; contraseña temporal y aviso de privacidad).
 5. Authentication → Providers → Email: recomendado **desactivar "Confirm
    email"** (el SMTP gratuito manda muy pocos correos por hora). Si lo dejás,
    la app muestra la pantalla "Confirmá tu correo".
@@ -124,8 +132,8 @@ npm run dev
 ```
 Abrí `http://localhost:3000` → "Empezá acá" → registrate con el correo de
 entrenador → panel. Registrá un segundo correo como cliente para probar el
-flujo completo (tarjeta de prueba: cualquier número, ej. 4111 1111 1111 1111;
-una que termine en 0002 simula un rechazo).
+flujo completo: después de "Ya pagué", confirma el pago desde la ficha del
+cliente en el panel del entrenador.
 
 ### 4. GitHub + Vercel
 ```bash
@@ -137,8 +145,9 @@ git push -u origin main
 En Vercel: importar el repo, cargar `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `GROQ_API_KEY` (o `GEMINI_API_KEY`), Deploy. Las páginas que
 llaman a la IA declaran `maxDuration = 60`. Opcionales: `TZ_APP` (zona horaria,
-por defecto `America/Mexico_City`) y `PLAN_PRECIO_USD` (precio del mes en dólares,
-por defecto 50; el pago sigue siendo simulado).
+por defecto `America/Mexico_City`), `PLAN_PRECIO` (precio del mes, por defecto 50),
+`PLAN_MONEDA` (`MXN` o `USD`, por defecto USD) y `PAGO_INSTRUCCIONES` (cómo pagarte:
+banco, CLABE, titular o "efectivo"; `\n` para saltos de línea).
 
 Avisos al teléfono (opcional): `NEXT_PUBLIC_VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY`
 (`npx web-push generate-vapid-keys`), `VAPID_SUBJECT`, `CRON_SECRET` y
@@ -167,7 +176,7 @@ src/
   middleware.ts           refresca la sesión de Supabase y protege rutas
   app/
     login, registro, confirmar
-    (onboarding)/         cuestionario · pago (checkout simulado + plan inicial)
+    (onboarding)/         cuestionario · pago (manual: "Ya pagué" y el entrenador confirma)
     (app)/                cliente: semana, dia/[id] (+ /entrenar), nutricion,
                           progreso, rutina, perfil
     (entrenador)/         panel: clientes · [id] (resumen, rutina, progreso,
@@ -200,8 +209,8 @@ src/
     descargo.ts           aviso legal de las recomendaciones de comida
     nutrition.ts          TMB, macros por objetivo, regla de tres
     off.ts                Open Food Facts + caché en `ingredients`
-    pagos.ts              checkout simulado (punto de cambio a pago real)
-supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes) · 0003 recomendación de comidas · 0004 asistente · 0005 check-ins · 0006 ajuste de macros · 0007 vencimiento del pago · 0008 mensajes, push y referidos · 0009 revisión del entrenador · 0010 medidas · 0011 sesiones · 0012 fotos · 0013 récords · 0014 plantillas · 0015 checklist y protocolos · 0016 alimentos de México, pre/post-entreno y fases · 0017 menú en borrador · 0018 rutinas por fases
+    pagos.ts              precio, instrucciones de pago y vigencia del mes
+supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes) · 0003 recomendación de comidas · 0004 asistente · 0005 check-ins · 0006 ajuste de macros · 0007 vencimiento del pago · 0008 mensajes, push y referidos · 0009 revisión del entrenador · 0010 medidas · 0011 sesiones · 0012 fotos · 0013 récords · 0014 plantillas · 0015 checklist y protocolos · 0016 alimentos de México, pre/post-entreno y fases · 0017 menú en borrador · 0018 rutinas por fases · 0019 perfil protegido y cobro manual
 scripts/                  tests: progresión, planes/nutrición, RLS
 ```
 
@@ -212,10 +221,12 @@ scripts/                  tests: progresión, planes/nutrición, RLS
 registre. Si ya se registró: `update profiles set rol = 'entrenador' where
 email = 'correo@...';`.
 
-**¿Cómo paso a cobrar de verdad?** Reemplazá `procesarPago` en
-`src/lib/pagos.ts` por Mercado Pago Checkout Pro o Stripe Checkout y marcá
-`estado_pago = 'pagado'` desde el webhook del proveedor. El resto de la app
-solo mira `profiles.estado_pago`.
+**¿Cómo se cobra?** A mano: el cliente te paga por transferencia o en
+efectivo, toca "Ya pagué" y tú confirmas el pago (o renuevas +30 días) en su
+ficha. Para cobrar automático más adelante, conecta Mercado Pago Checkout Pro
+y marca `estado_pago = 'pagado'` desde su webhook con la clave service_role
+(un cliente no puede cambiar esa columna). El resto de la app solo mira
+`profiles.estado_pago` y `pago_vence_at`.
 
 **¿De dónde salen los macros de los alimentos?** De la tabla `ingredients`:
 ~55 valores de referencia de USDA FoodData Central (seed) y todo lo que se

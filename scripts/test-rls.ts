@@ -68,6 +68,37 @@ async function sesion(email: string, password: string) {
   const { data: rolDespues } = await cli.c.from("profiles").select("rol").eq("id", cli.uid).single();
   check("cliente NO puede cambiarse el rol", !!eRol && rolDespues?.rol === "cliente", eRol?.message ?? rolDespues);
 
+  // El cliente intenta marcarse pagado, extender su mes o reactivarse (trigger de 0019)
+  const antes = (await cli.c.from("profiles").select("estado_pago, pago_vence_at, activo, nombre").eq("id", cli.uid).single()).data!;
+  for (const [nombre, cambio] of [
+    ["marcarse pagado", { estado_pago: "pagado" }],
+    ["extender su mes", { pago_vence_at: "2099-12-31" }],
+    ["darse de alta", { activo: !antes.activo }],
+    ["cambiarse las macros", { macros_manual: { entreno: { kcal: 9999 } } }]
+  ] as const) {
+    const { error } = await cli.c.from("profiles").update(cambio).eq("id", cli.uid);
+    check(`cliente NO puede ${nombre}`, !!error, error?.message ?? "se aplicó");
+  }
+  const despues = (await cli.c.from("profiles").select("estado_pago, pago_vence_at, activo").eq("id", cli.uid).single()).data!;
+  check(
+    "el pago del cliente quedó igual",
+    despues.estado_pago === antes.estado_pago && despues.pago_vence_at === antes.pago_vence_at && despues.activo === antes.activo,
+    despues
+  );
+  // Lo suyo sí lo puede editar
+  const { error: eNombre } = await cli.c.from("profiles").update({ nombre: `${antes.nombre} ` }).eq("id", cli.uid);
+  check("cliente sí puede editar su nombre", !eNombre, eNombre?.message);
+  await cli.c.from("profiles").update({ nombre: antes.nombre }).eq("id", cli.uid);
+
+  // Un mensaje del cliente nunca sale "de entrenador"
+  const { data: msj } = await cli.c
+    .from("mensajes")
+    .insert({ user_id: cli.uid, de: "entrenador", texto: "prueba de RLS" })
+    .select("id, de")
+    .single();
+  check("mensaje del cliente queda como 'cliente'", msj?.de === "cliente", msj);
+  if (msj) await ent.c.from("mensajes").delete().eq("id", msj.id);
+
   // El cliente intenta editar el perfil del entrenador (RLS lo filtra: 0 filas)
   const { data: updOtro } = await cli.c
     .from("profiles")

@@ -30,7 +30,7 @@ export const maxDuration = 60;
 export default async function Home({
   searchParams
 }: {
-  searchParams?: { bienvenida?: string; checkin?: string; renovado?: string };
+  searchParams?: { checkin?: string };
 }) {
   const { userId, perfil } = await requireCliente();
 
@@ -95,16 +95,6 @@ export default async function Home({
 
   return (
     <main>
-      {searchParams?.bienvenida ? (
-        <section className="card mb-4 border-ok/40">
-          <p className="font-semibold">✓ ¡Tu plan está listo, {perfil.nombre.split(" ")[0]}!</p>
-          <p className="mt-1 text-sm text-muted">
-            Abajo tienes tu semana. Toca el día de hoy y usa &quot;Comenzar
-            rutina&quot; para que la app te guíe ejercicio por ejercicio.
-          </p>
-        </section>
-      ) : null}
-
       {searchParams?.checkin ? (
         <section className="card mb-4 border-ok/40">
           <p className="font-semibold">✓ Check-in enviado</p>
@@ -114,13 +104,6 @@ export default async function Home({
               ¿Registras tus medidas de la semana? →
             </Link>
           </p>
-        </section>
-      ) : null}
-
-      {searchParams?.renovado ? (
-        <section className="card mb-4 border-ok/40">
-          <p className="font-semibold">✓ Mes renovado</p>
-          <p className="mt-1 text-sm text-muted">Seguimos. Tu rutina, tu menú y tus informes siguen donde estaban.</p>
         </section>
       ) : null}
 

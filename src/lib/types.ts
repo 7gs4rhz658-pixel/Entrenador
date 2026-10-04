@@ -66,6 +66,9 @@ export interface Profile {
   ajuste_macros_at: string | null;
   pago_vence_at: string | null;
   pagado_at: string | null;
+  pago_avisado_at: string | null; // último "ya pagué" del cliente
+  debe_cambiar_clave: boolean; // entró con una contraseña temporal del entrenador
+  acepto_privacidad_at: string | null;
   codigo_referido: string | null;
   referido_por: string | null;
   onboarding_completo: boolean;

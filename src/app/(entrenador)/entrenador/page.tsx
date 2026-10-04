@@ -5,7 +5,7 @@ import { contarNoLeidos, getBloque, getBloqueBorrador, getClientes, getDias, get
 import { fechaLocal, fmtTiempoRelativo, hoyDiaSemana, hoyFecha, sumarDias } from "@/lib/format";
 import { cumplimientoRango } from "@/lib/hoy-db";
 import { checkinPendiente } from "@/lib/stats";
-import { estadoPago } from "@/lib/pagos";
+import { avisoPagoPendiente, estadoPago } from "@/lib/pagos";
 import { ETIQUETAS_OBJETIVO } from "@/lib/nutrition";
 
 export default async function ClientesPage() {
@@ -65,7 +65,8 @@ export default async function ClientesPage() {
         {[...activos, ...inactivos].map(({ c, meso, borrador, ultimo, ajuste, diasSin, noLeidos, abandono }) => {
           const pendientes: string[] = [];
           if (!c.onboarding_completo) pendientes.push("cuestionario");
-          if (c.estado_pago !== "pagado") pendientes.push("pago");
+          if (avisoPagoPendiente(c)) pendientes.push("avisó que pagó");
+          else if (c.estado_pago !== "pagado") pendientes.push("pago");
           const pago = estadoPago(c, hoy);
           if (pago.vencido) pendientes.push("mes vencido");
           else if (pago.diasRestantes != null && pago.diasRestantes <= 3) pendientes.push(`vence en ${pago.diasRestantes} d`);
@@ -119,7 +120,15 @@ function PanelHoy({
   hoy
 }: {
   filas: {
-    c: { id: string; nombre: string; email: string; estado_pago: "pendiente" | "pagado"; pago_vence_at: string | null };
+    c: {
+      id: string;
+      nombre: string;
+      email: string;
+      estado_pago: "pendiente" | "pagado";
+      pago_vence_at: string | null;
+      pago_avisado_at: string | null;
+      pagado_at: string | null;
+    };
     nuevo: boolean;
     abandono: boolean;
     diasSin: number | null;
@@ -135,6 +144,7 @@ function PanelHoy({
   hoy: string;
 }) {
   const nombre = (f: (typeof filas)[number]) => f.c.nombre.split(" ")[0] || f.c.email;
+  const pagaron = filas.filter((f) => avisoPagoPendiente(f.c));
   const nuevos = filas.filter((f) => f.nuevo);
   const informes = filas.filter((f) => conInforme.has(f.c.id));
   const mensajes = filas.filter((f) => f.noLeidos > 0);
@@ -147,6 +157,7 @@ function PanelHoy({
     return p.vencido || (p.diasRestantes != null && p.diasRestantes <= 3);
   });
   const grupos = [
+    { titulo: "Avisaron que pagaron", lista: pagaron, tab: "resumen", color: "text-ok" },
     { titulo: "Nuevos por armar", lista: nuevos, tab: "plan", color: "text-warn" },
     { titulo: "Informes por aprobar", lista: informes, tab: "resumen", color: "text-warn" },
     { titulo: "Mensajes sin leer", lista: mensajes, tab: "mensajes", color: "text-accent" },
