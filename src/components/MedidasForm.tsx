@@ -35,7 +35,7 @@ export default function MedidasForm({
     <section className="card">
       <button type="button" onClick={() => setAbierto((a) => !a)} className="flex w-full items-center justify-between text-left">
         <div>
-          <h2 className="font-bold">{ultima ? "Nueva toma de medidas" : "Cargá tus medidas"}</h2>
+          <h2 className="font-bold">{ultima ? "Nueva toma de medidas" : "Registra tus medidas"}</h2>
           <p className="text-xs text-muted">
             Misma hora, mismo lado, cinta sin apretar. Con una toma por semana alcanza.
           </p>

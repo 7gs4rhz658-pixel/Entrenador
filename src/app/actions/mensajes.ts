@@ -21,7 +21,7 @@ function mensaje(e: unknown): string {
 // El entrenador escribe a un cliente (llega push) o el cliente responde.
 export async function enviarMensaje(input: { userId?: string; texto: string }): Promise<{ mensaje?: Mensaje; error?: string }> {
   const texto = input.texto.trim().slice(0, 2000);
-  if (texto.length < 2) return { error: "Escribí algo." };
+  if (texto.length < 2) return { error: "Escribe algo." };
   try {
     const sesion = await requireSesion();
     const esEntrenador = sesion.perfil.rol === "entrenador";

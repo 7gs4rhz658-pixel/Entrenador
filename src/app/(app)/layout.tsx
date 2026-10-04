@@ -1,6 +1,7 @@
 import AceptarPrivacidad from "@/components/AceptarPrivacidad";
 import BottomNav from "@/components/BottomNav";
 import RegistrarSW from "@/components/RegistrarSW";
+import SeriesPendientes from "@/components/SeriesPendientes";
 import { requireCliente } from "@/lib/auth";
 
 // Todo el árbol autenticado se renderiza en cada request (los datos
@@ -17,6 +18,7 @@ export default async function AppLayout({
   return (
     <div className="mx-auto w-full max-w-lg px-4 pb-28 pt-5">
       <RegistrarSW />
+      <SeriesPendientes />
       {perfil.acepto_privacidad_at ? null : <AceptarPrivacidad />}
       {children}
       <BottomNav />

@@ -25,6 +25,8 @@ Facts · Vercel.
   por cadencia, la **guía de la serie** cuenta cada repetición ("Sube 3 s →
   Aprieta 5 s → Baja 3 s", luego las parciales) con pitido y vibración; en
   **superseries** alterna los ejercicios y el descanso va al final.
+  **Sin señal** (gym con mala cobertura) la serie queda guardada en el
+  teléfono ("⏳ En el teléfono") y se sube sola al volver la conexión.
 - **Plan del entrenador por fases:** la fase de la semana (reglas, cómo es
   cada serie, aviso cuando cambia), solo los ejercicios de esa fase y el
   **paso a paso** de cada ejercicio con su cadencia, parciales y la clave.
@@ -80,6 +82,11 @@ Facts · Vercel.
   vigencia, alta/baja, macros ni referidos (trigger `proteger_perfil`), y sus
   mensajes siempre salen "de cliente" (trigger `proteger_mensaje`).
 - El cobro es manual: la app nunca pide ni recibe datos de tarjeta.
+- Tope de 15 consultas de IA al día por cliente (asistente, recetas,
+  sustituir), solo con el plan activo: el plan gratis de Groq se comparte con
+  las importaciones del entrenador (tabla `ia_uso`).
+- Cabeceras de seguridad (`X-Frame-Options`, `nosniff`, `Referrer-Policy`,
+  `Permissions-Policy`) y Next.js 15 con `npm audit` en 0.
 - El rol lo decide un trigger al registrarse: correos listados en la tabla
   `entrenadores` → entrenador; el resto → cliente. Un cliente no puede
   cambiarse el rol (trigger).
@@ -115,7 +122,9 @@ Facts · Vercel.
    `supabase/migrations/0018_rutina_fases.sql` (rutinas del entrenador por fases: cadencia,
    parciales, superseries, paso a paso, y la rutina nueva en borrador sin cortar la actual) y
    `supabase/migrations/0019_proteger_perfil.sql` (cobro manual: el cliente no puede
-   marcarse pagado; contraseña temporal y aviso de privacidad).
+   marcarse pagado; contraseña temporal y aviso de privacidad) y
+   `supabase/migrations/0020_rls_rendimiento.sql` (RLS más rápida, índices y tope
+   diario de IA por cliente).
 5. Authentication → Providers → Email: recomendado **desactivar "Confirm
    email"** (el SMTP gratuito manda muy pocos correos por hora). Si lo dejás,
    la app muestra la pantalla "Confirmá tu correo".
@@ -181,6 +190,9 @@ npm run test              # motor de progresión + planes/nutrición
 npm run test:rls          # aislamiento RLS en vivo (pasar 4 args: cliente pass entrenador pass)
 ```
 
+GitHub Actions (`.github/workflows/ci.yml`) corre las pruebas y el build en
+cada push a `main`: si algo falla, el commit queda en rojo.
+
 ## Estructura
 
 ```
@@ -222,7 +234,7 @@ src/
     nutrition.ts          TMB, macros por objetivo, regla de tres
     off.ts                Open Food Facts + caché en `ingredients`
     pagos.ts              precio, instrucciones de pago y vigencia del mes
-supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes) · 0003 recomendación de comidas · 0004 asistente · 0005 check-ins · 0006 ajuste de macros · 0007 vencimiento del pago · 0008 mensajes, push y referidos · 0009 revisión del entrenador · 0010 medidas · 0011 sesiones · 0012 fotos · 0013 récords · 0014 plantillas · 0015 checklist y protocolos · 0016 alimentos de México, pre/post-entreno y fases · 0017 menú en borrador · 0018 rutinas por fases · 0019 perfil protegido y cobro manual
+supabase/migrations/      0001 esquema + RLS · 0002 seed (entrenador, ingredientes) · 0003 recomendación de comidas · 0004 asistente · 0005 check-ins · 0006 ajuste de macros · 0007 vencimiento del pago · 0008 mensajes, push y referidos · 0009 revisión del entrenador · 0010 medidas · 0011 sesiones · 0012 fotos · 0013 récords · 0014 plantillas · 0015 checklist y protocolos · 0016 alimentos de México, pre/post-entreno y fases · 0017 menú en borrador · 0018 rutinas por fases · 0019 perfil protegido y cobro manual · 0020 rendimiento de RLS y tope de IA
 scripts/                  tests: progresión, planes/nutrición, RLS
 ```
 

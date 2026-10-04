@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Mi Entrenador Personal",
   description:
-    "Dashboard de entrenamiento para hipertrofia: rutina semanal, progresión automática, nutrición e hidratación."
+    "Tu rutina, tu menú y el seguimiento de tu entrenador en el teléfono."
 };
 
 export const viewport: Viewport = {

@@ -12,12 +12,12 @@ export default async function CuestionarioPage() {
         <div className="mb-2 text-4xl">📋</div>
         <h1 className="text-2xl font-bold">
           {perfil.onboarding_completo
-            ? "Actualizá tu cuestionario"
+            ? "Actualiza tu cuestionario"
             : `¡Hola, ${perfil.nombre || "bienvenido"}!`}
         </h1>
         <p className="mt-1 text-muted">
           Con esto armamos tu plan de entrenamiento y tus calorías y macros
-          diarios. Podés editarlo después desde Perfil.
+          diarios. Puedes editarlo después desde Perfil.
         </p>
       </header>
       <CuestionarioForm perfil={perfil} />

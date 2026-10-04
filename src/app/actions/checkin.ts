@@ -40,9 +40,9 @@ export async function guardarCheckin(_prev: Estado, formData: FormData): Promise
   const comentario = String(formData.get("comentario") ?? "").trim().slice(0, 500);
 
   if (!mesoId || !Number.isInteger(semana) || semana < 1) return { error: "Falta la semana del check-in." };
-  if (!Number.isFinite(peso) || peso < 30 || peso > 300) return { error: "Revisá el peso (en kg)." };
-  if (cintura != null && (!Number.isFinite(cintura) || cintura < 40 || cintura > 200)) return { error: "Revisá la cintura (en cm)." };
-  if (!energia || !sueno || !adherencia) return { error: "Marcá energía, sueño y cómo te fue con el plan." };
+  if (!Number.isFinite(peso) || peso < 30 || peso > 300) return { error: "Revisa el peso (en kg)." };
+  if (cintura != null && (!Number.isFinite(cintura) || cintura < 40 || cintura > 200)) return { error: "Revisa la cintura (en cm)." };
+  if (!energia || !sueno || !adherencia) return { error: "Marca energía, sueño y cómo te fue con el plan." };
 
   let meso;
   try {

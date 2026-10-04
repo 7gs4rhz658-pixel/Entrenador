@@ -12,6 +12,7 @@ import {
 import { buscarIngredientesLocal, exec, getComidas, getIngrediente, q } from "@/lib/data";
 import { gramosEquivalentes, macrosDe, type CriterioSustitucion } from "@/lib/nutrition";
 import { buscarIngredientes } from "@/lib/off";
+import { permitirIA } from "@/lib/uso-ia";
 import { db } from "@/lib/supabase/server";
 import type { Ingredient, MealLog, Momento } from "@/lib/types";
 import type { Macros } from "@/lib/nutrition";
@@ -197,6 +198,8 @@ export async function sustituirIngrediente(input: {
     let interpretacion = "";
 
     if (iaDisponible()) {
+      const tope = await permitirIA("sustituir");
+      if (tope) return { error: tope };
       const p = await interpretarSustitucion(
         input.texto,
         comidas.map((c) => ({ nombre: c.ingredient.nombre, cantidad_g: c.cantidad_g, momento: c.momento }))
@@ -305,6 +308,8 @@ export async function pedirRecetas(input: {
   }
   try {
     await resolverUsuario(null);
+    const tope = await permitirIA("recetas");
+    if (tope) return { error: tope };
     const base = await q<{ nombre: string }[]>(
       db().from("ingredients").select("nombre").neq("fuente", "off").order("nombre").limit(80)
     );

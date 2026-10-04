@@ -48,10 +48,15 @@ export default function ChecklistHoy({
     setError(null);
     setItems((xs) => xs.map((x) => (x.key === it.key ? { ...x, hecho: nuevo, soloManual: false } : x)));
     iniciar(async () => {
-      const r =
-        it.tipo === "comida" && it.momento
-          ? await marcarComida({ fecha: datos.fecha, tipo_dia: datos.tipoDia, momento: it.momento, hecha: nuevo })
-          : await marcarItemHoy({ fecha: datos.fecha, key: it.key, hecho: nuevo });
+      let r: { error?: string };
+      try {
+        r =
+          it.tipo === "comida" && it.momento
+            ? await marcarComida({ fecha: datos.fecha, tipo_dia: datos.tipoDia, momento: it.momento, hecha: nuevo })
+            : await marcarItemHoy({ fecha: datos.fecha, key: it.key, hecho: nuevo });
+      } catch {
+        r = { error: "Sin conexión: márcalo cuando vuelva la señal." };
+      }
       if (r.error) {
         setError(r.error);
         setItems((xs) => xs.map((x) => (x.key === it.key ? { ...x, hecho: it.hecho, soloManual: it.soloManual } : x)));

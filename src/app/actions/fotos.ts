@@ -35,7 +35,7 @@ export async function subirFotos(formData: FormData): Promise<Resultado> {
       await exec(db().from("fotos_progreso").upsert({ user_id: userId, fecha, vista, path }, { onConflict: "user_id,fecha,vista" }));
       subidas += 1;
     }
-    if (!subidas) return { error: "Elegí al menos una foto." };
+    if (!subidas) return { error: "Elige al menos una foto." };
     revalidatePath("/", "layout");
     return { ok: true, subidas };
   } catch (e) {

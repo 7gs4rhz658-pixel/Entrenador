@@ -1,0 +1,28 @@
+# Antes de que Vercel publique: pruebas y build (que verifica tipos). Si
+# algo falla, GitHub lo marca en rojo en el commit.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Pruebas
+        run: npm test
+      - name: Build (incluye tipos)
+        run: npx next build
+        env:
+          # Valores de mentira: el build no se conecta a Supabase
+          NEXT_PUBLIC_SUPABASE_URL: https://ejemplo.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: clave-publica-de-prueba

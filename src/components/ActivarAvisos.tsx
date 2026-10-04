@@ -100,7 +100,7 @@ export default function ActivarAvisos({ vapidKey, entrenador = false }: { vapidK
           {!vapidKey
             ? "Los avisos no están configurados en este servidor."
             : esIOS && !instalada
-              ? "En iPhone: tocá Compartir → \"Agregar a inicio\" y abrí la app desde ahí para poder activar los avisos."
+              ? "En iPhone: toca Compartir → \"Agregar a inicio\" y abre la app desde ahí para poder activar los avisos."
               : "Este navegador no soporta avisos."}
         </p>
       ) : null}

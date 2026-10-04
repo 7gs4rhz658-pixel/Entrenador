@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import RestTimer from "./RestTimer";
 import Stepper from "./Stepper";
 import { ComoSeHace, EtiquetasEjercicio } from "./TecnicaEjercicio";
 import {
   borrarSerie,
   guardarSerie,
-  registrarSegunPlan
+  registrarSegunPlan,
+  type SerieInput
 } from "@/app/actions/entreno";
 import { guardarDescanso } from "@/app/actions/rutina";
+import { encolarSerie, EVENTO_COLA, pendientesDe } from "@/lib/cola-series";
 import { fmtNum, resumenPlan } from "@/lib/format";
 import type { Exercise, LoggedSet, PlannedSet } from "@/lib/types";
 
@@ -20,7 +22,10 @@ interface Fila {
   rir: number | null;
   alFallo: boolean;
   guardada: boolean;
+  enCola?: boolean; // guardada en el teléfono, esperando señal
 }
+
+const SIN_RED = "Sin conexión: inténtalo cuando vuelva la señal.";
 
 function construirFilas(plan: PlannedSet | null, logs: LoggedSet[]): Fila[] {
   const maxSerie = Math.max(
@@ -98,10 +103,32 @@ export default function ExerciseLogger({
   const conPeso = ejercicio.unidad === "kg";
   const pasada = resumenSemanaPasada(logsPrev, conPeso);
 
+  // Series que quedaron en el teléfono sin señal (después de recargar), y
+  // al subirse dejan de marcarse como pendientes
+  useEffect(() => {
+    const enCola = pendientesDe(mesoId, ejercicio.id, semana);
+    if (enCola.length) {
+      setFilas((fs) =>
+        fs.map((f) => {
+          const p = enCola.find((x) => x.serie === f.serie);
+          return p
+            ? { ...f, reps: p.reps ?? f.reps, peso: p.peso_kg ?? f.peso, rir: p.rir, alFallo: p.al_fallo, guardada: true, enCola: true }
+            : f;
+        })
+      );
+    }
+    const revisar = () => {
+      const quedan = pendientesDe(mesoId, ejercicio.id, semana);
+      setFilas((fs) => fs.map((f) => (f.enCola && !quedan.some((p) => p.serie === f.serie) ? { ...f, enCola: false } : f)));
+    };
+    window.addEventListener(EVENTO_COLA, revisar);
+    return () => window.removeEventListener(EVENTO_COLA, revisar);
+  }, [mesoId, ejercicio.id, semana]);
+
   function actualizar(serie: number, cambios: Partial<Fila>) {
     setFilas((fs) =>
       fs.map((f) =>
-        f.serie === serie ? { ...f, ...cambios, guardada: false } : f
+        f.serie === serie ? { ...f, ...cambios, guardada: false, enCola: false } : f
       )
     );
   }
@@ -109,31 +136,38 @@ export default function ExerciseLogger({
   function cambiarDescanso(seg: number) {
     setDescanso(seg);
     // Queda como descanso por defecto del ejercicio (sin bloquear la UI)
-    void guardarDescanso({ exerciseId: ejercicio.id, descanso_seg: seg });
+    guardarDescanso({ exerciseId: ejercicio.id, descanso_seg: seg }).catch(() => {});
+  }
+
+  function marcarGuardada(serie: number, enCola: boolean) {
+    setFilas((fs) => fs.map((f) => (f.serie === serie ? { ...f, guardada: true, enCola } : f)));
+    // Arranca el descanso salvo que sea la última serie planificada
+    const ultima = plan ? serie >= plan.series : false;
+    if (!ultima) setDisparo((d) => d + 1);
   }
 
   function guardar(fila: Fila) {
     setError(null);
+    const datos: SerieInput = {
+      mesoId,
+      exerciseId: ejercicio.id,
+      semana,
+      serie: fila.serie,
+      reps: fila.reps,
+      peso_kg: conPeso ? fila.peso : null,
+      rir: fila.alFallo ? null : fila.rir,
+      al_fallo: fila.alFallo,
+      descanso_seg: descanso
+    };
     iniciar(async () => {
-      const r = await guardarSerie({
-        mesoId,
-        exerciseId: ejercicio.id,
-        semana,
-        serie: fila.serie,
-        reps: fila.reps,
-        peso_kg: conPeso ? fila.peso : null,
-        rir: fila.alFallo ? null : fila.rir,
-        al_fallo: fila.alFallo,
-        descanso_seg: descanso
-      });
-      if (r.error) setError(r.error);
-      else {
-        setFilas((fs) =>
-          fs.map((f) => (f.serie === fila.serie ? { ...f, guardada: true } : f))
-        );
-        // Arranca el descanso salvo que sea la última serie planificada
-        const ultima = plan ? fila.serie >= plan.series : false;
-        if (!ultima) setDisparo((d) => d + 1);
+      try {
+        const r = await guardarSerie(datos);
+        if (r.error) setError(r.error);
+        else marcarGuardada(fila.serie, false);
+      } catch {
+        // Sin señal: queda en el teléfono y se sube sola al volver
+        encolarSerie(datos);
+        marcarGuardada(fila.serie, true);
       }
     });
   }
@@ -142,11 +176,16 @@ export default function ExerciseLogger({
     if (!plan) return;
     setError(null);
     iniciar(async () => {
-      const r = await registrarSegunPlan({
-        mesoId,
-        exerciseId: ejercicio.id,
-        semana
-      });
+      let r: { error?: string };
+      try {
+        r = await registrarSegunPlan({
+          mesoId,
+          exerciseId: ejercicio.id,
+          semana
+        });
+      } catch {
+        r = { error: SIN_RED };
+      }
       if (r.error) setError(r.error);
       else {
         setFilas((fs) =>
@@ -191,12 +230,17 @@ export default function ExerciseLogger({
       return;
     }
     iniciar(async () => {
-      const r = await borrarSerie({
-        mesoId,
-        exerciseId: ejercicio.id,
-        semana,
-        serie: fila.serie
-      });
+      let r: { error?: string };
+      try {
+        r = await borrarSerie({
+          mesoId,
+          exerciseId: ejercicio.id,
+          semana,
+          serie: fila.serie
+        });
+      } catch {
+        r = { error: SIN_RED };
+      }
       if (r.error) setError(r.error);
       else setFilas((fs) => fs.filter((f) => f.serie !== fila.serie));
     });
@@ -253,7 +297,7 @@ export default function ExerciseLogger({
             <div
               key={fila.serie}
               className={`rounded-xl border p-3 ${
-                fila.guardada ? "border-ok/40" : "border-line"
+                fila.enCola ? "border-warn/40" : fila.guardada ? "border-ok/40" : "border-line"
               }`}
             >
               <div className="mb-2 flex items-center justify-between">
@@ -272,7 +316,9 @@ export default function ExerciseLogger({
                   ) : null}
                 </span>
                 <div className="flex items-center gap-2">
-                  {fila.guardada ? (
+                  {fila.enCola ? (
+                    <span className="text-sm font-semibold text-warn">⏳ En el teléfono</span>
+                  ) : fila.guardada ? (
                     <span className="text-sm font-semibold text-ok">
                       ✓ Guardada
                     </span>

@@ -105,7 +105,7 @@ export default function HiloMensajes({
         onChange={(e) => setTexto(e.target.value)}
         rows={3}
         className="input mt-2"
-        placeholder={soyEntrenador ? "Escribile al cliente…" : "Escribile a tu entrenador…"}
+        placeholder={soyEntrenador ? "Escríbele al cliente…" : "Escríbele a tu entrenador…"}
       />
       <button type="button" onClick={enviar} disabled={pendiente || texto.trim().length < 2} className="btn-primary mt-2 w-full">
         {pendiente ? "…" : "Enviar"}

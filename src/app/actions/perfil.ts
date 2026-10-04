@@ -25,19 +25,19 @@ export async function guardarPerfil(
   const actividad = String(formData.get("nivel_actividad") ?? "") as NivelActividad;
   const objetivo = String(formData.get("objetivo") ?? "") as Objetivo;
 
-  if (nombre.length < 2) return { error: "Poné tu nombre." };
+  if (nombre.length < 2) return { error: "Escribe tu nombre." };
   if (!Number.isFinite(edad) || edad < 14 || edad > 90)
-    return { error: "Revisá la edad (entre 14 y 90)." };
+    return { error: "Revisa la edad (entre 14 y 90)." };
   if (sexo !== "masculino" && sexo !== "femenino")
-    return { error: "Elegí el sexo." };
+    return { error: "Elige el sexo." };
   if (!Number.isFinite(peso) || peso < 30 || peso > 300)
-    return { error: "Revisá el peso corporal (en kg)." };
+    return { error: "Revisa el peso corporal (en kg)." };
   if (!Number.isFinite(altura) || altura < 120 || altura > 230)
-    return { error: "Revisá la altura (en cm)." };
+    return { error: "Revisa la altura (en cm)." };
   if (!["sedentario", "ligero", "moderado", "alto"].includes(actividad))
-    return { error: "Elegí el nivel de actividad." };
+    return { error: "Elige el nivel de actividad." };
   if (!["deficit", "mantenimiento", "superavit"].includes(objetivo))
-    return { error: "Elegí tu objetivo." };
+    return { error: "Elige tu objetivo." };
 
   try {
     await exec(

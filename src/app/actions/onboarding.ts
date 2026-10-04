@@ -37,16 +37,16 @@ export async function guardarCuestionario(
   const lesiones = String(formData.get("lesiones") ?? "").trim().slice(0, 500);
   const preferencias = String(formData.get("preferencias") ?? "").trim().slice(0, 500);
 
-  if (!Number.isFinite(edad) || edad < 14 || edad > 90) return { error: "Revisá la edad (entre 14 y 90)." };
-  if (sexo !== "masculino" && sexo !== "femenino") return { error: "Elegí el sexo." };
-  if (!Number.isFinite(peso) || peso < 30 || peso > 300) return { error: "Revisá el peso corporal (en kg)." };
-  if (!Number.isFinite(altura) || altura < 120 || altura > 230) return { error: "Revisá la altura (en cm)." };
-  if (!["sedentario", "ligero", "moderado", "alto"].includes(actividad)) return { error: "Elegí el nivel de actividad." };
-  if (!["deficit", "mantenimiento", "superavit"].includes(objetivo)) return { error: "Elegí tu objetivo." };
-  if (!["principiante", "intermedio", "avanzado"].includes(experiencia)) return { error: "Elegí tu experiencia." };
-  if (dias.length < 1) return { error: "Marcá al menos un día para entrenar." };
-  if (![30, 45, 60, 90].includes(minutos)) return { error: "Elegí cuánto tiempo tenés por sesión." };
-  if (!["gimnasio", "casa_basico", "sin_equipo"].includes(equipamiento)) return { error: "Elegí con qué equipamiento contás." };
+  if (!Number.isFinite(edad) || edad < 14 || edad > 90) return { error: "Revisa la edad (entre 14 y 90)." };
+  if (sexo !== "masculino" && sexo !== "femenino") return { error: "Elige el sexo." };
+  if (!Number.isFinite(peso) || peso < 30 || peso > 300) return { error: "Revisa el peso corporal (en kg)." };
+  if (!Number.isFinite(altura) || altura < 120 || altura > 230) return { error: "Revisa la altura (en cm)." };
+  if (!["sedentario", "ligero", "moderado", "alto"].includes(actividad)) return { error: "Elige el nivel de actividad." };
+  if (!["deficit", "mantenimiento", "superavit"].includes(objetivo)) return { error: "Elige tu objetivo." };
+  if (!["principiante", "intermedio", "avanzado"].includes(experiencia)) return { error: "Elige tu experiencia." };
+  if (dias.length < 1) return { error: "Marca al menos un día para entrenar." };
+  if (![30, 45, 60, 90].includes(minutos)) return { error: "Elige cuánto tiempo tienes por sesión." };
+  if (!["gimnasio", "casa_basico", "sin_equipo"].includes(equipamiento)) return { error: "Elige con qué equipo cuentas." };
 
   const cuestionario: Cuestionario = {
     experiencia,
@@ -103,7 +103,7 @@ export async function guardarCuestionarioNutricion(
   if (comidas.length < 3 || comidas.length > 7) return { error: "Elige entre 3 y 7 comidas por día." };
   if (!["cocino", "mixto", "como_fuera"].includes(cocina)) return { error: "Cuéntanos si cocinas o comes fuera." };
   if (!["bajo", "medio", "alto"].includes(presupuesto)) return { error: "Elige tu presupuesto." };
-  if (!acepto) return { error: "Para ver las recomendaciones de comida tenés que aceptar el aviso." };
+  if (!acepto) return { error: "Para ver las recomendaciones de comida tienes que aceptar el aviso." };
 
   const cn: CuestionarioNutricion = {
     comidas: comidas.sort((a, b) => (a.hora || "99").localeCompare(b.hora || "99")),

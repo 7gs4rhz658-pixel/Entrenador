@@ -50,7 +50,7 @@ export default function FotosForm({ hoy, userId }: { hoy: string; userId?: strin
           alguna = true;
         }
       }
-      if (!alguna) throw new Error("Elegí al menos una foto.");
+      if (!alguna) throw new Error("Elige al menos una foto.");
       const r = await subirFotos(salida);
       if (r.error) throw new Error(r.error);
       setOk(`${r.subidas} foto${r.subidas === 1 ? "" : "s"} guardada${r.subidas === 1 ? "" : "s"}.`);
@@ -68,7 +68,7 @@ export default function FotosForm({ hoy, userId }: { hoy: string; userId?: strin
         <div>
           <h2 className="font-bold">Fotos de progreso</h2>
           <p className="text-xs text-muted">
-            Una vez por mes, misma luz y misma distancia. Solo las ven vos y tu entrenador.
+            Una vez por mes, misma luz y misma distancia. Solo las ven tú y tu entrenador.
           </p>
         </div>
         <span className="text-muted">{abierto ? "▾" : "▸"}</span>

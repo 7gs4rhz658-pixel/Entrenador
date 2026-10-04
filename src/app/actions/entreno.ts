@@ -49,6 +49,16 @@ export interface SerieInput {
   rir: number | null;
   al_fallo: boolean;
   descanso_seg?: number | null;
+  logged_at?: string | null; // la serie quedó en el teléfono sin señal y se sube después
+}
+
+// Una serie que se subió tarde conserva su hora real (hasta 7 días atrás);
+// si no viene o no es creíble, vale la del servidor.
+function horaRegistro(iso?: string | null): string {
+  const t = iso ? Date.parse(iso) : NaN;
+  const ahora = Date.now();
+  const creible = Number.isFinite(t) && t <= ahora + 5 * 60_000 && t >= ahora - 7 * 86_400_000;
+  return new Date(creible ? t : ahora).toISOString();
 }
 
 export async function guardarSerie(input: SerieInput): Promise<Resultado & { record?: RecordDetectado | null }> {
@@ -70,7 +80,7 @@ export async function guardarSerie(input: SerieInput): Promise<Resultado & { rec
             al_fallo: input.al_fallo,
             descanso_seg: input.descanso_seg ?? null,
             completado: true,
-            logged_at: new Date().toISOString()
+            logged_at: horaRegistro(input.logged_at)
           },
           { onConflict: "mesocycle_id,exercise_id,semana,serie" }
         )

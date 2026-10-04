@@ -24,9 +24,10 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Protege todo salvo estáticos de Next, íconos, el service worker y el
-  // cron de avisos (que se autentica con CRON_SECRET, sin usuario)
+  // Protege todo salvo estáticos de Next, íconos (el iPhone pide el de
+  // inicio sin sesión), el service worker y el cron de avisos (que se
+  // autentica con CRON_SECRET, sin usuario)
   matcher: [
-    "/((?!_next/static|_next/image|favicon\.ico|icon\.svg|manifest\.webmanifest|sw\.js|api/cron).*)"
+    "/((?!_next/static|_next/image|favicon\\.ico|icon\\.svg|icon-\\d+\\.png|apple-icon|manifest\\.webmanifest|sw\\.js|api/cron).*)"
   ]
 };

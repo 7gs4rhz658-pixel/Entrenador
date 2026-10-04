@@ -7,7 +7,7 @@ export const DESCARGO_CORTO =
   "Las recomendaciones de comida son orientación general de tu entrenador, no un plan de nutricionista ni consejo médico.";
 
 export const DESCARGO_COMPLETO =
-  "Las recomendaciones de alimentación de esta app son orientación general de tu entrenador, basada en referencias nutricionales públicas (USDA, Open Food Facts) y en los datos que cargaste. No son un plan elaborado por un nutricionista ni reemplazan una consulta médica. Si tenés una condición de salud, estás embarazada, tuviste o tenés un trastorno alimentario o tomás medicación, consultá con un profesional antes de seguirlas. Vos decidís qué comer; usá estas recomendaciones como una guía flexible.";
+  "Las recomendaciones de alimentación de esta app son orientación general de tu entrenador, basada en referencias nutricionales públicas (USDA, Open Food Facts) y en los datos que cargaste. No son un plan elaborado por un nutricionista ni reemplazan una consulta médica. Si tienes una condición de salud, estás embarazada, tuviste o tienes un trastorno alimentario o tomas medicación, consulta con un profesional antes de seguirlas. Tú decides qué comer; usa estas recomendaciones como una guía flexible.";
 
 // Protocolo del entrenador (suplementos, cuidado personal, hábitos)
 export const DESCARGO_PROTOCOLO =

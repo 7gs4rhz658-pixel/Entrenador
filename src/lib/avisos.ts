@@ -20,7 +20,7 @@ export async function armarAvisoDiario(c: Profile): Promise<CargaPush> {
 
   const pago = estadoPago(c, hoy);
   if (pago.vencido) {
-    partes.push("Tu mes venció: renová para seguir con informes y el próximo bloque.");
+    partes.push("Tu mes venció: renueva para seguir con informes y el próximo bloque.");
     url = "/pago";
   } else if (pago.diasRestantes != null && pago.diasRestantes <= 3) {
     partes.push(
@@ -39,7 +39,7 @@ export async function armarAvisoDiario(c: Profile): Promise<CargaPush> {
   const ultima = await getUltimaActividad(c.id);
   const diasSin = ultima ? Math.floor((Date.now() - new Date(ultima).getTime()) / 86_400_000) : null;
   if (diasSin != null && diasSin >= 4) {
-    partes.push(`Hace ${diasSin} días que no registrás nada. Volvé con lo de mañana, sin drama.`);
+    partes.push(`Hace ${diasSin} días que no registras nada. Vuelve con lo de mañana, sin drama.`);
   }
 
   const dias = await getDias(c.id);

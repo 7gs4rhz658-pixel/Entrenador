@@ -25,8 +25,12 @@ export default function MarcarComida({
   function toggle() {
     setError(null);
     iniciar(async () => {
-      const r = await marcarComida({ userId, fecha, tipo_dia: tipo, momento, hecha: !hecha });
-      if (r.error) setError(r.error);
+      try {
+        const r = await marcarComida({ userId, fecha, tipo_dia: tipo, momento, hecha: !hecha });
+        if (r.error) setError(r.error);
+      } catch {
+        setError("Sin conexión: márcala cuando vuelva la señal.");
+      }
     });
   }
 

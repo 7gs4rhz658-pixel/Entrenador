@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-// "Traé un amigo": el cliente comparte su código; quien se registra con
+// "Trae a un amigo": el cliente comparte su código; quien se registra con
 // él queda enlazado y el entrenador aplica el beneficio a los dos.
 export default function CodigoReferido({ codigo }: { codigo: string }) {
   const [copiado, setCopiado] = useState(false);
@@ -19,7 +19,7 @@ export default function CodigoReferido({ codigo }: { codigo: string }) {
 
   return (
     <section className="card mt-4 text-sm">
-      <p className="font-semibold">Traé un amigo</p>
+      <p className="font-semibold">Trae a un amigo</p>
       <p className="mt-1 text-muted">
         Si alguien se registra con tu código, los dos tienen descuento el mes siguiente (lo aplica tu
         entrenador).

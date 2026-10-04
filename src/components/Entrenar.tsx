@@ -8,7 +8,8 @@ import GuiaCadencia from "./GuiaCadencia";
 import RestTimer from "./RestTimer";
 import Stepper from "./Stepper";
 import { ComoSeHace, EtiquetasEjercicio } from "./TecnicaEjercicio";
-import { guardarSerie, guardarSesion, type RecordDetectado } from "@/app/actions/entreno";
+import { guardarSerie, guardarSesion, type RecordDetectado, type SerieInput } from "@/app/actions/entreno";
+import { encolarSerie, pendientesDe } from "@/lib/cola-series";
 import { guardarDescanso } from "@/app/actions/rutina";
 import { fmtNum, fmtSegundos, resumenPlan } from "@/lib/format";
 import { grupoSuperserie, repsDeSerie } from "@/lib/rutina";
@@ -132,22 +133,51 @@ export default function Entrenar({
           alFallo: plan?.al_fallo ?? false
         };
 
+  // Series que quedaron en el teléfono sin señal (después de recargar):
+  // cuentan como hechas y la sesión sigue desde la primera pendiente
+  useEffect(() => {
+    let cambio = false;
+    const m = { ...hechas };
+    for (const e of ejercicios) {
+      for (const p of pendientesDe(mesoId, e.id, semana)) {
+        if ((m[e.id] ?? []).some((h) => h.serie === p.serie)) continue;
+        m[e.id] = [...(m[e.id] ?? []), { serie: p.serie, reps: p.reps ?? 0, peso: p.peso_kg, rir: p.rir, alFallo: p.al_fallo }].sort(
+          (a, b) => a.serie - b.serie
+        );
+        cambio = true;
+      }
+    }
+    if (!cambio) return;
+    setHechas(m);
+    const i = ejercicios.findIndex((e) => (m[e.id]?.length ?? 0) < (planes[e.id]?.series ?? 1));
+    setIndice(i === -1 ? ejercicios.length : i);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function registrar() {
     if (!ex) return;
     setError(null);
     const fila = { ...actual };
+    const datos: SerieInput = {
+      mesoId,
+      exerciseId: ex.id,
+      semana,
+      serie: serieActual,
+      reps: fila.reps,
+      peso_kg: conPeso ? fila.peso : null,
+      rir: fila.alFallo ? null : fila.rir,
+      al_fallo: fila.alFallo,
+      descanso_seg: descansos[ex.id]
+    };
     iniciar(async () => {
-      const r = await guardarSerie({
-        mesoId,
-        exerciseId: ex.id,
-        semana,
-        serie: serieActual,
-        reps: fila.reps,
-        peso_kg: conPeso ? fila.peso : null,
-        rir: fila.alFallo ? null : fila.rir,
-        al_fallo: fila.alFallo,
-        descanso_seg: descansos[ex.id]
-      });
+      let r: Awaited<ReturnType<typeof guardarSerie>>;
+      try {
+        r = await guardarSerie(datos);
+      } catch {
+        // Sin señal: queda en el teléfono, se sube sola y la sesión sigue
+        encolarSerie(datos);
+        r = {};
+      }
       if (r.error) {
         setError(r.error);
         return;
@@ -186,7 +216,7 @@ export default function Entrenar({
   function cambiarDescanso(seg: number) {
     if (!ex) return;
     setDescansos((d) => ({ ...d, [ex.id]: seg }));
-    void guardarDescanso({ exerciseId: ex.id, descanso_seg: seg });
+    guardarDescanso({ exerciseId: ex.id, descanso_seg: seg }).catch(() => {});
   }
 
   // Al terminar se guarda la sesión una sola vez y se limpia el reloj
@@ -195,12 +225,16 @@ export default function Entrenar({
   useEffect(() => {
     if (!terminado || sesionGuardada.current) return;
     sesionGuardada.current = true;
-    void guardarSesion({ mesoId, diaId, semana, inicioIso: new Date(inicio).toISOString(), series: totalHechasSesion }).then((r) => {
-      setDuracionFinal(r.duracion_seg ?? 0);
-      try {
-        localStorage.removeItem(claveReloj);
-      } catch {}
-    });
+    const duracion = Math.round((Date.now() - inicio) / 1000);
+    guardarSesion({ mesoId, diaId, semana, inicioIso: new Date(inicio).toISOString(), series: totalHechasSesion })
+      .then((r) => setDuracionFinal(r.duracion_seg ?? 0))
+      // Sin señal la duración se calcula en el teléfono (la sesión no se registra)
+      .catch(() => setDuracionFinal(duracion >= 60 && duracion <= 6 * 3600 ? duracion : 0))
+      .finally(() => {
+        try {
+          localStorage.removeItem(claveReloj);
+        } catch {}
+      });
   }, [terminado, mesoId, diaId, semana, inicio, totalHechasSesion, claveReloj]);
 
   // ── Pantalla final ────────────────────────────────────────────

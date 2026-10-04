@@ -7,6 +7,7 @@ import { resolverUsuario } from "@/lib/auth";
 import { exec, getComidas, getDias, getPerfil } from "@/lib/data";
 import { diaSemanaDe, horaLocal } from "@/lib/format";
 import { recomendacionPara } from "@/lib/meal-plan-db";
+import { permitirIA } from "@/lib/uso-ia";
 import { ETIQUETAS_OBJETIVO, macrosDe, objetivosCliente, sumarMacros } from "@/lib/nutrition";
 import { db } from "@/lib/supabase/server";
 import type { AsistenteLog, Momento, RespuestaAsistente } from "@/lib/types";
@@ -25,11 +26,13 @@ export async function consultarAsistente(input: {
   pregunta: string;
 }): Promise<{ log?: AsistenteLog; error?: string }> {
   const pregunta = input.pregunta.trim();
-  if (pregunta.length < 5) return { error: "Contame un poco más qué pasa hoy." };
+  if (pregunta.length < 5) return { error: "Cuéntame un poco más qué pasa hoy." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.fecha)) return { error: "Fecha inválida." };
   if (!iaDisponible()) return { error: "El asistente necesita la IA configurada (GROQ_API_KEY)." };
   try {
     const { userId } = await resolverUsuario(input.userId);
+    const tope = await permitirIA("asistente");
+    if (tope) return { error: tope };
     const [perfil, comidas, dias] = await Promise.all([
       getPerfil(userId),
       getComidas(userId, input.fecha),

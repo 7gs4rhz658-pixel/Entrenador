@@ -192,7 +192,7 @@ export default function CuestionarioForm({ perfil }: { perfil: Profile }) {
             </select>
           </div>
           <div>
-            <span className="label">Días que podés entrenar</span>
+            <span className="label">Días que puedes entrenar</span>
             <div className="grid grid-cols-7 gap-1.5">
               {DIAS_SEMANA.map((nombre, i) => {
                 const d = i + 1;
