@@ -1,3 +1,4 @@
+import AceptarPrivacidad from "@/components/AceptarPrivacidad";
 import BottomNav from "@/components/BottomNav";
 import RegistrarSW from "@/components/RegistrarSW";
 import { requireCliente } from "@/lib/auth";
@@ -12,10 +13,11 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await requireCliente();
+  const { perfil } = await requireCliente();
   return (
     <div className="mx-auto w-full max-w-lg px-4 pb-28 pt-5">
       <RegistrarSW />
+      {perfil.acepto_privacidad_at ? null : <AceptarPrivacidad />}
       {children}
       <BottomNav />
     </div>

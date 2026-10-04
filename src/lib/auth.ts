@@ -24,7 +24,7 @@ export const getSesion = cache(async (): Promise<Sesion | null> => {
   if (error) throw new Error(`Base de datos: ${error.message}`);
   if (!perfil) {
     throw new Error(
-      "No existe el perfil de este usuario. Ejecutá las migraciones SQL (carpeta supabase/)."
+      "No existe el perfil de este usuario. Ejecuta las migraciones SQL (carpeta supabase/)."
     );
   }
   return { userId: user.id, email: user.email ?? perfil.email, perfil };
@@ -34,6 +34,8 @@ export const getSesion = cache(async (): Promise<Sesion | null> => {
 // Se usa para redirigir directo desde el login y evitar cadenas de
 // redirecciones (server action → "/" → "/cuestionario").
 export function destinoInicial(perfil: Profile): string {
+  // Entró con una contraseña temporal del entrenador: primero la cambia
+  if (perfil.debe_cambiar_clave) return "/nueva-clave";
   if (perfil.rol === "entrenador") return "/entrenador";
   if (!perfil.onboarding_completo) return "/cuestionario";
   if (perfil.estado_pago !== "pagado") return "/pago";
@@ -43,6 +45,7 @@ export function destinoInicial(perfil: Profile): string {
 export async function requireSesion(): Promise<Sesion> {
   const s = await getSesion();
   if (!s) redirect("/login");
+  if (s.perfil.debe_cambiar_clave) redirect("/nueva-clave");
   return s;
 }
 
@@ -70,7 +73,7 @@ export async function resolverUsuario(
   const sesion = await requireSesion();
   if (!userId || userId === sesion.userId) return { sesion, userId: sesion.userId };
   if (sesion.perfil.rol !== "entrenador") {
-    throw new Error("No tenés permiso para editar a otro usuario.");
+    throw new Error("No tienes permiso para editar a otro usuario.");
   }
   return { sesion, userId };
 }

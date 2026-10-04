@@ -20,6 +20,9 @@ export default async function EntrenadorLayout({
         </Link>
         <div className="flex items-center gap-3">
           <span className="hidden text-sm text-muted sm:inline">{perfil.nombre || perfil.email}</span>
+          <Link href="/nueva-clave" className="text-sm text-muted" title="Cambiar contraseña">
+            🔑
+          </Link>
           <div className="w-auto">
             <LogoutButton />
           </div>

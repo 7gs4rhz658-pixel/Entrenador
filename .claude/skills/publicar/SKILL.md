@@ -218,8 +218,9 @@ datos** que va a pedir, así después es solo pegar:
   - **`CRON_SECRET`**: un texto largo al azar (ej. 40 letras y números). Protege
     la ruta que dispara el aviso diario. Vercel lo manda solo al cron.
   - **`SUPABASE_SERVICE_ROLE_KEY`**: en Supabase, engranaje ⚙️ → "API Keys" →
-    la clave **service_role** (o "Secret"). **Es secreta**: solo la usa el
-    aviso diario, que corre sin usuario. Que la pegue directo en Vercel.
+    la clave **service_role** (o "Secret"). **Es secreta**: la usan el aviso
+    diario, los avisos al entrenador que dispara un cliente, la contraseña
+    temporal y "Eliminar mi cuenta". Que la pegue directo en Vercel, nunca en el chat.
   - El aviso diario ya está programado en `vercel.json` (todos los días a las
     01:00 UTC = 19:00 México, sin horario de verano). En el plan Hobby de Vercel un cron diario
     está permitido. El cliente activa los avisos desde **Perfil → "Avisos en el

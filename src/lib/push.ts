@@ -3,7 +3,7 @@
 // y la app sigue funcionando igual.
 
 import webpush from "web-push";
-import { db } from "./supabase/server";
+import { adminDisponible, conAdmin, db } from "./supabase/server";
 import { exec, getEntrenadores, getSuscripcionesPush } from "./data";
 
 export interface CargaPush {
@@ -59,10 +59,17 @@ export async function enviarPush(userId: string, carga: CargaPush): Promise<numb
   return ok;
 }
 
-// Aviso a todos los entrenadores (cliente nuevo, check-in, mensaje…)
+// Aviso a todos los entrenadores (cliente nuevo, check-in, mensaje…).
+// Casi siempre lo dispara un cliente, y RLS no le deja ver el perfil ni
+// las suscripciones del entrenador: sale con la clave de servicio.
 export async function avisarEntrenadores(carga: CargaPush): Promise<number> {
   if (!preparar()) return 0;
-  let ok = 0;
-  for (const e of await getEntrenadores()) ok += await enviarPush(e.id, carga);
-  return ok;
+  const enviar = async () => {
+    let ok = 0;
+    for (const e of await getEntrenadores()) ok += await enviarPush(e.id, carga);
+    return ok;
+  };
+  if (adminDisponible()) return conAdmin(enviar);
+  console.warn("Aviso al entrenador sin SUPABASE_SERVICE_ROLE_KEY: si lo dispara un cliente no llega.");
+  return enviar();
 }

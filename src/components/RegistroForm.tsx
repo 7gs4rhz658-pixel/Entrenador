@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
 import { registro } from "@/app/actions/auth";
 
@@ -41,7 +42,7 @@ export default function RegistroForm({ referido = "" }: { referido?: string }) {
           autoComplete="email"
           required
           className="input"
-          placeholder="vos@correo.com"
+          placeholder="tu@correo.com"
         />
       </div>
       <div>
@@ -73,6 +74,16 @@ export default function RegistroForm({ referido = "" }: { referido?: string }) {
           placeholder="Ej: JUANA1B2"
         />
       </div>
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" name="privacidad" required className="mt-1 h-4 w-4 shrink-0 accent-accent" />
+        <span>
+          Acepto el{" "}
+          <Link href="/privacidad" target="_blank" className="font-semibold text-accent">
+            aviso de privacidad
+          </Link>{" "}
+          y que mi entrenador use mis datos de salud (peso, medidas, fotos, lesiones) para armar mi plan.
+        </span>
+      </label>
       {estado.error ? (
         <p className="text-sm font-medium text-danger">✗ {estado.error}</p>
       ) : null}

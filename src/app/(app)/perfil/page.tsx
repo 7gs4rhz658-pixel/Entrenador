@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ActivarAvisos from "@/components/ActivarAvisos";
+import EliminarCuenta from "@/components/EliminarCuenta";
 import LogoutButton from "@/components/LogoutButton";
 import ProfileForm from "@/components/ProfileForm";
 import { requireCliente } from "@/lib/auth";
@@ -79,9 +80,24 @@ export default async function PerfilPage() {
 
       {perfil.codigo_referido ? <CodigoReferido codigo={perfil.codigo_referido} /> : null}
 
-      <p className="mt-4 text-center text-xs text-muted">{perfil.email}</p>
-      <div className="mt-2">
+      <section className="card mt-4 text-sm">
+        <p className="font-semibold">Tu cuenta</p>
+        <p className="mt-1 text-muted">{perfil.email}</p>
+        <div className="mt-2 flex flex-col gap-1">
+          <Link href="/nueva-clave" className="font-semibold text-accent">
+            Cambiar contraseña →
+          </Link>
+          <Link href="/privacidad" className="font-semibold text-accent">
+            Aviso de privacidad →
+          </Link>
+        </div>
+      </section>
+
+      <div className="mt-4">
         <LogoutButton />
+      </div>
+      <div className="mt-6 text-center">
+        <EliminarCuenta />
       </div>
     </main>
   );

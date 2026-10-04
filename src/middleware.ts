@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { actualizarSesion } from "@/lib/supabase/middleware";
 
-const PUBLICAS = ["/login", "/registro", "/confirmar"];
+const PUBLICAS = ["/login", "/registro", "/confirmar", "/privacidad"];
 
 export async function middleware(req: NextRequest) {
   const { res, user } = await actualizarSesion(req);

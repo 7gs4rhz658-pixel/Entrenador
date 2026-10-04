@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { marcarActivo, marcarPago } from "@/app/actions/entrenador";
+import { contrasenaTemporal, marcarActivo, marcarPago } from "@/app/actions/entrenador";
 import { fmtTiempoRelativo } from "@/lib/format";
 import { avisoPagoPendiente } from "@/lib/pagos";
 import type { Profile } from "@/lib/types";
@@ -16,6 +16,7 @@ export default function ClienteAcciones({
 }) {
   const [pendiente, iniciar] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [clave, setClave] = useState<string | null>(null);
   const pagado = perfil.estado_pago === "pagado";
   const avisoPago = avisoPagoPendiente(perfil);
 
@@ -24,6 +25,16 @@ export default function ClienteAcciones({
     iniciar(async () => {
       const r = await fn();
       if (r.error) setError(r.error);
+    });
+  }
+
+  function nuevaClave() {
+    if (!confirm(`¿Crear una contraseña temporal para ${perfil.nombre || perfil.email}? La actual deja de funcionar.`)) return;
+    setError(null);
+    iniciar(async () => {
+      const r = await contrasenaTemporal({ userId: perfil.id });
+      if (r.error) setError(r.error);
+      else setClave(r.clave ?? null);
     });
   }
 
@@ -73,7 +84,27 @@ export default function ClienteAcciones({
         >
           {perfil.activo ? "dar de baja" : "reactivar"}
         </button>
+        <button type="button" disabled={pendiente} onClick={nuevaClave} className="chip border-line text-muted">
+          contraseña temporal
+        </button>
       </div>
+      {clave ? (
+        <div className="rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 text-right text-sm">
+          <p>
+            Contraseña temporal: <span className="select-all font-mono font-bold">{clave}</span>
+          </p>
+          <p className="text-xs text-muted">
+            Pásasela por WhatsApp o en persona; no se vuelve a mostrar. Al entrar, la app le pide crear una nueva.
+          </p>
+          <button
+            type="button"
+            onClick={() => void navigator.clipboard?.writeText(`Tu contraseña temporal es ${clave}. Al entrar, la app te pide crear una nueva.`)}
+            className="btn-ghost mt-1 px-3 py-1 text-xs"
+          >
+            Copiar mensaje
+          </button>
+        </div>
+      ) : null}
       {pagado && perfil.pago_vence_at ? (
         <span className="text-xs text-muted">
           vence el {new Date(`${perfil.pago_vence_at}T12:00:00`).toLocaleDateString("es-MX", { day: "numeric", month: "short" })}

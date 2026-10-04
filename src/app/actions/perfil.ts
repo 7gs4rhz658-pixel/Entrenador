@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireSesion } from "@/lib/auth";
-import { exec } from "@/lib/data";
-import { db } from "@/lib/supabase/server";
+import { exec, q } from "@/lib/data";
+import { avisarEntrenadores } from "@/lib/push";
+import { adminDisponible, conAdmin, db } from "@/lib/supabase/server";
 import type { NivelActividad, Objetivo, Sexo } from "@/lib/types";
 
 function mensaje(e: unknown): string {
@@ -57,4 +59,42 @@ export async function guardarPerfil(
   }
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+// "Eliminar mi cuenta" (derecho de cancelación): borra las fotos del
+// almacenamiento y el usuario de Auth; todas sus filas caen en cascada.
+// Necesita la clave service_role (solo vive en el servidor).
+export async function eliminarCuenta(input: { confirmacion: string }): Promise<{ error?: string }> {
+  const sesion = await requireSesion();
+  if (sesion.perfil.rol === "entrenador") return { error: "La cuenta del entrenador no se elimina desde la app." };
+  if (input.confirmacion.trim().toUpperCase() !== "ELIMINAR") return { error: "Escribe ELIMINAR para confirmar." };
+  if (!adminDisponible()) {
+    return { error: "Falta configurar la clave de servicio en el servidor. Pídele a tu entrenador que elimine tu cuenta." };
+  }
+  const { userId, perfil, email } = sesion;
+  try {
+    await conAdmin(async () => {
+      const fotos = await q<{ path: string }[]>(db().from("fotos_progreso").select("path").eq("user_id", userId));
+      if (fotos.length) {
+        const { error } = await db().storage.from("fotos").remove(fotos.map((f) => f.path));
+        if (error) throw new Error(`Fotos: ${error.message}`);
+      }
+      const { error } = await db().auth.admin.deleteUser(userId);
+      if (error) throw new Error(error.message);
+    });
+  } catch (e) {
+    return { error: `No se pudo eliminar la cuenta: ${mensaje(e)}` };
+  }
+  try {
+    await avisarEntrenadores({
+      titulo: "Un cliente eliminó su cuenta",
+      cuerpo: `${perfil.nombre || email} eliminó su cuenta y sus datos.`,
+      url: "/entrenador",
+      tag: "baja"
+    });
+  } catch (e) {
+    console.error("Aviso al entrenador falló:", mensaje(e));
+  }
+  await db().auth.signOut();
+  redirect("/login");
 }

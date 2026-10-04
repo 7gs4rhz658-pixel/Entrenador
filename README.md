@@ -48,7 +48,10 @@ Facts · Vercel.
   mantener calorías, proteína o carbos; **recetas con IA** dentro de los
   macros restantes.
 - **Progreso:** gráfico por ejercicio del mejor peso (o reps) por semana.
-- **Perfil:** datos, objetivo y cuestionario editables.
+- **Perfil:** datos, objetivo y cuestionario editables; cambiar contraseña,
+  aviso de privacidad y **eliminar mi cuenta** (borra datos y fotos).
+- **Privacidad:** al registrarse acepta el aviso (`/privacidad`), que cubre
+  los datos de salud; quien ya tenía cuenta lo acepta una vez dentro.
 
 ### Entrenador
 - **Panel** con todos los clientes: objetivo, bloque y semana, último entreno,
@@ -57,6 +60,8 @@ Facts · Vercel.
   editable** (mismo editor que el cliente), progreso, comida del día, cerrar
   semana / nuevo bloque, confirmar pago y renovar (+30 días), dar de baja.
   "Avisaron que pagaron" aparece arriba en el panel Hoy.
+- **Contraseña temporal** (sin correo): desde la ficha del cliente; la ve una
+  sola vez y al entrar la app le pide al cliente crear una nueva.
 - **Rutina nueva desde tu plan (PDF, `.txt` o texto pegado):** la IA lee fases,
   días, series, cadencias, parciales, superseries y notas (solo transcribe) →
   vista previa → **borrador** (el cliente sigue con su rutina) → la IA escribe
@@ -148,6 +153,13 @@ llaman a la IA declaran `maxDuration = 60`. Opcionales: `TZ_APP` (zona horaria,
 por defecto `America/Mexico_City`), `PLAN_PRECIO` (precio del mes, por defecto 50),
 `PLAN_MONEDA` (`MXN` o `USD`, por defecto USD) y `PAGO_INSTRUCCIONES` (cómo pagarte:
 banco, CLABE, titular o "efectivo"; `\n` para saltos de línea).
+
+Aviso de privacidad: `AVISO_RESPONSABLE`, `AVISO_DOMICILIO` y `AVISO_CONTACTO`
+(datos del responsable que muestra `/privacidad`).
+
+`SUPABASE_SERVICE_ROLE_KEY` (secreta, solo en Vercel) es necesaria para: los
+avisos al entrenador que dispara un cliente (RLS no le deja ver al
+entrenador), el aviso diario, la contraseña temporal y eliminar cuenta.
 
 Avisos al teléfono (opcional): `NEXT_PUBLIC_VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY`
 (`npx web-push generate-vapid-keys`), `VAPID_SUBJECT`, `CRON_SECRET` y

@@ -7,13 +7,19 @@ export default function LoginPage() {
       <div className="mb-8 text-center">
         <div className="mb-3 text-4xl">🏋️</div>
         <h1 className="text-2xl font-bold">Mi Entrenador Personal</h1>
-        <p className="mt-1 text-muted">Ingresá con tu correo para ver tu plan</p>
+        <p className="mt-1 text-muted">Entra con tu correo para ver tu plan</p>
       </div>
       <LoginForm />
+      <details className="mt-4 text-center text-sm text-muted">
+        <summary className="cursor-pointer select-none font-semibold text-accent">¿Olvidaste tu contraseña?</summary>
+        <p className="mt-2">
+          Escríbele a tu entrenador: te da una contraseña temporal y, al entrar, la app te pide crear una nueva.
+        </p>
+      </details>
       <p className="mt-6 text-center text-sm text-muted">
-        ¿Todavía no tenés cuenta?{" "}
+        ¿Todavía no tienes cuenta?{" "}
         <Link href="/registro" className="font-semibold text-accent">
-          Empezá acá
+          Empieza aquí
         </Link>
       </p>
     </main>

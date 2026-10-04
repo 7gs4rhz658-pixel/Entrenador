@@ -1,5 +1,6 @@
 "use server";
 
+import { randomInt } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireEntrenador } from "@/lib/auth";
 import { ErrorIA, generarPlanInicial, iaDisponible } from "@/lib/ai";
@@ -18,7 +19,7 @@ import {
   publicarBorradorRutina
 } from "@/lib/plan-import";
 import { explicarSiguienteTanda, type AvanceTecnica } from "@/lib/rutina-tecnica";
-import { db } from "@/lib/supabase/server";
+import { adminDisponible, conAdmin, db } from "@/lib/supabase/server";
 import type { PlanGenerado } from "@/lib/types";
 
 type Resultado = { ok?: boolean; error?: string };
@@ -276,4 +277,30 @@ export async function marcarActivo(input: {
   }
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+// Sin correo para recuperar la contraseña: el entrenador le da al cliente
+// una temporal (la ve una sola vez) y la app lo obliga a cambiarla al
+// entrar. Necesita la clave service_role (solo en el servidor).
+const PALABRAS = ["Fuerza", "Toro", "Roble", "Halcon", "Cima", "Rayo", "Acero", "Lobo", "Tigre", "Cumbre", "Puma", "Volcan"];
+
+export async function contrasenaTemporal(input: { userId: string }): Promise<{ clave?: string; error?: string }> {
+  try {
+    await requireEntrenador();
+    if (!adminDisponible()) {
+      return { error: "Falta SUPABASE_SERVICE_ROLE_KEY en Vercel: sin ella no se puede cambiar la contraseña desde la app." };
+    }
+    const perfil = await getPerfil(input.userId);
+    if (perfil.rol !== "cliente") return { error: "Solo se puede con clientes." };
+    const palabra = () => PALABRAS[randomInt(PALABRAS.length)];
+    const clave = `${palabra()}-${randomInt(1000, 10000)}-${palabra()}`;
+    await conAdmin(async () => {
+      const { error } = await db().auth.admin.updateUserById(input.userId, { password: clave });
+      if (error) throw new Error(error.message);
+      await exec(db().from("profiles").update({ debe_cambiar_clave: true }).eq("id", input.userId));
+    });
+    return { clave };
+  } catch (e) {
+    return { error: mensaje(e) };
+  }
 }

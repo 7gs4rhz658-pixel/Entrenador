@@ -28,7 +28,7 @@ export default function LoginForm() {
           autoFocus
           required
           className="input"
-          placeholder="vos@correo.com"
+          placeholder="tu@correo.com"
         />
       </div>
       <div>
