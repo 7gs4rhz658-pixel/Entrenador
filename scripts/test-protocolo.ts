@@ -132,6 +132,7 @@ check("sanearItem: fase 1 = desde el principio", sanearItem({ titulo: "Omega", f
 
 // Cantidades del texto → gramos (fijos, no los que estime la IA)
 check("piezas con peso típico", aGramos("Galleta de arroz", 2, "pieza", 20, "").gramos === 18 && aGramos("Huevo entero", 3, "pieza", 150, "").gramos === 150);
+check("galletas de quinoa también pesan 9 g", aGramos("Galletas de quinoa", 2, "pieza", 0, "").gramos === 18);
 check("cucharada = 15 g", aGramos("Vinagre de manzana", 1, "cucharada", 15, "").gramos === 15);
 check("'1 cucharadita (5 ml)' leído como 5 cucharaditas = 5 g", aGramos("Aceite de oliva", 5, "cucharadita", 5, "").gramos === 5);
 check("cantidad libre fija", aGramos("Pepino", null, "libre", 30, "").gramos === 50 && aGramos("Ensalada verde", null, "libre", 80, "").gramos === 100);
@@ -154,6 +155,10 @@ const textoBloques = [
 const base = (p: Partial<ItemEntrada>): ItemEntrada => ({ ...sanearItem({ titulo: "x", ...p }), ...p }) as ItemEntrada;
 const anclados = anclarPorBloque([base({ segmento: "Suplementos", titulo: "Omega 3", ancla: "en_el_dia" })], textoBloques, [{ momento: "almuerzo", hora: "14:00" }]);
 check("'en el día' dentro del bloque de la comida → con la comida", anclados[0].ancla === "con_almuerzo", anclados[0].ancla);
+// La primera mención está en la explicación de fases (sin hora): cuenta la del bloque
+const conFases = ["Fase 1 (Días 1 al 7): solo toma el Multivitamínico y el Omega-3.", textoBloques].join("\n");
+const ancladoFases = anclarPorBloque([base({ segmento: "Suplementos", titulo: "Omega-3", ancla: "en_el_dia" })], conFases, [{ momento: "almuerzo", hora: "14:00" }]);
+check("mención en las fases no gana al bloque de la comida", ancladoFases[0].ancla === "con_almuerzo", ancladoFases[0].ancla);
 const completos = completarDescanso([base({ segmento: "Suplementos", titulo: "Creatina", ancla: "con_post_entreno", aplica: "entreno" })], textoBloques);
 check("creatina también en descanso, con la colación", completos.length === 2 && completos[1].aplica === "descanso" && completos[1].ancla === "con_snack", completos.map((c) => `${c.ancla}/${c.aplica}`));
 

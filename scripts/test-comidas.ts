@@ -2,14 +2,16 @@
 // cliente no come y elección del alimento de la base (sinónimos, plural).
 import {
   ajustarAMacros,
+  calcularTandas,
   chocaCon,
   elegir,
   grupoDe,
+  listaCompras,
   palabrasAEvitar,
   redondearGramos,
   totalesDe
 } from "../src/lib/meal-plan";
-import type { Ingredient, ItemComidaResuelto } from "../src/lib/types";
+import type { Ingredient, ItemComidaResuelto, MealPlanItem } from "../src/lib/types";
 
 let fallos = 0;
 function check(nombre: string, cond: boolean, detalle?: unknown) {
@@ -93,6 +95,21 @@ check("camote por su otro nombre", elegir("Batata hervida", [CAMOTE, POLLO])?.no
 check("plural y singular", elegir("Aguacates", [AGUACATE])?.nombre === "Aguacate");
 check("crudo pedido elige crudo", elegir("Salmón", [ing("Salmón (cocido)", 206, 22, 0, 12.4), SALMON], "crudo")?.nombre === "Salmón (crudo)");
 check("la base propia gana a un producto de marca", elegir("Aguacate", [ing("Aguacates", 205, 2, 9, 19, null, "off"), AGUACATE])?.fuente === "usda");
+
+// Lista de compras y guía de cocina
+const delMenu = (nombre: string, g: number) =>
+  ({ tipo_dia: "entreno", ingredient_id: nombre, ingredient: ing(nombre, 100, 1, 1, 1), cantidad_g: g }) as unknown as MealPlanItem;
+const compras = listaCompras([delMenu("Vinagre de manzana", 15), delMenu("Aceite de aguacate", 10), delMenu("Aguacate", 40), delMenu("Huevo entero", 100)], 5);
+const practicoDe = (n: string) => compras.find((c) => c.nombre === n)?.practico ?? "";
+check("vinagre de manzana no son manzanas", !/manzana/.test(practicoDe("Vinagre de manzana")), practicoDe("Vinagre de manzana"));
+check("aceite de aguacate no son aguacates", !/aguacate/.test(practicoDe("Aceite de aguacate")), practicoDe("Aceite de aguacate"));
+check("aguacate y huevo sí van en piezas", /aguacates?$/.test(practicoDe("Aguacate")) && /huevos$/.test(practicoDe("Huevo entero")), [practicoDe("Aguacate"), practicoDe("Huevo entero")]);
+const tandas = calcularTandas([delMenu("Semillas de calabaza", 25), delMenu("Camote (cocido)", 250)], 5);
+check(
+  "las semillas no van al horno",
+  tandas.flatMap((t) => t.items).every((i) => !/Semillas/.test(i.nombre)) && tandas.some((t) => t.tecnica === "Horno"),
+  JSON.stringify(tandas)
+);
 
 console.log(fallos ? `\n${fallos} TEST(S) FALLARON` : "\nTODOS LOS TESTS PASAN");
 if (fallos) process.exit(1);

@@ -104,8 +104,12 @@ export function baseRelevante(base: string[], texto: string): string[] {
   );
 }
 
+// La lista de compras del final ("Lista de compras", "Lista del súper",
+// "lista del mandado") no le sirve a la IA y gasta tokens
+export const LISTA_DE_COMPRAS = /\blista del? (las )?(compras|s[uú]per(mercado)?|mandado)\b/i;
+
 export function sinListaDeCompras(texto: string): string {
-  const m = /^.*lista de (las )?compras.*$/im.exec(texto);
+  const m = new RegExp(`^.*${LISTA_DE_COMPRAS.source}.*$`, "im").exec(texto);
   return m && m.index > texto.length * 0.5 ? texto.slice(0, m.index).trimEnd() : texto;
 }
 

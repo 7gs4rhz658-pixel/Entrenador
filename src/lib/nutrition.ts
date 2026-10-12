@@ -146,6 +146,13 @@ export function nombreMomento(m: Momento): string {
   return MOMENTOS.find((x) => x.valor === m)?.texto ?? m;
 }
 
+// "Cena · Cena ligera", pero "Comida" y no "Comida · Comida"
+export function tituloComida(m: Momento, plato: string | null | undefined): string {
+  const nombre = nombreMomento(m);
+  const p = (plato ?? "").trim();
+  return p && p.toLowerCase() !== nombre.toLowerCase() ? `${nombre} · ${p}` : nombre;
+}
+
 // ── Cálculos sobre ingredientes ─────────────────────────────────
 
 export function macrosDe(ing: Ingredient, gramos: number): Macros {

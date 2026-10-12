@@ -17,6 +17,7 @@ import {
   type EntradaDia,
   type HechosDia
 } from "../src/lib/hoy";
+import { tituloComida } from "../src/lib/nutrition";
 import type { CuestionarioNutricion, ProtocoloItem } from "../src/lib/types";
 
 let fallos = 0;
@@ -260,6 +261,10 @@ const info3 = infoFase(fases, "2026-10-05", "2026-10-20", [creatina]);
 check("la última fase no tiene próxima", info3?.numero === 3 && info3.proxima === null && info3.hasta === null && info3.diaDeLaFase === 2);
 const antes = infoFase(fases, "2026-10-05", "2026-10-03", []);
 check("antes de empezar: fase 1 con día ≤ 0", antes?.numero === 1 && antes.dia === -1);
+
+// Título de cada comida: el plato solo si dice algo más que el momento
+check("plato distinto se suma", tituloComida("cena", "Cena ligera") === "Cena · Cena ligera");
+check("plato igual al momento no se repite", tituloComida("almuerzo", "Comida") === "Comida" && tituloComida("pre_entreno", "Pre-entreno") === "Pre-entreno");
 
 console.log(fallos ? `\n${fallos} TEST(S) FALLARON` : "\nTODOS LOS TESTS PASAN");
 if (fallos) process.exit(1);

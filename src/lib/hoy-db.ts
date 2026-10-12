@@ -30,7 +30,7 @@ import {
   type ItemHoy
 } from "./hoy";
 import { comidasPorMomento, type ComidaDelPlan } from "./meal-plan";
-import { nombreMomento, objetivosCliente } from "./nutrition";
+import { objetivosCliente, tituloComida } from "./nutrition";
 import { db } from "./supabase/server";
 import type { Momento, Profile, TipoDia } from "./types";
 
@@ -70,7 +70,7 @@ function menuDelDia(comidas: ComidaDelPlan[]): EntradaDia["menu"] {
       .join(" · ");
     return {
       momento: c.momento,
-      titulo: `${nombreMomento(c.momento)}${c.plato ? ` · ${c.plato}` : ""}`,
+      titulo: tituloComida(c.momento, c.plato),
       detalle: `${ingredientes.length > 110 ? `${ingredientes.slice(0, 107)}…` : ingredientes} · ${c.macros.kcal} kcal`,
       hora: c.hora || undefined
     };

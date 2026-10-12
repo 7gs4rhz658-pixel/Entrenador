@@ -124,24 +124,26 @@ export function anclarPorBloque<T extends Pick<ItemEntrada, "titulo" | "ancla" |
       .split(" ")
       .filter((w) => w.length >= 4 && !["dosis", "tableta", "capsula", "soporte"].includes(w));
     if (!claves.length) return it;
-    // La primera línea que más palabras del nombre tiene ("Vitamina D con
-    // aceite de hígado de bacalao" no es la del "aceite en aerosol")
-    let i = -1;
-    let mejor = 0;
-    lineas.forEach((l, k) => {
-      const ws = normalizarTexto(l).split(" ");
-      const n = claves.filter((w) => ws.includes(w)).length;
-      if (n > mejor) {
-        mejor = n;
-        i = k;
+    // Las líneas que lo mencionan, de más a menos palabras del nombre
+    // ("Vitamina D con aceite de hígado de bacalao" no es la del "aceite en
+    // aerosol"). Gana la primera que cae en un bloque de comida con hora: la
+    // mención en la explicación de las fases ("solo toma el Omega-3") no
+    // tiene hora y se salta.
+    const candidatas = lineas
+      .map((l, k) => {
+        const ws = normalizarTexto(l).split(" ");
+        return { k, n: claves.filter((w) => ws.includes(w)).length };
+      })
+      .filter((c) => c.n > 0)
+      .sort((a, b) => b.n - a.n || a.k - b.k);
+    for (const { k } of candidatas) {
+      for (let j = k; j >= 0; j--) {
+        const hora = horaDeLinea(lineas[j]);
+        if (!hora) continue;
+        const comida = comidas.find((c) => c.hora === hora);
+        if (comida) return { ...it, ancla: `con_${comida.momento}` as AnclaProtocolo };
+        break;
       }
-    });
-    if (i < 0) return it;
-    for (let j = i; j >= 0; j--) {
-      const hora = horaDeLinea(lineas[j]);
-      if (!hora) continue;
-      const comida = comidas.find((c) => c.hora === hora);
-      return comida ? { ...it, ancla: `con_${comida.momento}` as AnclaProtocolo } : it;
     }
     return it;
   });
@@ -154,7 +156,7 @@ export function anclarPorBloque<T extends Pick<ItemEntrada, "titulo" | "ancla" |
 export function completarDescanso<T extends ItemEntrada>(items: T[], texto: string): T[] {
   const lineas = texto.split(/\r?\n/);
   const n = lineas.map((l) => normalizarTexto(l));
-  const FIN = /\bestrategia\b|\blista de (las )?compras\b|\bdias? de entrenamiento\b/;
+  const FIN = /\bestrategia\b|\blista del? (las )?(compras|super(mercado)?|mandado)\b|\bdias? de entrenamiento\b|\bmeal prep\b/;
   // La sección es la que tiene comidas con hora (no la tabla de calorías
   // del principio, que también dice "días de descanso")
   let desde = -1;

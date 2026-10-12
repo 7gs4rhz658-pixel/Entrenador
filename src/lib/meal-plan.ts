@@ -49,7 +49,7 @@ export function normalizarTexto(s: string): string {
 const PESO_PIEZA: [RegExp, number][] = [
   [/\bclara/, 33],
   [/\bhuevo/, 50],
-  [/\bgalleta.*arroz|\brice cake/, 9],
+  [/\bgalleta.*(arroz|quinoa|quinua)|\brice cake/, 9],
   [/\bpl[aá]tano|\bbanana/, 100],
   [/\btortilla de harina/, 40],
   [/\btortilla/, 30],
@@ -634,7 +634,9 @@ export interface ItemCompra {
 
 function practico(nombre: string, gramos: number): string {
   const n = normalizarTexto(nombre);
-  const u = UNIDADES.find((x) => x.patron.test(n));
+  // Solo si el alimento ES eso: "Vinagre de manzana" no son manzanas ni
+  // "Aceite de aguacate" aguacates
+  const u = UNIDADES.find((x) => x.patron.exec(n)?.index === 0);
   if (u) {
     const cant = Math.ceil(gramos / u.gramos);
     return `${cant} ${cant === 1 ? u.uno : u.varios}`;
@@ -747,7 +749,7 @@ export function calcularTandas(items: MealPlanItem[], diasEntreno: number): Batc
   for (const i of lista) {
     const n = normalizarTexto(i.nombre);
     // Lo que se come fresco o se hace en el momento no va al batch
-    if (/\bpan\b|\byogur|\bleche|\bqueso|\blata|\benlatado|\bcopos|\bgalleta|\bavena|\bhuevo|\bclara|\bwhey|\bprote/.test(n)) continue;
+    if (/\bpan\b|\byogur|\bleche|\bqueso|\blata|\benlatado|\bcopos|\bgalleta|\bavena|\bhuevo|\bclara|\bwhey|\bprote|\bsemilla/.test(n)) continue;
     const t = tandas.find((x) => TECNICAS.find((y) => y.tecnica === x.tecnica)!.patron.test(n));
     if (t) t.items.push({ nombre: i.nombre, gramos_semana: i.gramos });
   }

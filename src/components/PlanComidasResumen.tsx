@@ -1,6 +1,6 @@
 import { chocaCon, horaDe, comidasPorMomento, ordenarPorHorario, TIPOS_DIA } from "@/lib/meal-plan";
 import { fmtHora } from "@/lib/hoy";
-import { ETIQUETAS_TIPO_DIA, nombreMomento } from "@/lib/nutrition";
+import { ETIQUETAS_TIPO_DIA, tituloComida } from "@/lib/nutrition";
 import type { PlanComidasActivo } from "@/lib/data";
 import type { CuestionarioNutricion } from "@/lib/types";
 
@@ -51,8 +51,7 @@ export default function PlanComidasResumen({
                     <li key={c.momento}>
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted">
                         {hora ? `${fmtHora(hora)} · ` : ""}
-                        {nombreMomento(c.momento)}
-                        {c.plato ? ` · ${c.plato}` : ""}
+                        {tituloComida(c.momento, c.plato)}
                       </p>
                       <p className="text-muted">
                         {c.items.map((i, k) => {
