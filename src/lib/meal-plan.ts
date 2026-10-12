@@ -4,7 +4,7 @@
 // batch cooking. Resolver ingredientes y escribir en la base vive en
 // meal-plan-db.ts.
 
-import { macrosDe, sumarMacros, type Macros } from "./nutrition";
+import { ETIQUETAS_TIPO_DIA, macrosDe, nombreMomento, sumarMacros, type Macros } from "./nutrition";
 import type {
   BatchCooking,
   ComidaGenerada,
@@ -434,12 +434,19 @@ const GRUPOS: Grupo[] = ["p", "c", "g"];
 // sus calorías son proteína (carnes, pescados aunque sean grasos como el
 // salmón), a la proteína; si no, al macro que más calorías le da (las
 // semillas son grasa). Lo de pocas calorías (verduras, fruta liviana,
-// aderezos) y lo que va por piezas (3 huevos) no se toca.
-export function grupoDe(i: Pick<ItemComidaResuelto, "ingredient" | "nota">): Grupo | null {
+// aderezos), lo que va por piezas (3 huevos, 2 galletas) y la proteína en
+// polvo (va por scoop) no se toca. Lo que va por medidas de cocina (1
+// cucharada, 1 plátano mediano) tampoco, para que la nota no contradiga
+// los gramos, salvo `conMedidas` (ver ajusteDeCantidades).
+type OpcionesCuadre = { conMedidas?: boolean };
+const POR_PIEZA = /\b(pieza|rebanada|scoop)/;
+const POR_MEDIDA = /\b(cucharad|cdita|cda\b|taza|median[oa]|grande)/;
+export function grupoDe(i: Pick<ItemComidaResuelto, "ingredient" | "nota">, opciones: OpcionesCuadre = {}): Grupo | null {
   const ing = i.ingredient;
-  if (!ing || ing.kcal_100 < 60 || /\bpieza/.test(normalizarTexto(i.nota ?? ""))) return null;
-  // El huevo entero se cuenta por piezas aunque no lo diga la nota
-  if (/^huevo/.test(normalizarTexto(ing.nombre))) return null;
+  const nota = normalizarTexto(i.nota ?? "");
+  if (!ing || ing.kcal_100 < 60 || POR_PIEZA.test(nota) || (!opciones.conMedidas && POR_MEDIDA.test(nota))) return null;
+  // El huevo va por piezas y la proteína en polvo por scoops aunque no lo diga la nota
+  if (/^huevo|\bwhey\b|\bproteina (en polvo|aislada|de suero)/.test(normalizarTexto(ing.nombre))) return null;
   if (ing.prot_100 * 4 >= ing.kcal_100 * 0.35) return "p";
   const p = ing.prot_100 * 4;
   const c = ing.carb_100 * 4;
@@ -470,14 +477,40 @@ function resolverSistema(m: number[][], b: number[]): number[] | null {
   return a.map((fila, i) => fila[n] / fila[i]);
 }
 
+// Al redondear a gramos de cocina las calorías quedan unas decenas
+// lejos: se cierran moviendo de a un paso (5 g, o 1 g abajo de 20 g) el
+// carbohidrato o la grasa que más acerque, hasta quedar a 0.5 % o sin
+// mejora. La proteína no se mueve y valen los mismos topes del cuadre.
+function cerrarKcal(del: ItemComidaResuelto[], antes: Map<ItemComidaResuelto, number>, meta: number, opciones: OpcionesCuadre) {
+  for (let vuelta = 0; vuelta < 40; vuelta++) {
+    const falta = meta - sumarMacros(del.map((i) => macrosDe(i.ingredient!, i.cantidad_g))).kcal;
+    if (Math.abs(falta) <= meta * 0.005) return;
+    let mejor: { i: ItemComidaResuelto; g: number; error: number } | null = null;
+    for (const i of del) {
+      const k = grupoDe(i, opciones);
+      if (k !== "c" && k !== "g") continue;
+      const paso = (i.cantidad_g >= 20 ? 5 : 1) * Math.sign(falta);
+      const g = i.cantidad_g + paso;
+      const base = antes.get(i) ?? i.cantidad_g;
+      if (g < Math.max(1, base * 0.4) || g > base * 2.5) continue;
+      const error = Math.abs(falta - (i.ingredient!.kcal_100 * paso) / 100);
+      if (!mejor || error < mejor.error) mejor = { i, g, error };
+    }
+    if (!mejor || mejor.error >= Math.abs(falta)) return;
+    mejor.i.cantidad_g = mejor.g;
+  }
+}
+
 // Lleva cada tipo de día lo más cerca posible de su proteína,
 // carbohidratos y grasa escalando en bloque los alimentos de cada macro
 // (mínimos cuadrados sobre el error relativo, con un leve tirón hacia no
-// cambiar). Ningún alimento baja de ×0.4 ni sube de ×2.5. Determinista:
-// la IA propone qué comer; los números los cierra esto.
+// cambiar) y después cierra las calorías. Ningún alimento baja de ×0.4 ni
+// sube de ×2.5. Determinista: la IA propone qué comer; los números los
+// cierra esto.
 export function ajustarAMacros(
   items: ItemComidaResuelto[],
-  objetivo: Record<TipoDia, Macros>
+  objetivo: Record<TipoDia, Macros>,
+  opciones: OpcionesCuadre = {}
 ): ItemComidaResuelto[] {
   const out = items.map((i) => ({ ...i }));
   for (const tipo of TIPOS_DIA) {
@@ -489,7 +522,7 @@ export function ajustarAMacros(
     const suma: Record<Grupo, { p: number; c: number; g: number }> = { p: vacio(), c: vacio(), g: vacio() };
     for (const i of del) {
       const m = macrosDe(i.ingredient!, i.cantidad_g);
-      const k = grupoDe(i);
+      const k = grupoDe(i, opciones);
       const destino = k ? suma[k] : fijo;
       destino.p += m.prot_g;
       destino.c += m.carb_g;
@@ -517,14 +550,161 @@ export function ajustarAMacros(
     });
     const f = resolverSistema(m, b);
     if (!f) continue;
+    const antes = new Map(del.map((i) => [i, i.cantidad_g]));
     for (const i of del) {
-      const k = grupoDe(i);
+      const k = grupoDe(i, opciones);
       if (!k) continue;
       const factor = Math.min(2.5, Math.max(0.4, f[activos.indexOf(k)]));
       i.cantidad_g = redondearGramos(i.cantidad_g * factor);
     }
+    cerrarKcal(del, antes, meta.kcal, opciones);
   }
   return out;
+}
+
+// ── 3c. Ajustar a otras calorías ────────────────────────────────
+
+// Metas para llevar un menú a otras calorías sin rehacerlo: la proteína
+// queda como está y la diferencia la absorben carbohidratos y grasa en la
+// proporción que ya tienen. Las calorías de la tabla no son justo 4/4/9
+// (fibra, redondeos): se corrige con la razón del propio menú.
+export function metasPorKcal(menu: Macros, kcal: number): Macros {
+  const atwater = menu.prot_g * 4 + menu.carb_g * 4 + menu.grasa_g * 9;
+  const resto = menu.carb_g * 4 + menu.grasa_g * 9;
+  const s = atwater && resto && menu.kcal ? Math.max(0, (kcal * (atwater / menu.kcal) - menu.prot_g * 4) / resto) : 1;
+  return {
+    kcal: Math.round(kcal),
+    prot_g: Math.round(menu.prot_g),
+    carb_g: Math.round(menu.carb_g * s),
+    grasa_g: Math.round(menu.grasa_g * s)
+  };
+}
+
+// Las metas del ajuste: con las mismas calorías de la referencia, la
+// referencia completa (con sus macros); con otras, el menú escalado.
+export function metasDelAjuste(menu: Macros, referencia: Macros | null, kcal: number): Macros {
+  return referencia?.kcal && Math.round(referencia.kcal) === Math.round(kcal) ? referencia : metasPorKcal(menu, kcal);
+}
+
+type ConGramos = Pick<ItemComidaResuelto, "tipo_dia" | "momento" | "cantidad_g"> & {
+  ingredient: Ingredient | null;
+  nota?: string | null;
+};
+
+export interface CambioGramos {
+  tipo: TipoDia;
+  momento: Momento;
+  nombre: string;
+  antes: number;
+  despues: number;
+  notaAntes?: string; // si la nota tenía una medida que ya no vale ("1 cucharada")
+}
+
+// Cada alimento por tipo de día, comida y vez que aparece
+function porClave<T extends ConGramos>(items: T[]): Map<string, T> {
+  const out = new Map<string, T>();
+  const veces = new Map<string, number>();
+  for (const i of items) {
+    if (!i.ingredient) continue;
+    const base = `${i.tipo_dia}|${i.momento}|${i.ingredient.id}`;
+    const n = (veces.get(base) ?? 0) + 1;
+    veces.set(base, n);
+    out.set(`${base}|${n}`, i);
+  }
+  return out;
+}
+
+// Los mismos alimentos en las mismas comidas: solo cambiaron gramos
+export function mismosAlimentos(a: ConGramos[], b: ConGramos[]): boolean {
+  const ka = porClave(a);
+  const kb = porClave(b);
+  return ka.size === kb.size && [...ka.keys()].every((k) => kb.has(k));
+}
+
+export function cambiosDeGramos(antes: ConGramos[], despues: ConGramos[]): CambioGramos[] {
+  const previos = porClave(antes);
+  const out: CambioGramos[] = [];
+  for (const [k, d] of porClave(despues)) {
+    const a = previos.get(k);
+    const ga = Math.round(Number(a?.cantidad_g));
+    const gd = Math.round(Number(d.cantidad_g));
+    if (a && ga !== gd) {
+      out.push({
+        tipo: d.tipo_dia,
+        momento: d.momento,
+        nombre: d.ingredient!.nombre,
+        antes: ga,
+        despues: gd,
+        ...(a.nota && a.nota !== d.nota ? { notaAntes: a.nota } : {})
+      });
+    }
+  }
+  return out;
+}
+
+// Qué tan lejos queda un tipo de día de sus calorías (0.05 = 5 %)
+function desvio(items: ItemComidaResuelto[], objetivos: Record<TipoDia, Macros>, t: TipoDia): number {
+  const meta = objetivos[t].kcal;
+  return meta > 0 && items.some((i) => i.tipo_dia === t) ? Math.abs(totalesDe(items, t).kcal - meta) / meta : 0;
+}
+
+// Si con los topes de gramos un tipo de día queda a más de 3 % de sus calorías
+export function avisoSinLlegar(items: ItemComidaResuelto[], objetivos: Record<TipoDia, Macros>): string | undefined {
+  const lejos = TIPOS_DIA.filter((t) => desvio(items, objetivos, t) > 0.03);
+  if (!lejos.length) return undefined;
+  const detalle = lejos
+    .map((t) => `el ${ETIQUETAS_TIPO_DIA[t].toLowerCase()} queda en ${Math.round(totalesDe(items, t).kcal)} kcal (meta ${Math.round(objetivos[t].kcal)})`)
+    .join(" y ");
+  return `Solo con gramos no se llega: ${detalle}. Ningún alimento baja de 40 % ni sube de 2.5 veces su cantidad, y huevos, scoops, lo que va por piezas y las verduras quedan igual. Para llegar, quita o cambia algún alimento aquí abajo.`;
+}
+
+// La nota sin la medida de cocina, cuando los gramos ya no son esa medida:
+// "crudo, 1 cucharada (15 ml)" → "crudo"; "mediano" → nada
+export function sinMedida(nota: string | null): string | null {
+  const todas = (nota ?? "").split(/[,;]/).map((p) => p.trim()).filter(Boolean);
+  const partes = todas.filter((p) => !POR_MEDIDA.test(normalizarTexto(p)));
+  if (partes.length === todas.length) return nota;
+  return partes.length ? partes.join(", ") : null;
+}
+
+const SIN_META: Macros = { kcal: 0, prot_g: 0, carb_g: 0, grasa_g: 0 };
+
+// Ajuste solo de cantidades: los mismos alimentos con los gramos llevados
+// a las metas, la lista de lo que cambió y un aviso si algún día no llega.
+// Primero sin tocar las medidas de cocina; si un día no llega, ese día se
+// rehace moviéndolas también, y su nota deja de decir la medida.
+export function ajusteDeCantidades(
+  items: ItemComidaResuelto[],
+  objetivos: Record<TipoDia, Macros>
+): { items: ItemComidaResuelto[]; cambios: string[]; aviso?: string } {
+  let ajustados = ajustarAMacros(items, objetivos);
+  const lejos = TIPOS_DIA.filter((t) => desvio(ajustados, objetivos, t) > 0.03);
+  if (lejos.length) {
+    const soloLejos = { entreno: lejos.includes("entreno") ? objetivos.entreno : SIN_META, descanso: lejos.includes("descanso") ? objetivos.descanso : SIN_META };
+    const conMedidas = ajustarAMacros(items, soloLejos, { conMedidas: true }).map((c, k) =>
+      c.cantidad_g !== items[k].cantidad_g && !grupoDe(items[k]) ? { ...c, nota: sinMedida(c.nota) } : c
+    );
+    const mejoran = lejos.filter((t) => desvio(conMedidas, objetivos, t) < desvio(ajustados, objetivos, t));
+    ajustados = ajustados.map((a, k) => (mejoran.includes(a.tipo_dia) ? conMedidas[k] : a));
+  }
+  return {
+    items: ajustados,
+    cambios: cambiosDeGramos(items, ajustados).map(
+      (c) =>
+        `${ETIQUETAS_TIPO_DIA[c.tipo]} · ${nombreMomento(c.momento)}: ${c.nombre} ${c.antes} → ${c.despues} g` +
+        (c.notaAntes ? ` (ya no «${c.notaAntes}»)` : "")
+    ),
+    aviso: avisoSinLlegar(ajustados, objetivos)
+  };
+}
+
+// La guía de cocina menciona porciones ("tápers de 250g")
+export const MENCIONA_GRAMOS = /\d\s?(g|gr|gramos)\b/i;
+
+// Al poner al día los gramos de la guía solo pueden cambiar las cifras
+const sinCifras = (s: string) => s.replace(/\d+(?:[.,]\d+)?/g, "#");
+export function soloCambianCifras(antes: string[], despues: string[]): boolean {
+  return antes.length === despues.length && antes.every((t, k) => sinCifras(t) === sinCifras(String(despues[k] ?? "")));
 }
 
 // Totales de un tipo de día (solo lo que tiene alimento)
@@ -532,7 +712,7 @@ export function totalesDe(items: Pick<ItemComidaResuelto, "tipo_dia" | "ingredie
   return sumarMacros(items.filter((i) => i.tipo_dia === tipo && i.ingredient).map((i) => macrosDe(i.ingredient!, i.cantidad_g)));
 }
 
-// ── 3c. Lo que el cliente no come ───────────────────────────────
+// ── 3d. Lo que el cliente no come ───────────────────────────────
 
 // Palabras que no son alimentos en "no como trigo, arroz y maíz"
 const NO_ALIMENTO = new Set([

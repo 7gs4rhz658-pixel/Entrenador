@@ -6,8 +6,8 @@
 // nunca de prescripción profesional.
 
 import { ErrorIA, describirPerfil, generarJSON } from "./ai";
-import type { Macros } from "./nutrition";
-import { normalizarPlanComidas, normalizarTexto } from "./meal-plan";
+import { nombreMomento, type Macros } from "./nutrition";
+import { normalizarPlanComidas, normalizarTexto, type CambioGramos } from "./meal-plan";
 import type { BatchCooking, CuestionarioNutricion, Momento, PlanComidasGenerado, Profile, TipoDia } from "./types";
 
 const TONO = `Eres el asistente de un entrenador personal. Lo que escribes son RECOMENDACIONES de alimentación como orientación general del entrenador: usa "te recomiendo", "puedes", "una opción es". Nunca hables como profesional de la salud, no menciones enfermedades, medicación ni suplementos, y no prometas resultados. Español de México, de tú (nunca voseo), frases cortas.`;
@@ -209,4 +209,25 @@ export async function planificarBatchCooking(
       .filter(Boolean)
       .slice(0, 5)
   };
+}
+
+// ── 4. Gramos de la guía de cocina ──────────────────────────────
+
+// Cuando el menú solo cambió gramos, la guía de cocina se conserva (puede
+// ser la que escribió el entrenador) y la IA nada más cambia las cifras
+// de las porciones que menciona. Quien la llama revisa que no haya
+// cambiado nada más que cifras.
+export async function actualizarGramosGuia(
+  guia: Pick<BatchCooking, "pasos" | "conservacion">,
+  cambios: CambioGramos[]
+): Promise<Pick<BatchCooking, "pasos" | "conservacion">> {
+  const data = await generarJSON<{ pasos: unknown; conservacion: unknown }>(
+    `Las porciones de un menú cambiaron y su guía de cocina menciona gramos de las porciones de antes. Devuelve los mismos textos, carácter por carácter, cambiando SOLO las cifras de gramos que correspondan a una porción que cambió (usa el alimento, la comida y el tipo de día para saber cuál es). No cambies ninguna palabra, signo ni espacio. Las cifras que no son de una porción que cambió (temperaturas, minutos, equivalencias de crudo a cocido) se quedan igual. Devuelve SOLO JSON: {"pasos": [string], "conservacion": [string]}, con la misma cantidad de elementos y en el mismo orden.`,
+    `Porciones que cambiaron:\n${cambios
+      .map((c) => `- ${c.tipo === "entreno" ? "Día de entreno" : "Día de descanso"}, ${nombreMomento(c.momento)}: ${c.nombre} ${c.antes} g → ${c.despues} g`)
+      .join("\n")}\n\nGuía:\n${JSON.stringify(guia)}`,
+    { temperatura: 0, maxTokens: 2500 }
+  );
+  const lista = (v: unknown) => (Array.isArray(v) ? v.map((t) => String(t)) : []);
+  return { pasos: lista(data?.pasos), conservacion: lista(data?.conservacion) };
 }

@@ -12,13 +12,14 @@ const TIPOS: TipoDia[] = ["entreno", "descanso"];
 const MOMENTOS: Momento[] = ["pre_entreno", "post_entreno", "desayuno", "snack", "almuerzo", "merienda", "cena"];
 
 // De dónde viene lo que se edita
-export type ModoEditor = "ia" | "txt" | "editar" | "ajuste";
+export type ModoEditor = "ia" | "txt" | "editar" | "ajuste" | "cantidades";
 
 const SUBTITULO: Record<ModoEditor, string> = {
   ia: "Generado con IA y cuadrado con la referencia",
   txt: "Leído de tu texto, tal cual",
   editar: "El menú actual del cliente",
-  ajuste: "Ajustado a la referencia: la IA propuso los cambios y los gramos se cuadraron con los macros"
+  ajuste: "Ajustado a las calorías: la IA propuso los cambios y los gramos se cuadraron con los macros",
+  cantidades: "Mismos alimentos: solo cambiaron los gramos para llegar a las calorías"
 };
 
 function fmt(m: Macros) {
@@ -65,7 +66,9 @@ export default function EditorMenu({
   const [buscando, setBuscando] = useState<number | Momento | null>(null); // índice a cambiar o momento donde agregar
   const [resultados, setResultados] = useState<Ingredient[]>([]);
   const [q, setQ] = useState("");
+  // Las metas del texto del entrenador o, al ajustar, las calorías que pidió
   const objetivosTexto = preview.plan.objetivos;
+  const deAjuste = modo === "ajuste" || modo === "cantidades";
   const [usarObjetivos, setUsarObjetivos] = useState(!!objetivosTexto);
   const [nuevo, setNuevo] = useState<{ nombre: string; kcal: string; prot: string; carb: string; grasa: string } | null>(null);
   const [errorNuevo, setErrorNuevo] = useState<string | null>(null);
@@ -259,7 +262,9 @@ export default function EditorMenu({
       {preview.aviso ? <p className="mt-2 rounded-xl border border-warn/50 px-3 py-2 text-sm text-warn">{preview.aviso}</p> : null}
       {preview.cambios?.length ? (
         <div className="mt-2 rounded-xl border border-line px-3 py-2 text-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Qué cambió la IA</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+            {modo === "cantidades" ? "Qué cambió" : "Qué cambió la IA"}
+          </p>
           <ul className="mt-1 list-disc pl-4 text-muted">
             {preview.cambios.map((c, k) => (
               <li key={k}>{c}</li>
@@ -290,7 +295,9 @@ export default function EditorMenu({
         {meta.kcal ? (
           <>
             <p>
-              <span className="text-muted">{usarObjetivos && objetivosTexto ? "Objetivo de tu texto: " : "Referencia: "}</span>
+              <span className="text-muted">
+                {deAjuste ? "Meta: " : usarObjetivos && objetivosTexto ? "Objetivo de tu texto: " : "Referencia: "}
+              </span>
               {fmt(meta)}
             </p>
             <p className="text-xs">
@@ -302,7 +309,7 @@ export default function EditorMenu({
         ) : null}
         {hayMeta ? (
           <button type="button" onClick={cuadrar} disabled={pendiente} className="btn-ghost mt-2 w-full py-1.5 text-sm">
-            Cuadrar gramos con la referencia
+            {deAjuste ? "Volver a cuadrar los gramos con la meta" : "Cuadrar gramos con la referencia"}
           </button>
         ) : null}
         {cuadrado ? (
@@ -316,8 +323,8 @@ export default function EditorMenu({
         <label className="mt-2 flex items-start gap-2 text-sm">
           <input type="checkbox" checked={usarObjetivos} onChange={(e) => setUsarObjetivos(e.target.checked)} className="mt-1" />
           <span>
-            Usar los objetivos de tu texto como referencia diaria del cliente (entreno {objetivosTexto.entreno.kcal} kcal ·
-            descanso {objetivosTexto.descanso.kcal} kcal)
+            {deAjuste ? "Dejar estas calorías como su referencia diaria" : "Usar los objetivos de tu texto como referencia diaria del cliente"}{" "}
+            (entreno {objetivosTexto.entreno.kcal} kcal · descanso {objetivosTexto.descanso.kcal} kcal)
           </span>
         </label>
       ) : null}

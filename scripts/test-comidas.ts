@@ -1,14 +1,22 @@
 // Tests del menú: cuadre de proteína/carbohidratos/grasa, alimentos que el
 // cliente no come y elección del alimento de la base (sinónimos, plural).
 import {
+  MENCIONA_GRAMOS,
+  ajusteDeCantidades,
   ajustarAMacros,
   calcularTandas,
+  cambiosDeGramos,
   chocaCon,
   elegir,
   grupoDe,
   listaCompras,
+  metasDelAjuste,
+  metasPorKcal,
+  mismosAlimentos,
   palabrasAEvitar,
   redondearGramos,
+  sinMedida,
+  soloCambianCifras,
   totalesDe
 } from "../src/lib/meal-plan";
 import type { Ingredient, ItemComidaResuelto, MealPlanItem } from "../src/lib/types";
@@ -110,6 +118,62 @@ check(
   tandas.flatMap((t) => t.items).every((i) => !/Semillas/.test(i.nombre)) && tandas.some((t) => t.tecnica === "Horno"),
   JSON.stringify(tandas)
 );
+
+// 5. Llevar un menú a otras calorías solo con gramos: el día de entreno
+// del plan de salud intestinal de OBED (1869 kcal) a 2250 y a 1500
+const ESPINACA = ing("Espinaca", 23, 2.9, 3.6, 0.4);
+const SEMILLAS_CAL = ing("Semillas de calabaza", 559, 30.2, 10.7, 49.1);
+const FRUTOS = ing("Frutos rojos (mix)", 47, 0.9, 11.4, 0.4);
+const obed = [
+  item(GALLETAS, 18, "2 piezas"), item(PLATANO, 100, "mediano"), item(MIEL, 15, "1 cucharada sopera"), item(WHEY, 30), item(FRUTOS, 100),
+  item(HUEVO, 100, "en omelet"), item(ESPINACA, 150), item(YOGUR, 100), item(AGUACATE, 40),
+  item(POLLO, 150), item(CAMOTE, 250), item(ACEITE, 15, "crudo, 1 cucharada (15 ml)"), item(HUEVO, 50, "cocido"), item(SEMILLAS_CAL, 25),
+  item(POLLO, 130), item(CAMOTE, 160), item(BROCOLI, 150), item(AGUACATE, 40)
+].map((i, k) => ({ ...i, momento: (["pre_entreno", "desayuno", "almuerzo", "merienda", "cena"] as const)[Math.min(4, Math.floor(k / 4))] }));
+const sinMeta = { kcal: 0, prot_g: 0, carb_g: 0, grasa_g: 0 };
+const delObed = totalesDe(obed, "entreno");
+check("whey va por scoop: no se escala", grupoDe(item(WHEY, 30)) === null);
+const m2250 = metasPorKcal(delObed, 2250);
+check("la proteína de la meta queda como en el menú", m2250.prot_g === Math.round(delObed.prot_g) && m2250.carb_g > delObed.carb_g && m2250.grasa_g > delObed.grasa_g, m2250);
+const referencia = { kcal: 1869, prot_g: 140, carb_g: 200, grasa_g: 60 };
+check("con las calorías de la referencia, sus macros", metasDelAjuste(delObed, referencia, 1869) === referencia && metasDelAjuste(delObed, referencia, 2250).prot_g === Math.round(delObed.prot_g));
+for (const kcal of [2250, 1500]) {
+  const ajustado = ajusteDeCantidades(obed, { entreno: metasPorKcal(delObed, kcal), descanso: sinMeta }).items;
+  const total = totalesDe(ajustado, "entreno");
+  check(`${kcal} kcal: llega a ±0.5 %`, cerca(total.kcal, kcal, 0.005), total);
+  check(`${kcal} kcal: proteína a ±5 %`, cerca(total.prot_g, delObed.prot_g, 0.05), total);
+  check(
+    `${kcal} kcal: mismos alimentos; huevos, whey, galletas y verduras igual`,
+    mismosAlimentos(obed, ajustado) && [0, 3, 5, 6, 12, 16].every((k) => ajustado[k].cantidad_g === obed[k].cantidad_g),
+    ajustado.map((a) => a.cantidad_g)
+  );
+}
+const a2250 = ajusteDeCantidades(obed, { entreno: m2250, descanso: sinMeta });
+check("2250 kcal: lista lo que cambió y no avisa", a2250.cambios.some((c) => /^Día de entreno · Comida: Camote \(cocido\) 250 → \d+ g$/.test(c)) && !a2250.aviso, a2250.cambios);
+check("si llega sin ellas, las medidas de cocina no se tocan", [1, 2, 11].every((k) => a2250.items[k].cantidad_g === obed[k].cantidad_g && a2250.items[k].nota === obed[k].nota));
+const a1400 = ajusteDeCantidades(obed, { entreno: metasPorKcal(delObed, 1400), descanso: sinMeta });
+check(
+  "1400 kcal: sin medidas no llega; con ellas sí, y la nota deja la medida",
+  cerca(totalesDe(a1400.items, "entreno").kcal, 1400, 0.01) && a1400.items[2].cantidad_g < 15 && a1400.items[2].nota === null && a1400.items[11].nota === "crudo" && a1400.cambios.some((c) => c.endsWith("(ya no «1 cucharada sopera»)")),
+  [a1400.items[2], a1400.items[11], a1400.cambios]
+);
+check("nota sin la medida", sinMedida("crudo, 1 cucharada (15 ml)") === "crudo" && sinMedida("mediano") === null && sinMedida("peso cocido; o papa") === "peso cocido; o papa");
+const a1250 = ajusteDeCantidades(obed, { entreno: metasPorKcal(delObed, 1250), descanso: sinMeta });
+check(
+  "1250 kcal no se alcanza solo con gramos: avisa y nada baja de ×0.4",
+  /no se llega: el día de entreno queda en \d+ kcal \(meta 1250\)/.test(a1250.aviso ?? "") && a1250.items.every((d, k) => d.cantidad_g >= obed[k].cantidad_g * 0.4 - 1),
+  a1250.aviso
+);
+
+// 6. Qué cambió y la guía de cocina
+const cambiado = obed.map((i, k) => (k === 10 ? { ...i, cantidad_g: 365 } : i));
+const cambios = cambiosDeGramos(obed, cambiado);
+check("lista lo que cambió de gramos", cambios.length === 1 && cambios[0].nombre === "Camote (cocido)" && cambios[0].antes === 250 && cambios[0].despues === 365, cambios);
+check("otro alimento ya no son los mismos", !mismosAlimentos(obed, [...obed, item(PLATANO, 100)]));
+const pasos = ["Sepáralos en tápers con el peso en la tapa (\"250g\" o \"160g\").", "Hornea a 200 °C por 35-40 minutos."];
+check("la guía menciona gramos", MENCIONA_GRAMOS.test(pasos[0]) && !MENCIONA_GRAMOS.test(pasos[1]));
+check("solo cifras: vale", soloCambianCifras(pasos, ["Sepáralos en tápers con el peso en la tapa (\"365g\" o \"235g\").", pasos[1]]));
+check("otra palabra o un paso de menos: no vale", !soloCambianCifras(pasos, [pasos[0].replace("tápers", "recipientes"), pasos[1]]) && !soloCambianCifras(pasos, [pasos[0]]));
 
 console.log(fallos ? `\n${fallos} TEST(S) FALLARON` : "\nTODOS LOS TESTS PASAN");
 if (fallos) process.exit(1);

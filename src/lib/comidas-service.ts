@@ -4,6 +4,7 @@
 
 import {
   VERSION_MENU_TXT,
+  actualizarGramosGuia,
   generarRecomendacionComidas,
   pedirAjusteMenu,
   pedirComidasTxt,
@@ -14,13 +15,21 @@ import { iaDisponible } from "./ai";
 import { contarDiasEntreno, getPlanComidas, nombresBase } from "./data";
 import { conLectura } from "./ia-lecturas";
 import {
+  MENCIONA_GRAMOS,
   TIPOS_DIA,
+  ajusteDeCantidades,
   ajustarAMacros,
+  avisoSinLlegar,
   batchBasico,
   calcularTandas,
+  cambiosDeGramos,
+  metasDelAjuste,
+  mismosAlimentos,
   normalizarPlanComidas,
   palabrasAEvitar,
-  totalesDe
+  soloCambianCifras,
+  totalesDe,
+  type CambioGramos
 } from "./meal-plan";
 import { aplicarPlanComidas, resolverPlanComidas } from "./meal-plan-db";
 import { objetivosCliente, type Macros } from "./nutrition";
@@ -83,17 +92,31 @@ export function evitarDe(perfil: Profile): string[] {
   return palabrasAEvitar(cn?.alergias, cn?.no_come, perfil.cuestionario?.preferencias);
 }
 
-// Ajusta el menú actual a la referencia diaria: la IA propone los cambios
-// (mismas comidas, sobre todo gramos) y el código cierra los macros. Sin
-// IA, o si falla, se ajustan solo los gramos.
+// Ajusta el menú actual a unas calorías (o a la referencia diaria). Solo
+// cantidades: mismos alimentos y el código mueve los gramos. Con IA: la IA
+// propone los cambios (mismas comidas, sobre todo gramos) y el código
+// cierra los macros; si falla, se ajustan solo los gramos.
 export async function prepararAjusteMenu(
   perfil: Profile,
-  opciones: { indicacion: string; cambiarEvitados: boolean }
+  opciones: { indicacion: string; cambiarEvitados: boolean; kcal?: Record<TipoDia, number>; soloCantidades?: boolean }
 ): Promise<RecomendacionPreparada> {
-  const objetivos = objetivosDeReferencia(perfil);
-  if (!objetivos) throw new Error("Falta la referencia diaria: fíjala a mano o completa edad, sexo, peso y altura.");
+  const referencia = objetivosDeReferencia(perfil);
   const actual = await menuActual(perfil);
   let items = actual.plan.items;
+  const kcal = opciones.kcal;
+  if (!kcal && !referencia) throw new Error("Falta la referencia diaria: fíjala a mano o completa edad, sexo, peso y altura.");
+  const objetivos: Record<TipoDia, Macros> = kcal
+    ? {
+        entreno: metasDelAjuste(totalesDe(items, "entreno"), referencia?.entreno ?? null, kcal.entreno),
+        descanso: metasDelAjuste(totalesDe(items, "descanso"), referencia?.descanso ?? null, kcal.descanso)
+      }
+    : referencia!;
+  // Otras calorías que la referencia: al guardar se ofrece dejarlas como su referencia
+  const nuevaReferencia = TIPOS_DIA.some((t) => objetivos[t] !== referencia?.[t]) ? objetivos : null;
+  if (opciones.soloCantidades) {
+    const r = ajusteDeCantidades(items, objetivos);
+    return { plan: { ...actual.plan, items: r.items, objetivos: nuevaReferencia }, objetivos, cambios: r.cambios, aviso: r.aviso };
+  }
   let cambios: string[] = [];
   let aviso: string | undefined;
   if (iaDisponible()) {
@@ -148,11 +171,12 @@ export async function prepararAjusteMenu(
   } else {
     aviso = "Sin IA configurada: se ajustaron solo los gramos.";
   }
+  const ajustados = ajustarAMacros(items, objetivos);
   return {
-    plan: { ...actual.plan, items: ajustarAMacros(items, objetivos) },
+    plan: { ...actual.plan, items: ajustados, objetivos: nuevaReferencia },
     objetivos,
     cambios,
-    aviso
+    aviso: [aviso, avisoSinLlegar(ajustados, objetivos)].filter(Boolean).join(" ") || undefined
   };
 }
 
@@ -176,7 +200,10 @@ export async function prepararRecomendacionTxt(
 }
 
 // Guía de batch cooking para el menú: tandas deterministas + orden de
-// cocción de la IA (o la guía básica si la IA no responde).
+// cocción de la IA (o la guía básica si la IA no responde). Si el menú
+// tiene los mismos alimentos que el actual (solo cambiaron gramos), la
+// guía que ya tenía (puede ser la del entrenador) se conserva: se rehacen
+// las tandas y la IA pone al día los gramos que mencione.
 async function guiaBatch(perfil: Profile, plan: PlanComidasResuelto): Promise<BatchCooking | null> {
   const diasEntreno = await contarDiasEntreno(perfil.id);
   const comoItems = plan.items
@@ -184,6 +211,11 @@ async function guiaBatch(perfil: Profile, plan: PlanComidasResuelto): Promise<Ba
     .map((i) => ({ tipo_dia: i.tipo_dia, ingredient_id: i.ingredient!.id, ingredient: i.ingredient!, cantidad_g: i.cantidad_g })) as MealPlanItem[];
   const tandas = calcularTandas(comoItems, diasEntreno || 3);
   if (!tandas.length) return null;
+  const actual = await getPlanComidas(perfil.id, { conBorrador: true });
+  const previa = actual?.plan.batch_cooking;
+  if (actual && previa?.pasos?.length && mismosAlimentos(actual.items, plan.items)) {
+    return { ...previa, tandas, ...(await gramosAlDia(previa, cambiosDeGramos(actual.items, plan.items))) };
+  }
   const dia = perfil.cuestionario_nutricion?.dia_batch ?? 7;
   const basico = batchBasico(dia, tandas);
   if (!iaDisponible()) return basico;
@@ -197,6 +229,22 @@ async function guiaBatch(perfil: Profile, plan: PlanComidasResuelto): Promise<Ba
     };
   } catch {
     return basico;
+  }
+}
+
+// Los gramos que menciona la guía ("tápers de 250g") con las porciones
+// nuevas. Si la IA cambia algo más que cifras, queda el texto como estaba.
+async function gramosAlDia(
+  guia: BatchCooking,
+  cambios: CambioGramos[]
+): Promise<Pick<BatchCooking, "pasos" | "conservacion">> {
+  const sin = { pasos: guia.pasos, conservacion: guia.conservacion ?? [] };
+  if (!cambios.length || !iaDisponible() || ![...sin.pasos, ...sin.conservacion].some((t) => MENCIONA_GRAMOS.test(t))) return sin;
+  try {
+    const nueva = await actualizarGramosGuia(sin, cambios);
+    return soloCambianCifras(sin.pasos, nueva.pasos) && soloCambianCifras(sin.conservacion, nueva.conservacion) ? nueva : sin;
+  } catch {
+    return sin;
   }
 }
 

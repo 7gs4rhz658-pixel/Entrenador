@@ -13,19 +13,22 @@ import {
 } from "@/app/actions/comidas";
 import EditorMenu, { type ModoEditor } from "@/components/EditorMenu";
 import type { RecomendacionPreparada } from "@/lib/comidas-service";
+import { metasDelAjuste } from "@/lib/meal-plan";
 import { ETIQUETAS_TIPO_DIA, type Macros } from "@/lib/nutrition";
 import type { MacrosManual, TipoDia } from "@/lib/types";
 
 const TIPOS: TipoDia[] = ["entreno", "descanso"];
+const kcalValida = (k: number) => Number.isFinite(k) && k >= 1000 && k <= 6000;
 
 function fmtMacros(m: Macros) {
   return `${Math.round(m.kcal)} kcal · P ${Math.round(m.prot_g)} · C ${Math.round(m.carb_g)} · G ${Math.round(m.grasa_g)}`;
 }
 
 // Panel del entrenador en la pestaña Comida: referencia diaria (fórmula o
-// a mano), el menú actual (editarlo o ajustarlo a la referencia con IA) y
-// crear uno nuevo (con IA o desde el texto del plan). Todo se guarda como
-// borrador; el cliente sigue con su menú hasta que lo envías.
+// a mano), el menú actual (editarlo o llevarlo a otras calorías, solo
+// gramos o con IA) y crear uno nuevo (con IA o desde el texto del plan).
+// Todo se guarda como borrador; el cliente sigue con su menú hasta que lo
+// envías.
 export default function RecomendacionComidas({
   userId,
   conIA,
@@ -62,6 +65,8 @@ export default function RecomendacionComidas({
   const [lectura, setLectura] = useState(0); // cada lectura nueva rearma el editor
   const [editandoMacros, setEditandoMacros] = useState(false);
   const [ajustando, setAjustando] = useState(false);
+  const [kcalMeta, setKcalMeta] = useState<Record<TipoDia, string>>({ entreno: "", descanso: "" });
+  const [conIAAjuste, setConIAAjuste] = useState(false);
   const [indicacion, setIndicacion] = useState("");
   const [cambiarEvitados, setCambiarEvitados] = useState(true);
 
@@ -107,7 +112,7 @@ export default function RecomendacionComidas({
   }
 
   const origenAlGuardar = (modo: ModoEditor): "ia" | "txt" =>
-    modo === "txt" ? "txt" : modo === "editar" ? (origenPlan ?? "ia") : "ia";
+    modo === "txt" ? "txt" : modo === "editar" || modo === "cantidades" ? (origenPlan ?? "ia") : "ia";
 
   return (
     <div className="flex flex-col gap-3">
@@ -136,7 +141,7 @@ export default function RecomendacionComidas({
                 const r = await guardarMacrosManual({ userId, macros: m });
                 if (!r.error) setEditandoMacros(false);
                 return r;
-              }, tienePlan ? "Referencia guardada. Si quieres que el menú llegue a estos números, usa “Ajustar a la referencia”." : "Referencia guardada.")
+              }, tienePlan ? "Referencia guardada. Si quieres que el menú llegue a estos números, usa “Ajustar calorías”." : "Referencia guardada.")
             }
             onCancelar={() => setEditandoMacros(false)}
           />
@@ -220,23 +225,66 @@ export default function RecomendacionComidas({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAjustando((a) => !a)}
-                  disabled={pendiente || !objetivos}
+                  onClick={() => {
+                    if (!ajustando && totalesMenu) {
+                      const inicial = (t: TipoDia) => String(Math.round(objetivos?.[t].kcal || totalesMenu[t].kcal));
+                      setKcalMeta({ entreno: inicial("entreno"), descanso: inicial("descanso") });
+                    }
+                    setAjustando((a) => !a);
+                  }}
+                  disabled={pendiente || !totalesMenu}
                   className="btn-primary flex-1"
                 >
-                  Ajustar a la referencia
+                  Ajustar calorías
                 </button>
               </div>
-              {ajustando ? (
-                <div className="mt-3 flex flex-col gap-2 rounded-xl border border-line p-3">
+              {ajustando && totalesMenu ? (
+                <div className="mt-3 flex flex-col gap-3 rounded-xl border border-line p-3">
                   <p className="text-sm text-muted">
-                    Lleva este menú a la referencia diaria de arriba (edítala primero si quieres otros números).{" "}
-                    {conIA
-                      ? "La IA propone qué cambiar —mismas comidas, sobre todo gramos— y la app cuadra los gramos con la proteína, los carbohidratos y la grasa."
-                      : "Sin IA configurada: se cuadran solo los gramos."}{" "}
-                    Lo ves antes de guardar.
+                    Escribe las calorías de cada tipo de día. Se quedan los mismos alimentos y solo cambian los gramos: la
+                    proteína queda igual y la diferencia la absorben los carbohidratos y la grasa. Lo ves antes de guardar.
                   </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {TIPOS.map((t) => {
+                      const kcal = Number(kcalMeta[t]);
+                      const meta = kcalValida(kcal) ? metasDelAjuste(totalesMenu[t], objetivos?.[t] ?? null, kcal) : null;
+                      return (
+                        <label key={t} className="text-sm">
+                          <span className="label">{ETIQUETAS_TIPO_DIA[t]}</span>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={1000}
+                            max={6000}
+                            step={10}
+                            value={kcalMeta[t]}
+                            onChange={(e) => setKcalMeta({ ...kcalMeta, [t]: e.target.value })}
+                            className="input"
+                            aria-label={`Calorías del ${ETIQUETAS_TIPO_DIA[t].toLowerCase()}`}
+                          />
+                          <span className="mt-1 block text-xs text-muted" style={{ fontVariantNumeric: "tabular-nums" }}>
+                            {meta ? (
+                              <>
+                                ahora {Math.round(totalesMenu[t].kcal)} kcal
+                                <br />
+                                {meta === objetivos?.[t] ? "referencia" : "meta"}: P {Math.round(meta.prot_g)} · C {Math.round(meta.carb_g)} · G{" "}
+                                {Math.round(meta.grasa_g)}
+                              </>
+                            ) : (
+                              "Entre 1000 y 6000 kcal"
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
                   {conIA ? (
+                    <label className="flex items-start gap-2 text-sm">
+                      <input type="checkbox" checked={conIAAjuste} onChange={(e) => setConIAAjuste(e.target.checked)} className="mt-1" />
+                      <span>Dejar que la IA también cambie o agregue alimentos (no solo gramos)</span>
+                    </label>
+                  ) : null}
+                  {conIA && conIAAjuste ? (
                     <label className="text-sm">
                       <span className="label">Indicación para la IA (opcional)</span>
                       <textarea
@@ -249,7 +297,7 @@ export default function RecomendacionComidas({
                       />
                     </label>
                   ) : null}
-                  {conIA && evitar.length ? (
+                  {conIA && conIAAjuste && evitar.length ? (
                     <label className="flex items-start gap-2 text-sm">
                       <input type="checkbox" checked={cambiarEvitados} onChange={(e) => setCambiarEvitados(e.target.checked)} className="mt-1" />
                       <span>Cambiar lo que el cliente dijo que no come ({evitar.slice(0, 6).join(", ")})</span>
@@ -257,11 +305,23 @@ export default function RecomendacionComidas({
                   ) : null}
                   <button
                     type="button"
-                    onClick={() => abrir(() => ajustarMenuAction({ userId, indicacion, cambiarEvitados }), "ajuste")}
-                    disabled={pendiente}
+                    onClick={() =>
+                      abrir(
+                        () =>
+                          ajustarMenuAction({
+                            userId,
+                            indicacion,
+                            cambiarEvitados,
+                            kcal: { entreno: Number(kcalMeta.entreno), descanso: Number(kcalMeta.descanso) },
+                            soloCantidades: !(conIA && conIAAjuste)
+                          }),
+                        conIA && conIAAjuste ? "ajuste" : "cantidades"
+                      )
+                    }
+                    disabled={pendiente || !TIPOS.every((t) => kcalValida(Number(kcalMeta[t])))}
                     className="btn-primary"
                   >
-                    {pendiente ? "Ajustando…" : conIA ? "Ajustar con IA" : "Cuadrar gramos"}
+                    {pendiente ? "Ajustando…" : conIA && conIAAjuste ? "Ajustar con IA" : "Ajustar cantidades"}
                   </button>
                 </div>
               ) : null}

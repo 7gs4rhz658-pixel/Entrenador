@@ -107,19 +107,31 @@ export async function menuActualAction(input: {
   }
 }
 
-// Ajusta el menú actual a la referencia diaria (IA + cuadre de macros)
+// Ajusta el menú actual a unas calorías por tipo de día (o a la
+// referencia): solo gramos, o con la IA proponiendo cambios
 export async function ajustarMenuAction(input: {
   userId: string;
   indicacion: string;
   cambiarEvitados: boolean;
+  kcal?: Record<TipoDia, number>;
+  soloCantidades?: boolean;
 }): Promise<{ resultado?: RecomendacionPreparada; error?: string }> {
   await requireEntrenador();
+  let kcal: Record<TipoDia, number> | undefined;
+  if (input.kcal) {
+    kcal = { entreno: Math.round(Number(input.kcal.entreno)), descanso: Math.round(Number(input.kcal.descanso)) };
+    if (![kcal.entreno, kcal.descanso].every((k) => Number.isFinite(k) && k >= 1000 && k <= 6000)) {
+      return { error: "Las calorías tienen que estar entre 1000 y 6000." };
+    }
+  }
   try {
     const perfil = await getPerfil(input.userId);
     return {
       resultado: await prepararAjusteMenu(perfil, {
         indicacion: String(input.indicacion ?? ""),
-        cambiarEvitados: !!input.cambiarEvitados
+        cambiarEvitados: !!input.cambiarEvitados,
+        kcal,
+        soloCantidades: !!input.soloCantidades
       })
     };
   } catch (e) {
