@@ -214,19 +214,27 @@ export async function planificarBatchCooking(
 // ── 4. Gramos de la guía de cocina ──────────────────────────────
 
 // Cuando el menú solo cambió gramos, la guía de cocina se conserva (puede
-// ser la que escribió el entrenador) y la IA nada más cambia las cifras
-// de las porciones que menciona. Quien la llama revisa que no haya
-// cambiado nada más que cifras.
+// ser la que escribió el entrenador) y la IA nada más cambia las
+// cantidades que menciona: porciones y totales de la semana. Quien la
+// llama revisa que no haya cambiado nada más que cifras.
 export async function actualizarGramosGuia(
   guia: Pick<BatchCooking, "pasos" | "conservacion">,
-  cambios: CambioGramos[]
+  cambios: CambioGramos[],
+  totales: { nombre: string; antes: number; despues: number }[]
 ): Promise<Pick<BatchCooking, "pasos" | "conservacion">> {
   const data = await generarJSON<{ pasos: unknown; conservacion: unknown }>(
-    `Las porciones de un menú cambiaron y su guía de cocina menciona gramos de las porciones de antes. Devuelve los mismos textos, carácter por carácter, cambiando SOLO las cifras de gramos que correspondan a una porción que cambió (usa el alimento, la comida y el tipo de día para saber cuál es). No cambies ninguna palabra, signo ni espacio. Las cifras que no son de una porción que cambió (temperaturas, minutos, equivalencias de crudo a cocido) se quedan igual. Devuelve SOLO JSON: {"pasos": [string], "conservacion": [string]}, con la misma cantidad de elementos y en el mismo orden.`,
-    `Porciones que cambiaron:\n${cambios
+    `Pones al día las cantidades de la guía de cocina de un menú cuyas porciones cambiaron.
+Reglas:
+- Copia cada texto tal cual y reemplaza los números que son la cantidad de una porción o de un total de la semana que cambió por su valor nuevo, con la misma unidad y el mismo formato: "250g" → "405g", "bloques de 130 g" → "bloques de 105 g", "2.6 kg de camote" → "4.1 kg de camote" (los kilos, con un solo decimal).
+- Usa el alimento, la comida y el tipo de día para saber a qué porción se refiere cada número. Si un número puede ser de dos porciones del mismo alimento, usa la del día de entreno.
+- No toques temperaturas, minutos, días ni las equivalencias de crudo a cocido ("150 g en crudo son unos 115 g cocidos" se queda igual). No cambies ninguna palabra ni signo.
+Devuelve SOLO JSON: {"pasos": [string], "conservacion": [string]}, con la misma cantidad de elementos y en el mismo orden.`,
+    `Porciones (antes → ahora):\n${cambios
       .map((c) => `- ${c.tipo === "entreno" ? "Día de entreno" : "Día de descanso"}, ${nombreMomento(c.momento)}: ${c.nombre} ${c.antes} g → ${c.despues} g`)
+      .join("\n")}\n\nTotales de la semana (antes → ahora):\n${totales
+      .map((t) => `- ${t.nombre}: ${t.antes} g → ${t.despues} g`)
       .join("\n")}\n\nGuía:\n${JSON.stringify(guia)}`,
-    { temperatura: 0, maxTokens: 2500 }
+    { temperatura: 0, maxTokens: 4000, razonamiento: "medium" }
   );
   const lista = (v: unknown) => (Array.isArray(v) ? v.map((t) => String(t)) : []);
   return { pasos: lista(data?.pasos), conservacion: lista(data?.conservacion) };

@@ -698,8 +698,8 @@ export function ajusteDeCantidades(
   };
 }
 
-// La guía de cocina menciona porciones ("tápers de 250g")
-export const MENCIONA_GRAMOS = /\d\s?(g|gr|gramos)\b/i;
+// La guía de cocina menciona cantidades ("tápers de 250g", "2.6 kg")
+export const MENCIONA_GRAMOS = /\d\s?(g|gr|gramos|kg|kilos?)\b/i;
 
 // Al poner al día los gramos de la guía solo pueden cambiar las cifras
 const sinCifras = (s: string) => s.replace(/\d+(?:[.,]\d+)?/g, "#");

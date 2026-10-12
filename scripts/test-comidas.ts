@@ -171,7 +171,7 @@ const cambios = cambiosDeGramos(obed, cambiado);
 check("lista lo que cambió de gramos", cambios.length === 1 && cambios[0].nombre === "Camote (cocido)" && cambios[0].antes === 250 && cambios[0].despues === 365, cambios);
 check("otro alimento ya no son los mismos", !mismosAlimentos(obed, [...obed, item(PLATANO, 100)]));
 const pasos = ["Sepáralos en tápers con el peso en la tapa (\"250g\" o \"160g\").", "Hornea a 200 °C por 35-40 minutos."];
-check("la guía menciona gramos", MENCIONA_GRAMOS.test(pasos[0]) && !MENCIONA_GRAMOS.test(pasos[1]));
+check("la guía menciona gramos o kilos", MENCIONA_GRAMOS.test(pasos[0]) && MENCIONA_GRAMOS.test("hornea los 2.6 kg de camote") && !MENCIONA_GRAMOS.test(pasos[1]));
 check("solo cifras: vale", soloCambianCifras(pasos, ["Sepáralos en tápers con el peso en la tapa (\"365g\" o \"235g\").", pasos[1]]));
 check("otra palabra o un paso de menos: no vale", !soloCambianCifras(pasos, [pasos[0].replace("tápers", "recipientes"), pasos[1]]) && !soloCambianCifras(pasos, [pasos[0]]));
 

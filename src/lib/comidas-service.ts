@@ -214,7 +214,7 @@ async function guiaBatch(perfil: Profile, plan: PlanComidasResuelto): Promise<Ba
   const actual = await getPlanComidas(perfil.id, { conBorrador: true });
   const previa = actual?.plan.batch_cooking;
   if (actual && previa?.pasos?.length && mismosAlimentos(actual.items, plan.items)) {
-    return { ...previa, tandas, ...(await gramosAlDia(previa, cambiosDeGramos(actual.items, plan.items))) };
+    return { ...previa, tandas, ...(await gramosAlDia(previa, cambiosDeGramos(actual.items, plan.items), tandas)) };
   }
   const dia = perfil.cuestionario_nutricion?.dia_batch ?? 7;
   const basico = batchBasico(dia, tandas);
@@ -232,20 +232,25 @@ async function guiaBatch(perfil: Profile, plan: PlanComidasResuelto): Promise<Ba
   }
 }
 
-// Los gramos que menciona la guía ("tápers de 250g") con las porciones
-// nuevas. Si la IA cambia algo más que cifras, queda el texto como estaba.
+// Las cantidades que menciona la guía ("tápers de 250g", "2.6 kg de
+// camote") con las porciones y los totales nuevos. Si la IA cambia algo
+// más que cifras, queda el texto como estaba.
 async function gramosAlDia(
   guia: BatchCooking,
-  cambios: CambioGramos[]
+  cambios: CambioGramos[],
+  tandas: BatchCooking["tandas"]
 ): Promise<Pick<BatchCooking, "pasos" | "conservacion">> {
   const sin = { pasos: guia.pasos, conservacion: guia.conservacion ?? [] };
   if (!cambios.length || !iaDisponible() || ![...sin.pasos, ...sin.conservacion].some((t) => MENCIONA_GRAMOS.test(t))) return sin;
-  try {
-    const nueva = await actualizarGramosGuia(sin, cambios);
-    return soloCambianCifras(sin.pasos, nueva.pasos) && soloCambianCifras(sin.conservacion, nueva.conservacion) ? nueva : sin;
-  } catch {
-    return sin;
-  }
+  const previos = new Map((guia.tandas ?? []).flatMap((t) => t.items).map((i) => [i.nombre, Math.round(i.gramos_semana)]));
+  const totales = tandas
+    .flatMap((t) => t.items)
+    .map((i) => ({ nombre: i.nombre, antes: previos.get(i.nombre) ?? 0, despues: Math.round(i.gramos_semana) }))
+    .filter((t) => t.antes && t.antes !== t.despues);
+  // Guardar tiene 60 s: si la IA tarda, la guía queda como estaba
+  const tope = new Promise<null>((r) => setTimeout(() => r(null), 25_000));
+  const nueva = await Promise.race([actualizarGramosGuia(sin, cambios, totales).catch(() => null), tope]);
+  return nueva && soloCambianCifras(sin.pasos, nueva.pasos) && soloCambianCifras(sin.conservacion, nueva.conservacion) ? nueva : sin;
 }
 
 export async function aplicarRecomendacion(
